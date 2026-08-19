@@ -26,7 +26,10 @@ jobs:
           python-version: "3.12"
       - name: Sync workspace
         run: uv sync --all-packages
+      - name: Pruebas del arnés EDD
+        run: uv run --directory eval-harness pytest
 
-# TODO: job que ejecuta el arnés EDD contra el set patrón como gate de liberación
-# (edd-harness.md §5.4) — se añade cuando exista el arnés y el primer componente
-# a evaluar.
+# TODO: job que ejecuta el arnés EDD contra un set patrón real como gate de
+# liberación (edd-harness.md §5.4) — se añade cuando exista un componente
+# probabilístico real que evaluar. El paso de arriba solo corre las pruebas del
+# software del arnés, no un gate de EDD.

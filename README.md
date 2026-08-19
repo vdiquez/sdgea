@@ -70,5 +70,12 @@ el resto de los contextos quedan como esqueletos vacíos hasta que les toque tur
 uv sync --all-packages
 ```
 
-Ambos comandos deben correr en verde sobre un repo recién clonado; hoy no
-compilan ni ejecutan lógica real, solo la estructura.
+Ambos comandos deben correr en verde sobre un repo recién clonado. Los nueve
+contextos siguen vacíos; lo único con comportamiento real hoy es el arnés EDD,
+corriendo contra su componente **ficticio** (nunca un modelo real, ver
+`specs/00-constitution.md`):
+
+```
+uv run --directory eval-harness pytest      # pruebas del arnés
+uv run --directory eval-harness main.py     # corrida de punta a punta → boleta
+```
