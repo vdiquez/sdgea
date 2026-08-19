@@ -1,0 +1,36 @@
+# Esqueleto de empaquetado — modo SaaS (P-02, P-03).
+#
+# Mismo código base que docker-compose.onprem.yml; lo que cambia por modo es la
+# IMPLEMENTACIÓN detrás de cada interfaz de P-03 (almacenamiento de objetos, OCR,
+# embeddings, inferencia LLM, índice vectorial, índice léxico), nunca el código de
+# orquestación. Aún no hay Dockerfiles reales — se añaden cuando cada contexto
+# tenga código (empezando por records-custodia y captura-ingesta).
+#
+# TODO por contexto, cuando exista su Dockerfile:
+#   - contexts/captura-ingesta     (Kotlin/Spring)
+#   - contexts/records-custodia    (Kotlin/Spring)
+#   - contexts/seguridad-acceso    (Kotlin/Spring)
+#   - contexts/validacion-humana   (Kotlin/Spring)
+#   - contexts/normalizacion       (Python/FastAPI)
+#   - contexts/extraccion          (Python/FastAPI)
+#   - contexts/clasificacion       (Python/FastAPI)
+#   - contexts/enriquecimiento     (Python/FastAPI)
+#   - contexts/indexacion-busqueda (Python/FastAPI)
+#
+# TODO — implementaciones SaaS (gestionadas) de las seis capacidades de P-03:
+#   almacenamiento de objetos, OCR, embeddings, inferencia LLM, índice vectorial,
+#   índice léxico. En este modo la mayoría son servicios externos gestionados, no
+#   contenedores locales — se configuran vía variables de entorno, no código.
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: sgdea
+      POSTGRES_USER: sgdea
+      POSTGRES_PASSWORD: sgdea
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

@@ -1,0 +1,10 @@
+[tool.uv.workspace]
+members = [
+    "contexts/normalizacion",
+    "contexts/extraccion",
+    "contexts/clasificacion",
+    "contexts/enriquecimiento",
+    "contexts/indexacion-busqueda",
+    "platform-python",
+    "eval-harness",
+]

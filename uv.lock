@@ -1,0 +1,49 @@
+version = 1
+revision = 3
+requires-python = ">=3.12"
+
+[manifest]
+members = [
+    "clasificacion",
+    "enriquecimiento",
+    "eval-harness",
+    "extraccion",
+    "indexacion-busqueda",
+    "normalizacion",
+    "platform-python",
+]
+
+[[package]]
+name = "clasificacion"
+version = "0.1.0"
+source = { virtual = "contexts/clasificacion" }
+
+[[package]]
+name = "enriquecimiento"
+version = "0.1.0"
+source = { virtual = "contexts/enriquecimiento" }
+
+[[package]]
+name = "eval-harness"
+version = "0.1.0"
+source = { virtual = "eval-harness" }
+
+[[package]]
+name = "extraccion"
+version = "0.1.0"
+source = { virtual = "contexts/extraccion" }
+
+[[package]]
+name = "indexacion-busqueda"
+version = "0.1.0"
+source = { virtual = "contexts/indexacion-busqueda" }
+
+[[package]]
+name = "normalizacion"
+version = "0.1.0"
+source = { virtual = "contexts/normalizacion" }
+
+[[package]]
+name = "platform-python"
+version = "0.1.0"
+source = { editable = "platform-python" }

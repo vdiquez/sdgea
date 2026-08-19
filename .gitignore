@@ -1,2 +1,15 @@
 # Logs y estado efímero del loop agéntico — no son artefactos del proyecto
 .loop/
+
+# Gradle / Kotlin
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+
+# IDE
+.idea/

@@ -1,0 +1,33 @@
+# Esqueleto de empaquetado — modo appliance on-premise (P-02, P-03, P-10).
+#
+# Mismo código base que docker-compose.saas.yml. En este modo TODA capacidad
+# externa debe ser autoalojada — el appliance debe operar sin conectividad
+# saliente, incluso en entornos aislados (P-10). Aún no hay Dockerfiles reales —
+# se añaden cuando cada contexto tenga código (empezando por records-custodia y
+# captura-ingesta).
+#
+# TODO por contexto, cuando exista su Dockerfile: los mismos nueve de
+# docker-compose.saas.yml.
+#
+# TODO — implementaciones self-hosted de las seis capacidades de P-03, cada una
+# como contenedor local (candidatas a evaluar, no decididas todavía):
+#   - almacenamiento de objetos → p. ej. MinIO
+#   - OCR                        → motor autoalojado (se usa/ajusta uno existente,
+#                                   ver disciplina de alcance de la constitución)
+#   - embeddings                 → modelo autoalojado
+#   - inferencia LLM             → runtime autoalojado
+#   - índice vectorial           → autoalojado
+#   - índice léxico              → autoalojado
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: sgdea
+      POSTGRES_USER: sgdea
+      POSTGRES_PASSWORD: sgdea
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
