@@ -34,7 +34,7 @@ lógica de negocio todavía.
 
 ## Contexto que debes leer primero, en este orden
 
-1. specs/00-constitution.md — los principios no negociables del proyecto. Gobiernan
+1. .specify/memory/constitution.md — los principios no negociables del proyecto. Gobiernan
    todo lo que hagas. Si algo que vas a hacer contradice un principio, detente y
    pregúntame.
 2. specs/README.md — cómo funciona Spec-Driven Development en este repo.
@@ -147,7 +147,7 @@ Si quieres que el agente te ayude a decidir el stack, antepón esta tarea como u
 sesión previa y separada:
 
 ```
-Antes de andamiar nada: lee specs/00-constitution.md y las dos specs de contexto.
+Antes de andamiar nada: lee .specify/memory/constitution.md y las dos specs de contexto.
 Propón 2 o 3 opciones de stack (lenguaje, build, contenedores, CI) coherentes con la
 constitución — en especial con P-02 (un solo código base para SaaS y on-premise),
 P-03 (capas de abstracción) y P-10 (operación on-premise sin conectividad saliente,

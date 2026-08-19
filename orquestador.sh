@@ -4,7 +4,8 @@
 # Proyecto: Capa AI-native de clasificación e indexación documental (SGDEA)
 #
 # Principio del proceso (espejo de P-01): los agentes proponen, Victor dispone.
-# Frontera física: hook de git bloquea commits a specs/00-constitution.md sin
+# Frontera física: hook de git bloquea commits a .specify/memory/constitution.md
+# (la constitución; specs/00-constitution.md es un stub que apunta ahí) sin
 # HUMAN=1. El resto de specs/ es agente-escribible; Codex es el árbitro
 # automático (VETO detiene el loop) — la aprobación humana es por excepción,
 # no por defecto.
@@ -72,7 +73,7 @@ commit_count() { git rev-list --count HEAD 2>/dev/null || echo 0; }
 run_claude() { # run_claude <prompt> <etiqueta>
   local prompt="$1" tag="$2" out sid="" wait="$BACKOFF_START" attempt=0
   local -a flags=(--output-format json
-                  --append-system-prompt "Reglas duras: specs/00-constitution.md es SOLO LECTURA, nunca la edites ni la comitees. El resto de specs/ (contextos, plan-*.md, tasks-*.md, correcciones) SÍ puedes crearlo y editarlo, y comitearlo tras pasar revisión de Codex — no pidas aprobación humana por archivo. No inventar referencias normativas ni umbrales: quedan PENDIENTE/[CLARIFICAR]. No implementar componentes probabilísticos reales. Ante ambigüedad real (no procedimental) escribir en QUESTIONS.md y detener la tarea.")
+                  --append-system-prompt "Reglas duras: .specify/memory/constitution.md es SOLO LECTURA, nunca la edites ni la comitees (specs/00-constitution.md es un stub que apunta ahí, mismo trato). El resto de specs/ (contextos, plan-*.md, tasks-*.md, correcciones) SÍ puedes crearlo y editarlo, y comitearlo tras pasar revisión de Codex — no pidas aprobación humana por archivo. No inventar referencias normativas ni umbrales: quedan PENDIENTE/[CLARIFICAR]. No implementar componentes probabilísticos reales. Ante ambigüedad real (no procedimental) escribir en QUESTIONS.md y detener la tarea.")
   if [ "$CONTAINED" = "1" ]; then
     flags+=(--dangerously-skip-permissions)
   else
@@ -125,7 +126,7 @@ fitness() { # tests como árbitro objetivo
 }
 
 # --------------------------------------------------------------------- prompts
-CLAUDE_STEP_PROMPT='Lee, en este orden: CLAUDE.md, specs/00-constitution.md, STATE.md, REVIEW.md y TODO.md.
+CLAUDE_STEP_PROMPT='Lee, en este orden: CLAUDE.md, .specify/memory/constitution.md, STATE.md, REVIEW.md y TODO.md.
 Toma la PRIMERA tarea abierta "- [ ]" de TODO.md y trabaja SOLO en ella.
 Si la tarea es de CÓDIGO (implementación de un RF):
 1) Localiza en la spec del contexto los criterios Dado/Cuando/Entonces del RF de la tarea.
@@ -137,13 +138,14 @@ ya existentes (spec-records-custodia.md como referencia). No inventes referencia
 normativas ni umbrales.
 En ambos casos, al terminar:
 4) Haz un commit atómico con mensaje "RF-XXX: <resumen>" / "spec: <resumen>" /
-   "chore: ...". Puedes comitear specs/ directamente — SOLO specs/00-constitution.md
-   está bloqueado por el hook y requiere HUMAN=1.
+   "chore: ...". Puedes comitear specs/ directamente — SOLO
+   .specify/memory/constitution.md (y su stub specs/00-constitution.md) está
+   bloqueado por el hook y requiere HUMAN=1.
 5) Marca la tarea "- [x]" en TODO.md y actualiza STATE.md (tarea, decisiones tomadas, siguiente paso).
 Si encuentras un [CLARIFICAR], una celda PENDIENTE o una ambigüedad real: NO la resuelvas inventando.
 Escribe la pregunta en QUESTIONS.md, marca la tarea "- [?]" y termina limpiamente.'
 
-CODEX_REVIEW_PROMPT='Lee AGENTS.md, specs/00-constitution.md y STATE.md.
+CODEX_REVIEW_PROMPT='Lee AGENTS.md, .specify/memory/constitution.md y STATE.md.
 Revisa el último commit (git show HEAD) contra la spec del contexto correspondiente.
 Verifica en especial: P-01 (nada probabilístico escribe estado: todo cruza la capa
 anticorrupción como Sugerencia y solo una decisión humana materializa), P-03 (toda
@@ -162,7 +164,7 @@ constitución o una referencia/umbral inventado, la PRIMERA línea de REVIEW.md 
 ser exactamente "VETO: <motivo>".
 Puedes añadir tareas "- [ ]" al final de TODO.md solo si derivan de una spec existente.'
 
-PREFLIGHT_PROMPT='Fase F0 (pre-vuelo). Lee specs/00-constitution.md y luego aplica EN EL ÁRBOL DE
+PREFLIGHT_PROMPT='Fase F0 (pre-vuelo). Lee .specify/memory/constitution.md y luego aplica EN EL ÁRBOL DE
 TRABAJO, SIN COMITEAR, exactamente estas tres correcciones (Apéndice A del plan):
 1) specs/eval/eval-clasificacion.md §4.5: elimina la noción de "auto-aceptarse sin
    revisión". Redefine: Cobertura = fracción de documentos sobre el umbral que se
@@ -189,7 +191,8 @@ cmd_bootstrap() {
 
   [ -f CLAUDE.md ] || cat > CLAUDE.md <<'EOF'
 # Contexto permanente — Claude Code (implementador)
-Fuente de verdad: specs/. Gobierna specs/00-constitution.md.
+Fuente de verdad: specs/. Gobierna .specify/memory/constitution.md
+(specs/00-constitution.md es un stub que apunta ahí, mismo trato).
 Constitución de ejecución (violarla invalida la sesión):
 - specs/** es SOLO LECTURA para agentes, CON UNA ÚNICA EXCEPCIÓN: la tarea de
   preflight de F0 (invocada como `./orquestador.sh preflight`) puede editar el

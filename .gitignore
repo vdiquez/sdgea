@@ -13,3 +13,6 @@ __pycache__/
 
 # IDE
 .idea/
+
+# Configuración local de Claude Code (personal, no de proyecto)
+.claude/settings.local.json

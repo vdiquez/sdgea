@@ -83,7 +83,7 @@ Línea base de clasificación → calibrar gates absolutos (§5.1) → el loop v
 | `REVIEW.md` | Última revisión de Codex; `VETO: <motivo>` en línea 1 detiene el loop |
 | `QUESTIONS.md` | Escalaciones (solo-anexado): todo `[CLARIFICAR]` va aquí, nunca se inventa |
 | `BLOCKED.md` | Escrito al detenerse: motivo + cómo reanudar |
-| `CLAUDE.md` / `AGENTS.md` | Contexto permanente de cada agente; ambos apuntan a `specs/00-constitution.md` |
+| `CLAUDE.md` / `AGENTS.md` | Contexto permanente de cada agente; ambos apuntan a `.specify/memory/constitution.md` |
 
 **Constitución de ejecución** (embebida en CLAUDE.md/AGENTS.md y reforzada con `--append-system-prompt`): no tocar `specs/`; no inventar normativa ni umbrales; no implementar componentes probabilísticos reales; no cambiar el stack; ante ambigüedad → `QUESTIONS.md` y parar la tarea.
 

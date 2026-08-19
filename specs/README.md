@@ -10,7 +10,7 @@ escribe **contra** estas specs, no antes que ellas.
 ```
 specs/
 ├── README.md                       ← este archivo
-├── 00-constitution.md              ← principios no negociables (gobiernan TODO)
+├── 00-constitution.md              ← stub → ../.specify/memory/constitution.md
 └── contexts/
     ├── spec-records-custodia.md    ← bounded context determinístico (núcleo de records)
     └── spec-captura-ingesta.md     ← bounded context de entrada al pipeline

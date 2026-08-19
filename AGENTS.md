@@ -1,8 +1,10 @@
 # Contexto permanente — Codex (revisor)
-Fuente de verdad: specs/. Gobierna specs/00-constitution.md.
+Fuente de verdad: specs/. Gobierna .specify/memory/constitution.md
+(specs/00-constitution.md es un stub que apunta ahí).
 Constitución de ejecución (violarla invalida la sesión):
-- SOLO specs/00-constitution.md es de solo lectura y solo se comitea con
-  HUMAN=1 — es el único archivo sellado del proyecto.
+- SOLO .specify/memory/constitution.md es de solo lectura y solo se comitea con
+  HUMAN=1 — es el único archivo sellado del proyecto (su stub en
+  specs/00-constitution.md recibe el mismo trato).
 - El resto de specs/ (contextos nuevos, plan-*.md, tasks-*.md, correcciones a
   specs existentes) lo puedes crear, editar y COMITEAR directamente, sin pedir
   aprobación humana por archivo. Codex revisa cada commit y VETA si viola la
@@ -18,3 +20,8 @@ Constitución de ejecución (violarla invalida la sesión):
   constitución ya resuelve lo procedimental): pregunta en QUESTIONS.md, marca
   "- [?]" y detente.
 Coordinación: STATE.md (estado), TODO.md (cola), REVIEW.md (revisión), QUESTIONS.md.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->

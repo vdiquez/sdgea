@@ -5,6 +5,8 @@ contiene la estructura, los contratos y los esqueletos sobre los que se construy
 
 La fuente de verdad del producto es [`specs/`](specs/README.md) (Spec-Driven
 Development). El código se escribe **contra** esas specs, no antes que ellas.
+La constitución vive en `.specify/memory/constitution.md` (spec-kit);
+`specs/00-constitution.md` es un stub que apunta ahí.
 
 ---
 
@@ -32,6 +34,7 @@ detrás de cada interfaz de P-03 según el modo. CI: GitHub Actions
 
 ```
 sgdea/
+├── .specify/                       # spec-kit: constitución, plantillas, workflows
 ├── specs/                          # fuente de verdad (SDD/EDD)
 ├── contexts/
 │   ├── captura-ingesta/            # Kotlin · SDD
@@ -73,7 +76,7 @@ uv sync --all-packages
 Ambos comandos deben correr en verde sobre un repo recién clonado. Los nueve
 contextos siguen vacíos; lo único con comportamiento real hoy es el arnés EDD,
 corriendo contra su componente **ficticio** (nunca un modelo real, ver
-`specs/00-constitution.md`):
+`.specify/memory/constitution.md`):
 
 ```
 uv run --directory eval-harness pytest      # pruebas del arnés
