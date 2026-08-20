@@ -1,2 +1,15 @@
-# TODO
-(siembra con: ./orquestador.sh seed core)
+# TODO — F2/F3: corte vertical determinístico + arnés (clasificador ficticio)
+- [ ] T-01 RF-CI-001 Ingesta por lote: artefactos + inventario -> ítems `Recibido`
+- [ ] T-02 RF-CI-006 Validación y cuarentena con razón registrada
+- [ ] T-03 RF-RC-001 Custodia del original inmutable (WORM + huella verificable)
+- [ ] T-04 RF-RC-002 + RF-CI-007 Procedencia completa de punta a punta
+- [ ] T-05 RF-CI-008 Cero pérdida silenciosa: suma de estados terminales cuadra
+- [ ] T-06 RF-CI-002 Conciliación contra inventario (FUID): faltantes y sobrantes
+- [ ] T-07 RF-RC-006 TRD como objeto versionado (estructura mínima)
+- [ ] T-08 RF-RC-003 Sugerencia vía capa anticorrupción, con EMISOR FICTICIO; no toca estado
+- [ ] T-09 RF-RC-004 Materialización solo por decisión humana (actor + fecha)
+- [ ] T-10 RF-RC-005 Bitácora inmutable de solo anexado; modificar/borrar se rechaza
+- [ ] T-11 RF-RC-009 Verificación de integridad por demanda con reporte de discrepancias
+- [ ] T-12 Arnés: cargar set de juguete, correr componente ficticio, emitir boleta versionada
+- [ ] T-13 CI: build + tests + arnés; gates AgentShield + security-review
+- [ ] T-14 Empaquetado dual (P-02): mismos contenedores como SaaS y como instalador appliance
