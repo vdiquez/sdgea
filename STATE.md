@@ -1,5 +1,5 @@
 # STATE
-Fase: F1 cerrando → F2 arrancando. Ver plan-ejecucion-agentica.md.
+Fase: F1 CERRADO → F2 arrancando. Ver plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -14,15 +14,20 @@ Hecho:
 - F1: `specify init` (spec-kit) corrido con integraciones Claude Code + Codex;
   constitución migrada a .specify/memory/constitution.md (commit HUMAN=1 de
   Victor, `37a6125`).
+- F1: TEST_CMD fijado (`./test.sh` — gradlew test + pytest del arnés en un
+  solo binario, para que --allowedTools lo autorice completo).
+- F1: cierre — `codex exec` revisó af24e22/a890e83/37a6125 contra la
+  constitución. Resultado: "OK: cierre de F1 sin objeciones" (ver REVIEW.md).
+  Verificó P-01/P-02/P-03/P-05/P-06/P-10, corrió él mismo la suite del arnés
+  (3 passed) y confirmó que las pruebas no están amañadas. Sin VETO.
 
 ## Camino a F2 (checklist, 2026-08-20)
 
 - [ ] 1. Enviar el one-pager a 3–5 entidades calificadas (F4, hilo comercial —
-      sin dependencia técnica, arrancar cuando Victor pueda).
-- [ ] 2. Cerrar F1: `codex exec` revisa el esqueleto completo contra la
-      constitución → primera REVIEW.md.
-- [ ] 3. Fijar TEST_CMD real para orquestador.sh (no hay `make` en este
-      entorno): algo como `./gradlew test && uv run --directory eval-harness pytest`.
+      sin dependencia técnica; seguimos con los pasos técnicos primero).
+- [x] 2. Cerrar F1: `codex exec` revisó el esqueleto completo → REVIEW.md sin
+      VETO.
+- [x] 3. TEST_CMD fijado a `./test.sh`.
 - [ ] 4. Sembrar TODO.md: `./orquestador.sh seed core` (14 tareas T-01..T-14).
 - [ ] 5. Resolver dónde corre el loop autónomo (CONTAINED=1 asume contenedor
       Docker en Ubuntu; estamos en Windows, Docker Desktop instalado pero el

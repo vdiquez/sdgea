@@ -19,7 +19,9 @@
 #   ./orquestador.sh status       # estado rápido
 #
 # Variables (exportar antes de correr):
-#   TEST_CMD="make test"     árbitro objetivo (OBLIGATORIO fijar tras decidir stack)
+#   TEST_CMD="./test.sh"     árbitro objetivo — un solo binario (ver TEST_BIN
+#                            abajo); ./test.sh corre gradlew test + pytest del
+#                            arnés. Cambialo si el árbitro real debe ser otro.
 #   MAX_ITER=25              iteraciones máximas del loop por corrida
 #   MAX_TASK_ATTEMPTS=3      intentos de tests por tarea antes de bloquear
 #   BACKOFF_START=600        backoff inicial ante rate limit (s)
@@ -32,7 +34,7 @@
 # =============================================================================
 set -euo pipefail
 
-TEST_CMD="${TEST_CMD:-make test}"
+TEST_CMD="${TEST_CMD:-./test.sh}"
 MAX_ITER="${MAX_ITER:-25}"
 MAX_TASK_ATTEMPTS="${MAX_TASK_ATTEMPTS:-3}"
 BACKOFF_START="${BACKOFF_START:-600}"
