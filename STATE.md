@@ -64,6 +64,28 @@ Hecho:
   auditoría emitido aquí es un boceto mínimo (actor, fecha, tipo, estado
   anterior/posterior); la garantía de solo-anexado e inmutabilidad de la
   bitácora completa es T-10.
+- F2: T-04 (RF-RC-002 + RF-CI-007, procedencia completa de punta a punta)
+  implementado. Los dos contextos siguen desacoplados en compilación (cada
+  módulo Gradle solo depende de `platform-kotlin`, sin dependencia cruzada
+  captura-ingesta ↔ records-custodia), así que cada RF se probó contra su
+  propio Dado/Cuando/Entonces:
+  - `contexts/captura-ingesta`: `cargarLote` ahora recibe `fuente` y `fecha`
+    y produce, por cada `ItemIngesta`, una `Procedencia` (fuente, fecha,
+    disparador, loteOFlujoId). `disparador = "carga_por_lote"` nombra el
+    mensaje de entrada "Carga de un lote" del §4 de la spec — no es una
+    política de negocio inventada, es el nombre del evento de entrada ya
+    declarado. Test nuevo: `RegistroDeProcedenciaTest`.
+  - `contexts/records-custodia`: se añadió el agregado mínimo
+    `DocumentoDeArchivo` (id, originalId, procedencia) y el value object
+    `Procedencia` (fuente, fecha, loteOFlujoId) de spec §3. `custodiar` ahora
+    exige una `Procedencia` y `consultarProcedencia(id)` la expone. El resto
+    del agregado documento (metadatos, clasificación, estado de ciclo de
+    vida) queda fuera de alcance — es RF-RC-003 en adelante. Test nuevo:
+    `RegistroDeProcedenciaTest`.
+  TDD: 4 tests nuevos/actualizados escritos antes de la implementación;
+  `./test.sh` en verde (Gradle BUILD SUCCESSFUL — 3+1 tests en
+  captura-ingesta, 2+1 en records-custodia, todos passing; pytest del
+  arnés: 3 passed). No se tocó ningún `[CLARIFICAR]` de las specs.
 
 ## Camino a F2 (checklist, 2026-08-20)
 
