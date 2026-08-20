@@ -8,4 +8,9 @@ kotlin {
 
 dependencies {
     implementation(project(":platform-kotlin"))
+    testImplementation(kotlin("test"))
+}
+
+tasks.test {
+    useJUnitPlatform()
 }

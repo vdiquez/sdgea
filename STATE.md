@@ -27,6 +27,18 @@ Hecho:
   montaje de solo lectura de la sesión del host (no API keys separadas).
   `codex login status` y una llamada real de `claude -p` confirmaron que
   autentica; `orquestador.sh` y `test.sh` corren bien dentro del contenedor.
+- F2: T-01 (RF-CI-001, ingesta por lote) implementado en
+  `contexts/captura-ingesta` (paquete `sgdea.contexts.capturaingesta`):
+  `cargarLote(loteId, artefactos, inventario)` produce un `ItemIngesta` en
+  estado `RECIBIDO` por cada `ArtefactoOrigen`, conservando referencia al
+  artefacto y al lote. TDD: 3 tests (`IngestaPorLoteTest`) escritos contra el
+  Dado/Cuando/Entonces del RF antes de la implementación; `./test.sh` en
+  verde (Gradle: BUILD SUCCESSFUL, 3/3 en el nuevo test; pytest del arnés:
+  3 passed). Alcance deliberadamente angosto: solo el estado `Recibido` de
+  RF-CI-001 — validación/cuarentena (T-02), conciliación (T-06) y demás
+  estados del ítem quedan para sus propias tareas.
+  Siguiente paso: T-02 (RF-CI-006, validación y cuarentena) — primera tarea
+  abierta en TODO.md.
 
 ## Camino a F2 (checklist, 2026-08-20)
 
