@@ -47,6 +47,23 @@ Hecho:
   Siguiente paso: un humano responde la taxonomía de condiciones en
   QUESTIONS.md; T-03 (RF-RC-001, custodia del original) es la próxima tarea
   abierta en TODO.md que no depende de esa respuesta.
+- F2: T-03 (RF-RC-001, custodia del original inmutable) implementado en
+  `contexts/records-custodia` (paquete `sgdea.contexts.recordscustodia`):
+  `CustodiaOriginales` guarda cada original en modo de una sola escritura,
+  calcula su huella SHA-256 y expone `consultar`/`custodiar`; todo intento de
+  `intentarModificar` un original ya custodiado se rechaza con
+  `ModificacionDeOriginalRechazadaException` y deja un `EventoAuditoria` sin
+  tocar los bytes ni la huella almacenados. TDD: 2 tests
+  (`CustodiaOriginalesTest`) escritos contra el Dado/Cuando/Entonces de
+  RF-RC-001 antes de la implementación; `./test.sh` en verde. El algoritmo de
+  huella (SHA-256) es una decisión de implementación, no una referencia
+  normativa inventada: satisface RNF-RC-001 ("robusto y verificable de forma
+  independiente") sin citar ninguna norma ni umbral. El `[CLARIFICAR]` de
+  spec §8 sobre encadenamiento de huellas en la bitácora queda fuera de
+  alcance — es diseño de RF-RC-005/T-10, no de RF-RC-001. El evento de
+  auditoría emitido aquí es un boceto mínimo (actor, fecha, tipo, estado
+  anterior/posterior); la garantía de solo-anexado e inmutabilidad de la
+  bitácora completa es T-10.
 
 ## Camino a F2 (checklist, 2026-08-20)
 
