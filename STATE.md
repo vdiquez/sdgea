@@ -1,5 +1,5 @@
 # STATE
-Fase: F1 en curso — andamiaje hecho, falta cierre (revisión de Codex → REVIEW.md).
+Fase: F1 cerrando → F2 arrancando. Ver plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -11,12 +11,46 @@ Hecho:
   CI, empaquetado dual) — dos incrementos comiteados.
 - F1: interfaces P-03 (platform-kotlin, platform-python) + esqueleto
   ejecutable del arnés EDD con componente FICTICIO — comiteado.
-- F1: `specify init` (spec-kit) corrido con integraciones Claude Code + Codex.
-  La constitución se migró de specs/00-constitution.md a la ruta que espera
-  spec-kit, .specify/memory/constitution.md (contenido idéntico); el archivo
-  viejo queda como stub. Pendiente el commit HUMAN=1 de Victor.
+- F1: `specify init` (spec-kit) corrido con integraciones Claude Code + Codex;
+  constitución migrada a .specify/memory/constitution.md (commit HUMAN=1 de
+  Victor, `37a6125`).
 
-Pendiente para cerrar F1:
-- Commit HUMAN=1 de la migración de la constitución.
-- `codex exec` revisa el esqueleto completo contra la constitución → primera
-  REVIEW.md (F1, paso 4 del plan).
+## Camino a F2 (checklist, 2026-08-20)
+
+- [ ] 1. Enviar el one-pager a 3–5 entidades calificadas (F4, hilo comercial —
+      sin dependencia técnica, arrancar cuando Victor pueda).
+- [ ] 2. Cerrar F1: `codex exec` revisa el esqueleto completo contra la
+      constitución → primera REVIEW.md.
+- [ ] 3. Fijar TEST_CMD real para orquestador.sh (no hay `make` en este
+      entorno): algo como `./gradlew test && uv run --directory eval-harness pytest`.
+- [ ] 4. Sembrar TODO.md: `./orquestador.sh seed core` (14 tareas T-01..T-14).
+- [ ] 5. Resolver dónde corre el loop autónomo (CONTAINED=1 asume contenedor
+      Docker en Ubuntu; estamos en Windows, Docker Desktop instalado pero el
+      engine no estaba corriendo en la última verificación).
+- [ ] 6. Arrancar F2: `./orquestador.sh loop`.
+- [ ] 7. Skill_Seekers sobre el PDF del Acuerdo AGN 001 de 2024 → skill
+      normativa (F4, automatizable en paralelo).
+- [ ] 8. Completar F3: gates AgentShield + security-review en CI; Dockerfiles
+      reales por contexto a medida que el loop les da código.
+- [ ] 9. Empezar el ritual `./orquestador.sh digest`; decidir si configurar
+      NTFY_TOPIC.
+- [ ] 10. En la reunión/convenio de F4: proteger 9.2, negociar el Anexo 1 como
+      la negociación real del set patrón, decidir herramienta de anotación
+      con el archivista.
+
+Después de estos 10: TODO.md (sembrado en el paso 4) es el tracker de lo que
+sigue — el loop autónomo lo consume y lo marca `- [x]` / `- [?]` solo.
+
+## Sobre spec-kit — cuándo entran sus comandos
+
+`/speckit-plan`, `/speckit-tasks` y `/speckit-implement` operan sobre una
+"feature" registrada por `/speckit-specify` (crea specs/NNN-slug/spec.md +
+.specify/feature.json) — no se pueden apuntar directo a
+specs/contexts/*.md. El corte vertical de F2 (paso 6 de arriba) sigue el
+mecanismo YA construido en orquestador.sh (TODO.md + loop con backoff, VETO
+de Codex, watchdog) — spec-kit se instaló pero F2 no pasa por él, y así lo
+describe el plan tal cual está escrito. El punto natural para usar
+/speckit-specify por primera vez es al especificar un bounded context que
+TODAVÍA no tiene spec escrita a mano (Normalización, Extracción,
+Enriquecimiento, Indexación y Búsqueda, Seguridad y Acceso, Validación
+Humana) — no antes.
