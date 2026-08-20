@@ -20,6 +20,13 @@ Hecho:
   constitución. Resultado: "OK: cierre de F1 sin objeciones" (ver REVIEW.md).
   Verificó P-01/P-02/P-03/P-05/P-06/P-10, corrió él mismo la suite del arnés
   (3 passed) y confirmó que las pruebas no están amañadas. Sin VETO.
+- F2: `TODO.md` sembrado con las 14 tareas T-01..T-14 del corte vertical.
+- F2: sandbox Docker (`agent-sandbox/`) construido y verificado de punta a
+  punta — Ubuntu 24.04, usuario no-root `agent` (obligatorio: Claude Code
+  rechaza --dangerously-skip-permissions bajo root), autenticación por
+  montaje de solo lectura de la sesión del host (no API keys separadas).
+  `codex login status` y una llamada real de `claude -p` confirmaron que
+  autentica; `orquestador.sh` y `test.sh` corren bien dentro del contenedor.
 
 ## Camino a F2 (checklist, 2026-08-20)
 
@@ -28,11 +35,9 @@ Hecho:
 - [x] 2. Cerrar F1: `codex exec` revisó el esqueleto completo → REVIEW.md sin
       VETO.
 - [x] 3. TEST_CMD fijado a `./test.sh`.
-- [ ] 4. Sembrar TODO.md: `./orquestador.sh seed core` (14 tareas T-01..T-14).
-- [ ] 5. Resolver dónde corre el loop autónomo (CONTAINED=1 asume contenedor
-      Docker en Ubuntu; estamos en Windows, Docker Desktop instalado pero el
-      engine no estaba corriendo en la última verificación).
-- [ ] 6. Arrancar F2: `./orquestador.sh loop`.
+- [x] 4. TODO.md sembrado (14 tareas T-01..T-14).
+- [x] 5. Sandbox Docker construido y verificado (`agent-sandbox/`).
+- [ ] 6. Arrancar F2: `./agent-sandbox/run.sh` y dentro, `./orquestador.sh loop`.
 - [ ] 7. Skill_Seekers sobre el PDF del Acuerdo AGN 001 de 2024 → skill
       normativa (F4, automatizable en paralelo).
 - [ ] 8. Completar F3: gates AgentShield + security-review en CI; Dockerfiles
