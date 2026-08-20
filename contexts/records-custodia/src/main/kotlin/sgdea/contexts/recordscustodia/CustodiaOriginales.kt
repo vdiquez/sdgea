@@ -25,16 +25,39 @@ data class EventoAuditoria(
 
 class ModificacionDeOriginalRechazadaException(mensaje: String) : RuntimeException(mensaje)
 
+// Procedencia de un documento de archivo (spec §2/§3, RF-RC-002): fuente,
+// fecha de ingesta e identificador del lote o flujo de origen. Es la misma
+// información que Captura/Ingesta expone por ítem vía RF-CI-007 (ver
+// spec-captura-ingesta.md §4, salida "Procedencia del ítem" hacia
+// Records/Custodia); este contexto la recibe y la conserva junto al documento.
+data class Procedencia(
+    val fuente: String,
+    val fecha: Instant,
+    val loteOFlujoId: String,
+)
+
+// Documento de archivo (spec §3): boceto mínimo que referencia su original
+// inmutable y conserva su procedencia. El resto del agregado (metadatos,
+// clasificación, estado de ciclo de vida) es alcance de otras tareas
+// (RF-RC-003 en adelante).
+data class DocumentoDeArchivo(
+    val id: String,
+    val originalId: String,
+    val procedencia: Procedencia,
+)
+
 // RF-RC-001: custodia el original en modo de una sola escritura y registra su huella
 // criptográfica; un intento de modificarlo se rechaza y genera un evento de auditoría.
+// RF-RC-002: cada documento conserva su procedencia completa.
 class CustodiaOriginales {
 
     private val originales = mutableMapOf<String, OriginalInmutable>()
+    private val documentos = mutableMapOf<String, DocumentoDeArchivo>()
     private val eventos = mutableListOf<EventoAuditoria>()
 
     val eventosDeAuditoria: List<EventoAuditoria> get() = eventos.toList()
 
-    fun custodiar(id: String, bytes: ByteArray, actor: String, fecha: Instant): OriginalInmutable {
+    fun custodiar(id: String, bytes: ByteArray, actor: String, fecha: Instant, procedencia: Procedencia): OriginalInmutable {
         val original = OriginalInmutable(
             id = id,
             bytes = bytes,
@@ -43,6 +66,7 @@ class CustodiaOriginales {
             fechaCustodia = fecha,
         )
         originales[id] = original
+        documentos[id] = DocumentoDeArchivo(id = id, originalId = id, procedencia = procedencia)
         eventos.add(
             EventoAuditoria(
                 actor = actor,
@@ -56,6 +80,8 @@ class CustodiaOriginales {
     }
 
     fun consultar(id: String): OriginalInmutable = originales.getValue(id)
+
+    fun consultarProcedencia(id: String): Procedencia = documentos.getValue(id).procedencia
 
     // El original ya custodiado nunca se sobrescribe: toda solicitud de cambio se
     // rechaza y deja evento de auditoría, sin tocar los bytes ni la huella almacenados.

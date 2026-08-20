@@ -1,5 +1,6 @@
 package sgdea.contexts.capturaingesta
 
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -7,6 +8,8 @@ import kotlin.test.assertEquals
 // Dado un lote con artefactos e inventario, Cuando se carga,
 // Entonces cada artefacto produce un ítem de ingesta en estado `Recibido`.
 class IngestaPorLoteTest {
+
+    private val fecha = Instant.parse("2026-08-20T10:00:00Z")
 
     @Test
     fun `cargar un lote con artefactos e inventario produce un item Recibido por artefacto`() {
@@ -17,7 +20,13 @@ class IngestaPorLoteTest {
         )
         val inventario = InventarioOrigen(registros = listOf("a1", "a2", "a3"))
 
-        val lote = cargarLote(loteId = "lote-001", artefactos = artefactos, inventario = inventario)
+        val lote = cargarLote(
+            loteId = "lote-001",
+            artefactos = artefactos,
+            inventario = inventario,
+            fuente = "escaner-sala-3",
+            fecha = fecha,
+        )
 
         assertEquals(artefactos.size, lote.items.size)
         artefactos.forEach { artefacto ->
@@ -34,6 +43,8 @@ class IngestaPorLoteTest {
             loteId = "lote-001",
             artefactos = listOf(artefacto),
             inventario = InventarioOrigen(registros = listOf("a1")),
+            fuente = "escaner-sala-3",
+            fecha = fecha,
         )
 
         val item = lote.items.single()
@@ -47,8 +58,35 @@ class IngestaPorLoteTest {
             loteId = "lote-vacio",
             artefactos = emptyList(),
             inventario = InventarioOrigen(registros = emptyList()),
+            fuente = "escaner-sala-3",
+            fecha = fecha,
         )
 
         assertEquals(emptyList(), lote.items)
+    }
+}
+
+// RF-CI-007 · Registro de procedencia
+// Dado un ítem de ingesta, Cuando se consulta, Entonces expone su procedencia completa.
+class RegistroDeProcedenciaTest {
+
+    @Test
+    fun `un item de ingesta expone su procedencia completa fuente fecha disparador y lote`() {
+        val artefacto = ArtefactoOrigen(id = "a1", nombre = "expediente-001.pdf")
+        val fecha = Instant.parse("2026-08-20T10:00:00Z")
+
+        val lote = cargarLote(
+            loteId = "lote-001",
+            artefactos = listOf(artefacto),
+            inventario = InventarioOrigen(registros = listOf("a1")),
+            fuente = "escaner-sala-3",
+            fecha = fecha,
+        )
+
+        val item = lote.items.single()
+        assertEquals("escaner-sala-3", item.procedencia.fuente)
+        assertEquals(fecha, item.procedencia.fecha)
+        assertEquals("carga_por_lote", item.procedencia.disparador)
+        assertEquals("lote-001", item.procedencia.loteOFlujoId)
     }
 }
