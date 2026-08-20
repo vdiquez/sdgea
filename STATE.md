@@ -37,8 +37,16 @@ Hecho:
   3 passed). Alcance deliberadamente angosto: solo el estado `Recibido` de
   RF-CI-001 — validación/cuarentena (T-02), conciliación (T-06) y demás
   estados del ítem quedan para sus propias tareas.
-  Siguiente paso: T-02 (RF-CI-006, validación y cuarentena) — primera tarea
-  abierta en TODO.md.
+- F2: T-02 (RF-CI-006, validación y cuarentena) BLOQUEADA — marcada `- [?]`
+  en TODO.md. El Dado/Cuando/Entonces del RF ("el ítem queda `En cuarentena`
+  o `Rechazado`") no define qué condición (corrupto / ilegible / formato no
+  soportado) lleva a cada rama; `spec-captura-ingesta.md` §8 ya lo señala
+  como `[CLARIFICAR]` sin resolver. Implementarlo exige inventar una política
+  de negocio no autorizada, así que se detuvo sin tocar código ni comitear.
+  Pregunta registrada en QUESTIONS.md (2026-08-20).
+  Siguiente paso: un humano responde la taxonomía de condiciones en
+  QUESTIONS.md; T-03 (RF-RC-001, custodia del original) es la próxima tarea
+  abierta en TODO.md que no depende de esa respuesta.
 
 ## Camino a F2 (checklist, 2026-08-20)
 

@@ -67,3 +67,44 @@ respuesta humana.
 Causa raíz corregida en run_claude() de orquestador.sh (regla dura
 contradecía la tarea de preflight). Política vigente: solo
 specs/00-constitution.md requiere HUMAN=1. Reintentar preflight.
+
+## 2026-08-20 · T-02 RF-CI-006 bloqueada — [?]
+
+Tarea tomada de TODO.md: "T-02 RF-CI-006 Validación y cuarentena con razón
+registrada", primera tarea abierta tras T-01.
+
+El criterio Dado/Cuando/Entonces de RF-CI-006 en
+`specs/contexts/spec-captura-ingesta.md` §5 dice:
+
+> Dado un artefacto corrupto, Cuando se valida, Entonces el ítem queda `En
+> cuarentena` o `Rechazado` con razón registrada.
+
+Ese criterio es una disyunción: no dice qué condición concreta (corrupto,
+ilegible, formato no soportado, u otra) lleva a `Rechazado` y cuál lleva a `En
+cuarentena`. El propio §8 de la misma spec ya lo señala como pregunta abierta
+sin resolver:
+
+> **[CLARIFICAR]** Criterios de cuarentena automática frente a rechazo: qué
+> condiciones llevan a cada rama terminal.
+
+Para escribir TDD contra este RF necesito casos concretos ("dado un artefacto
+con problema X, el ítem termina en Rechazado" / "dado un artefacto con
+problema Y, el ítem termina en Cuarentena"). No existe ese mapeo en la spec.
+Cualquier regla que use para decidirlo (p. ej. "formato no soportado siempre
+rechaza porque es irrecuperable; corrupto/ilegible siempre pone en cuarentena
+porque puede corregirse con reescaneo") sería una política de negocio que
+estoy inventando, no algo que ya esté resuelto en la spec — exactamente el
+tipo de ambigüedad real que la constitución de ejecución me pide no resolver
+por mi cuenta.
+
+**Qué necesito para desbloquear:** que el archivista del design partner (o
+quien tenga la autoridad de negocio) defina, para RF-CI-006, la taxonomía
+mínima de condiciones de validación (al menos: corrupto, ilegible, formato no
+soportado) y para cada una indique si el ítem resultante debe quedar
+`Rechazado` (terminal, sin intervención posible) o `En cuarentena` (requiere
+intervención humana, potencialmente recuperable). Con ese mapeo puedo escribir
+los tests Dado/Cuando/Entonces concretos e implementar RF-CI-006.
+
+No se modificó ningún archivo de código para esta tarea. `TODO.md` queda con
+T-02 marcada `- [?]`. Sigo con la siguiente tarea abierta que no dependa de
+esta respuesta.
