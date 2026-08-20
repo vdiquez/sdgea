@@ -291,12 +291,12 @@ cmd_loop() {
     log "===== Iteración $i/$MAX_ITER ====="
 
     if ! grep -q '^- \[ \]' TODO.md; then
+      if grep -q '^- \[?\]' TODO.md; then
+        printf 'Motivo: tarea(s) "- [?]" esperando respuesta humana en QUESTIONS.md\n' > BLOCKED.md
+        notify "Loop detenido: hay preguntas para ti en QUESTIONS.md."
+        return 0
+      fi
       notify "TODO.md completado en la iteración $i. Loop terminado con éxito."
-      return 0
-    fi
-    if grep -q '^- \[?\]' TODO.md; then
-      printf 'Motivo: tarea(s) "- [?]" esperando respuesta humana en QUESTIONS.md\n' > BLOCKED.md
-      notify "Loop detenido: hay preguntas para ti en QUESTIONS.md."
       return 0
     fi
 

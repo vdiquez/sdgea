@@ -24,6 +24,15 @@ RUN npm install -g @anthropic-ai/claude-code@2.1.237 @openai/codex@0.148.0
 USER agent
 WORKDIR /home/agent
 
+# Sin esto, git rehúsa operar sobre /repo (bind mount = "dubious ownership")
+# y orquestador.sh cree que nunca hay commits nuevos (watchdog falso positivo).
+RUN git config --global --add safe.directory /repo
+
+# Docker crea el directorio padre de un bind mount de archivo suelto como
+# root si no existe ya — precrearlo como 'agent' es lo que permite a codex
+# escribir su propio estado junto al auth.json montado de solo lectura.
+RUN mkdir -p /home/agent/.claude /home/agent/.codex
+
 # uv gestiona su propio Python 3.12 — no depende del intérprete del sistema.
 # Se instala como 'agent', no como root, para que quede en su HOME.
 ENV PATH="/home/agent/.local/bin:${PATH}"
