@@ -1,5 +1,7 @@
 # STATE
-Fase: F1 CERRADO → F2 arrancando. Ver plan-ejecucion-agentica.md.
+Fase: F2 en curso — 11/14 tareas del corte vertical hechas; T-13/T-14 resueltas
+y desglosadas en T-15..T-18 (T-15 hecha, T-16..T-18 abiertas). T-02 sigue
+bloqueada. Ver plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -302,6 +304,19 @@ Hecho:
   Con T-02, T-13 y T-14 bloqueadas, no queda ninguna tarea `- [ ]` abierta en
   TODO.md — las tres tareas restantes de la lista original dependen de
   respuesta humana.
+- F2/F3: T-13 y T-14 resueltas por Victor (QUESTIONS.md, 2026-08-21).
+  T-13: `.github/workflows/ci.yml` gana el job `security-review`
+  (`anthropics/claude-code-security-review`, dispara en `pull_request`,
+  usa `secrets.ANTHROPIC_API_KEY`) y el job `agentshield-pendiente`
+  (placeholder explícito y no bloqueante — AgentShield sigue sin decisión de
+  herramienta). T-14: servicio HTTP por contexto (no monolito modular),
+  Spring Boot confirmado como decisión activa, Postgres por contexto sin
+  esquema compartido. T-15 (escribir `specs/spec-infra-servicios.md`) hecha:
+  contrato HTTP mínimo para `captura-ingesta` y `records-custodia`, cada
+  endpoint trazado a un método de dominio ya implementado — ninguno inventa
+  regla de negocio nueva. Desglosada en T-16 (captura-ingesta servicio),
+  T-17 (records-custodia servicio) y T-18 (Dockerfiles + compose), todas
+  abiertas `- [ ]` en TODO.md. T-02 sigue siendo la única bloqueada.
 
 ## Camino a F2 (checklist, 2026-08-20)
 

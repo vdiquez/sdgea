@@ -11,5 +11,17 @@
 - [x] T-10 RF-RC-005 Bitácora inmutable de solo anexado; modificar/borrar se rechaza
 - [x] T-11 RF-RC-009 Verificación de integridad por demanda con reporte de discrepancias
 - [x] T-12 Arnés: cargar set de juguete, correr componente ficticio, emitir boleta versionada
-- [?] T-13 CI: build + tests + arnés; gates AgentShield + security-review
-- [?] T-14 Empaquetado dual (P-02): mismos contenedores como SaaS y como instalador appliance
+- [x] T-13 CI: security-review cableado (anthropics/claude-code-security-review);
+      AgentShield PENDIENTE explícito y no bloqueante (ver QUESTIONS.md 2026-08-21)
+- [x] T-14 Empaquetado dual (P-02) — decisión resuelta (QUESTIONS.md 2026-08-21):
+      servicio HTTP por contexto, Spring Boot, Postgres por contexto sin esquema
+      compartido. Contrato mínimo en specs/spec-infra-servicios.md. Desglosada en
+      T-15..T-18:
+- [x] T-15 specs/spec-infra-servicios.md escrita (contrato HTTP mínimo +
+      mapeo de persistencia para captura-ingesta y records-custodia)
+- [ ] T-16 captura-ingesta como servicio HTTP (Spring Boot) + persistencia Postgres,
+      contra specs/spec-infra-servicios.md §3
+- [ ] T-17 records-custodia como servicio HTTP (Spring Boot) + persistencia Postgres,
+      contra specs/spec-infra-servicios.md §4
+- [ ] T-18 Dockerfiles reales (captura-ingesta, records-custodia) + wiring en
+      deploy/docker-compose.{saas,onprem}.yml

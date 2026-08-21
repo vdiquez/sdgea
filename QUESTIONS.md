@@ -227,3 +227,35 @@ de P-02. No se modificó ningún `Dockerfile`, `docker-compose.*.yml` ni
 archivo de código para esta tarea. `TODO.md` queda con T-14 marcada `- [?]`.
 No queda ninguna tarea `- [ ]` abierta en TODO.md que no dependa de esta
 respuesta: las tres restantes (T-02, T-13, T-14) están bloqueadas.
+
+## 2026-08-21 · T-13 Resuelto (AgentShield diferido, security-review cableado)
+
+Respuesta de Victor:
+1. **AgentShield** — no hay decisión de herramienta tomada; el nombre en
+   `plan-ejecucion-agentica.md` era un marcador, no una referencia concreta
+   (confirmado: existen proyectos no relacionados con ese nombre). No se
+   instala nada por nombre. Se deja un paso explícito y no bloqueante en el
+   job de CI marcado PENDIENTE, en vez de omitirlo en silencio — reabre
+   cuando evalúe candidatos reales.
+2. **security-review** = `anthropics/claude-code-security-review`, secreto
+   `ANTHROPIC_API_KEY` en el repo de GitHub. Cablear ahora.
+
+Aplicado en `.github/workflows/ci.yml`: job `security-review` (dispara solo en
+`pull_request`, usa `secrets.ANTHROPIC_API_KEY`) y job `agentshield-pendiente`
+(step explícito, siempre verde, con el motivo por escrito).
+
+## 2026-08-21 · T-14 Resuelto (servicios HTTP por contexto, Spring Boot, Postgres por contexto)
+
+Respuesta de Victor:
+1. Cada bounded context se expone como su propio proceso/servicio HTTP — no
+   monolito modular. Empezar con `captura-ingesta` y `records-custodia`.
+2. Framework: Spring Boot, confirmado como decisión activa (no solo
+   aspiracional en STATE.md). El contrato mínimo de API por contexto vive en
+   una spec nueva de infraestructura, `specs/spec-infra-servicios.md`, sin
+   mezclarse con las specs de dominio ya escritas.
+3. Persistencia: cada contexto mapea sus propios agregados a sus propias
+   tablas en el `postgres` ya declarado en los compose; sin esquema
+   compartido entre contextos.
+
+Siguiente paso: escribir `specs/spec-infra-servicios.md` (P-06, spec antes de
+código) y luego reabrir la implementación como tareas nuevas en TODO.md.

@@ -29,6 +29,38 @@ jobs:
       - name: Pruebas del arnés EDD
         run: uv run --directory eval-harness pytest
 
+  # security-review: gate real, T-13. anthropics/claude-code-security-review
+  # revisa el diff del PR contra vulnerabilidades; secreto ANTHROPIC_API_KEY
+  # ya configurado en el repo de GitHub.
+  security-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+      - uses: anthropics/claude-code-security-review@main
+        with:
+          claude-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  # agentshield: PENDIENTE a propósito (T-13). "AgentShield" en
+  # plan-ejecucion-agentica.md era un marcador, no una herramienta concreta
+  # decidida — no se instala nada por ese nombre. Este job existe para que el
+  # hueco sea visible en cada corrida de CI, no silencioso; no bloquea nada.
+  # Se reabre cuando Victor evalúe candidatos reales.
+  agentshield-pendiente:
+    runs-on: ubuntu-latest
+    steps:
+      - name: AgentShield — PENDIENTE
+        run: |
+          echo "PENDIENTE: no hay herramienta de AgentShield decidida todavía."
+          echo "El nombre del plan era un marcador, no una referencia real."
+          echo "No bloqueante a propósito — se revisita al evaluar candidatos."
+
 # TODO: job que ejecuta el arnés EDD contra un set patrón real como gate de
 # liberación (edd-harness.md §5.4) — se añade cuando exista un componente
 # probabilístico real que evaluar. El paso de arriba solo corre las pruebas del

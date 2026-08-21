@@ -11,6 +11,7 @@ escribe **contra** estas specs, no antes que ellas.
 specs/
 ├── README.md                       ← este archivo
 ├── 00-constitution.md              ← stub → ../.specify/memory/constitution.md
+├── spec-infra-servicios.md         ← infraestructura transversal (no es de dominio, ver abajo)
 └── contexts/
     ├── spec-records-custodia.md    ← bounded context determinístico (núcleo de records)
     └── spec-captura-ingesta.md     ← bounded context de entrada al pipeline
@@ -19,6 +20,11 @@ specs/
 A medida que el roadmap avance se agregarán las specs de los demás bounded contexts
 (Normalización, Extracción, Clasificación, Enriquecimiento, Indexación y Búsqueda,
 Seguridad y Acceso, Validación Humana).
+
+`spec-infra-servicios.md` vive en la raíz de `specs/`, no en `contexts/`: define
+*cómo se empaqueta y expone* el dominio ya especificado (servicios HTTP,
+framework de bootstrap, mapeo de persistencia), no reglas de negocio nuevas —
+por eso no se mezcla con las specs de dominio.
 
 ## Las tres capas de un contexto
 
