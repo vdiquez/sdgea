@@ -282,6 +282,27 @@ Hecho:
   dual P-02) es la próxima tarea abierta en TODO.md que no depende de esa
   respuesta.
 
+- F2/F3: T-14 (empaquetado dual P-02: mismos contenedores como SaaS y como
+  instalador appliance) BLOQUEADA — marcada `- [?]` en TODO.md. Los compose
+  de F1 (`deploy/docker-compose.{saas,onprem}.yml`) difieren "Dockerfiles
+  reales" hasta que `captura-ingesta`/`records-custodia` tuvieran código, y
+  ya lo tienen (T-01..T-11). Pero verificado con grep sobre todo el repo: no
+  existe ningún punto de entrada de aplicación (`fun main`,
+  `@SpringBootApplication`, `FastAPI(`) en ningún contexto, y la dependencia
+  de Spring Boot que STATE.md registra como decidida en F1.D1 nunca se
+  añadió a ningún `build.gradle.kts`. Los tres módulos Kotlin con código
+  (`platform-kotlin`, `captura-ingesta`, `records-custodia`) son bibliotecas
+  puras probadas por tests unitarios, sin servidor ni proceso de larga
+  duración. Escribir un Dockerfile "real" exigiría inventar un límite de
+  servicio (¿REST por contexto? ¿monolito modular?) que ninguna spec de
+  contexto define — violaría P-06 (SDD) hacerlo sin spec previa. Pregunta
+  registrada en QUESTIONS.md (2026-08-21).
+  Siguiente paso: un humano define el límite de servicio (HTTP vs monolito
+  modular, framework de bootstrap, mapeo de persistencia) en QUESTIONS.md.
+  Con T-02, T-13 y T-14 bloqueadas, no queda ninguna tarea `- [ ]` abierta en
+  TODO.md — las tres tareas restantes de la lista original dependen de
+  respuesta humana.
+
 ## Camino a F2 (checklist, 2026-08-20)
 
 - [ ] 1. Enviar el one-pager a 3–5 entidades calificadas (F4, hilo comercial —

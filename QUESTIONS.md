@@ -159,3 +159,71 @@ qué es AgentShield.
 
 No se modificó `.github/workflows/ci.yml` ni ningún otro archivo de código
 para esta tarea. `TODO.md` queda con T-13 marcada `- [?]`.
+
+## 2026-08-21 · T-14 Empaquetado dual (P-02) bloqueada — [?]
+
+Tarea tomada de TODO.md: "T-14 Empaquetado dual (P-02): mismos contenedores
+como SaaS y como instalador appliance" (única tarea `- [ ]` abierta; T-02 y
+T-13 siguen `- [?]` sin resolver).
+
+Los esqueletos `deploy/docker-compose.saas.yml` y `deploy/docker-compose.onprem.yml`
+(de F1) dejan escrito que los Dockerfiles reales "se añaden cuando cada
+contexto tenga código (empezando por records-custodia y captura-ingesta)".
+Esos dos contextos ya tienen código (T-01 a T-11), así que en principio T-14
+tocaría escribir esos Dockerfiles y enchufarlos en ambos compose.
+
+Verifiqué el estado real de esos módulos antes de escribir nada:
+
+```
+grep -rn "fun main\|SpringBootApplication\|FastAPI(" --include="*.kt" --include="*.py" .   → sin resultados
+grep -rn "spring\|Spring" --include="*.toml" --include="*.kts" --include="*.properties" .  → sin resultados
+```
+
+Ningún contexto Kotlin tiene punto de entrada de aplicación: no hay `fun
+main`, ninguna clase `@SpringBootApplication`, ni la dependencia de Spring
+Boot declarada en ningún `build.gradle.kts` (ni el raíz, ni
+`platform-kotlin`, ni `captura-ingesta`, ni `records-custodia`). Los tres son
+bibliotecas Kotlin puras (`plugins { kotlin("jvm") }`) probadas con
+`kotlin.test`, sin servidor HTTP, sin persistencia, sin ningún proceso de
+larga duración. Esto contradice lo que registra `STATE.md` sobre F1.D1
+("Kotlin/Spring Boot" como núcleo determinístico decidido): el stack se
+decidió pero la dependencia de Spring nunca se añadió, y ningún RF
+implementado hasta ahora (RF-CI-001/002/007/008, RF-RC-001/002/003/004/005/
+006/009) requirió una capa de aplicación — todos se probaron llamando
+directamente a las clases de dominio desde tests, sin necesidad de un
+proceso ejecutable.
+
+Un contenedor Docker necesita un `ENTRYPOINT`/`CMD` que ejecute algo; sin
+punto de entrada, la única forma de escribir un Dockerfile "real" para estos
+contextos es inventando de la nada una capa de aplicación: qué expone cada
+contexto (¿API REST? ¿consumidor de cola? ¿librería embebida en otro
+proceso?), en qué puerto, con qué framework de bootstrap, con qué mapeo de
+persistencia hacia el `postgres` que ya declaran los compose. Ninguna spec de
+contexto (`spec-captura-ingesta.md`, `spec-records-custodia.md`) define ese
+límite de servicio — ambas describen reglas de dominio, no una interfaz de
+proceso. Diseñar esa capa yo mismo violaría P-06 (SDD: "todo componente
+determinístico se especifica antes de implementarse; la spec es la fuente de
+verdad") y es exactamente el tipo de decisión de arquitectura que no me
+corresponde inventar.
+
+**Qué necesito para desbloquear:** definir, para al menos `captura-ingesta` y
+`records-custodia`, el límite de servicio de cada contexto:
+1. ¿Cada contexto se expone como su propio servicio HTTP (REST/gRPC), o los
+   contextos determinísticos viven dentro de un único proceso Spring Boot
+   (monolito modular) con un solo Dockerfile para el núcleo de records?
+2. Si es HTTP: framework de bootstrap a usar (Spring Boot ya está en
+   STATE.md, pero falta confirmarlo como decisión activa y no solo
+   aspiracional) y el contrato mínimo de API por contexto (puede vivir en
+   una spec nueva de infraestructura, no necesariamente en las specs de
+   dominio ya escritas).
+3. Persistencia: ¿los agregados de dominio ya escritos (p. ej.
+   `CustodiaOriginales`, `BitacoraAuditoria`) se mapean a las tablas de
+   `postgres` que ya declaran los compose, o eso es una tarea aparte?
+
+Sin esa definición, cualquier Dockerfile que escriba sería una fachada vacía
+(una imagen que empaqueta un jar sin nada que ejecutar) o una arquitectura
+inventada sin respaldo de spec — ninguna de las dos es un empaquetado real
+de P-02. No se modificó ningún `Dockerfile`, `docker-compose.*.yml` ni
+archivo de código para esta tarea. `TODO.md` queda con T-14 marcada `- [?]`.
+No queda ninguna tarea `- [ ]` abierta en TODO.md que no dependa de esta
+respuesta: las tres restantes (T-02, T-13, T-14) están bloqueadas.
