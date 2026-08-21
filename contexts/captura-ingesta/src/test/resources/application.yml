@@ -1,0 +1,17 @@
+# Sin Docker disponible en el entorno de ejecución del agente (verificado:
+# `docker` no está instalado), Testcontainers-contra-Postgres-real no es
+# viable para correr `./test.sh` aquí. H2 en modo de compatibilidad Postgres
+# es una sustitución de prueba, no una decisión de producción: las tablas de
+# este contexto (lotes_ingesta, items_ingesta) no tienen el invariante WORM
+# que sí exige records-custodia, así que sustituir el motor solo para test no
+# oculta ninguna garantía específica de Postgres que esta tarea deba probar.
+spring:
+  datasource:
+    url: jdbc:h2:mem:captura-ingesta;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect

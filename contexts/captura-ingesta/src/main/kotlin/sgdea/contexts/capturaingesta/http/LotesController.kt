@@ -1,0 +1,73 @@
+package sgdea.contexts.capturaingesta.http
+
+import java.time.Instant
+import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ResponseStatusException
+import sgdea.contexts.capturaingesta.ArtefactoOrigen
+import sgdea.contexts.capturaingesta.ConteoPorEstado
+import sgdea.contexts.capturaingesta.InventarioOrigen
+import sgdea.contexts.capturaingesta.LoteIngesta
+import sgdea.contexts.capturaingesta.ReporteConciliacion
+import sgdea.contexts.capturaingesta.cargarLote
+import sgdea.contexts.capturaingesta.conciliar
+import sgdea.contexts.capturaingesta.contarPorEstado
+import sgdea.contexts.capturaingesta.persistencia.LoteIngestaRepositorio
+
+// specs/spec-infra-servicios.md §3 · Contrato mínimo — captura-ingesta.
+// Cada endpoint traduce uno a uno una función de dominio ya implementada y
+// probada por TDD (T-01, T-05, T-06); esta clase no añade regla de negocio
+// alguna, solo entrada/salida HTTP y el punto de persistencia entre
+// peticiones que exige la spec.
+data class ArtefactoDto(val id: String, val nombre: String)
+
+data class CargarLoteRequest(
+    val loteId: String,
+    val artefactos: List<ArtefactoDto>,
+    val inventario: List<String>,
+    val fuente: String,
+    val fecha: Instant,
+)
+
+@RestController
+@RequestMapping("/lotes")
+class LotesController(
+    private val repositorio: LoteIngestaRepositorio,
+) {
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    fun cargar(@RequestBody request: CargarLoteRequest): LoteIngesta {
+        val lote = cargarLote(
+            loteId = request.loteId,
+            artefactos = request.artefactos.map { ArtefactoOrigen(id = it.id, nombre = it.nombre) },
+            inventario = InventarioOrigen(request.inventario),
+            fuente = request.fuente,
+            fecha = request.fecha,
+        )
+        repositorio.guardar(lote)
+        return lote
+    }
+
+    @GetMapping("/{loteId}/conteo")
+    fun conteo(@PathVariable loteId: String): ConteoPorEstado {
+        val lote = buscarOFallar(loteId)
+        return contarPorEstado(lote)
+    }
+
+    @GetMapping("/{loteId}/conciliacion")
+    fun conciliacion(@PathVariable loteId: String): ReporteConciliacion {
+        val lote = buscarOFallar(loteId)
+        return conciliar(lote)
+    }
+
+    private fun buscarOFallar(loteId: String): LoteIngesta =
+        repositorio.buscar(loteId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Lote no encontrado: $loteId")
+}

@@ -19,7 +19,7 @@
       T-15..T-18:
 - [x] T-15 specs/spec-infra-servicios.md escrita (contrato HTTP mínimo +
       mapeo de persistencia para captura-ingesta y records-custodia)
-- [ ] T-16 captura-ingesta como servicio HTTP (Spring Boot) + persistencia Postgres,
+- [x] T-16 captura-ingesta como servicio HTTP (Spring Boot) + persistencia Postgres,
       contra specs/spec-infra-servicios.md §3
 - [ ] T-17 records-custodia como servicio HTTP (Spring Boot) + persistencia Postgres,
       contra specs/spec-infra-servicios.md §4

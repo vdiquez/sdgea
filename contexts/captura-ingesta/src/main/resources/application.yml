@@ -1,0 +1,23 @@
+# specs/spec-infra-servicios.md §2: Postgres por contexto, sin esquema
+# compartido. El host/puerto/credenciales se parametrizan por variable de
+# entorno para que el mismo código base sirva a SaaS y a on-premise (P-02) sin
+# cambiar nada aquí, solo el contenedor de postgres que lo respalda.
+spring:
+  application:
+    name: captura-ingesta
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:sgdea}
+    username: ${DB_USER:sgdea}
+    password: ${DB_PASSWORD:sgdea}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # DDL explícitamente delegado a esta tarea por specs/spec-infra-servicios.md
+      # §3 ("el DDL exacto es decisión de implementación"). No hay todavía
+      # herramienta de migración decidida (Flyway/Liquibase) en ninguna spec —
+      # introducirla sin decisión sería la misma clase de invención de
+      # arquitectura que bloqueó T-14; `update` es la opción más simple que no
+      # la requiere, revisable cuando el proyecto decida una herramienta.
+      ddl-auto: update
+server:
+  port: ${SERVER_PORT:8081}

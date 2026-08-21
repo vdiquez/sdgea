@@ -1,7 +1,7 @@
 # STATE
-Fase: F2 en curso — 11/14 tareas del corte vertical hechas; T-13/T-14 resueltas
-y desglosadas en T-15..T-18 (T-15 hecha, T-16..T-18 abiertas). T-02 sigue
-bloqueada. Ver plan-ejecucion-agentica.md.
+Fase: F2 en curso — T-13/T-14 resueltas y desglosadas en T-15..T-18 (T-15 y
+T-16 hechas; T-17, T-18 abiertas). T-02 sigue bloqueada. Ver
+plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -317,6 +317,69 @@ Hecho:
   regla de negocio nueva. Desglosada en T-16 (captura-ingesta servicio),
   T-17 (records-custodia servicio) y T-18 (Dockerfiles + compose), todas
   abiertas `- [ ]` en TODO.md. T-02 sigue siendo la única bloqueada.
+
+- F3: T-16 (captura-ingesta como servicio HTTP + persistencia Postgres)
+  implementado contra `specs/spec-infra-servicios.md` §3, sin tocar ninguna
+  regla de dominio ya probada (T-01/T-05/T-06). Añadido en
+  `contexts/captura-ingesta`:
+  - `CapturaIngestaApplication.kt`: punto de entrada Spring Boot (primer
+    `fun main`/`@SpringBootApplication` del repo — resuelve la mitad de lo
+    que dejó bloqueado T-14 sobre falta de capa de aplicación).
+  - `http/LotesController.kt`: los tres endpoints exactos de la tabla de la
+    spec (`POST /lotes`, `GET /lotes/{id}/conteo`, `GET
+    /lotes/{id}/conciliacion`), cada uno invocando directo `cargarLote` /
+    `contarPorEstado` / `conciliar` ya existentes — ningún endpoint nuevo sin
+    función de dominio detrás, tal como exige la spec §1.
+  - `persistencia/Entidades.kt` + `LoteIngestaRepositorio.kt`: `LoteEntity`
+    (tabla `lotes_ingesta`) y `ItemIngestaEntity` (tabla `items_ingesta`, FK
+    `lote_id`) tal como mapea la spec §3; el dominio (`LoteIngesta` etc.)
+    sigue sin anotaciones JPA — el repositorio es el único punto que traduce
+    entre agregado inmutable y entidades persistentes. `inventario` (lista) se
+    guarda serializada a JSON en una columna de texto — decisión de
+    implementación no exigida literalmente por la spec (que solo fija
+    "id, inventario -> tabla lotes_ingesta"), documentada en el código.
+  Decisiones técnicas tomadas (no normativas, no de negocio):
+  - Spring Boot **3.5.16** (línea estable más reciente a la fecha, verificada
+    contra el índice real de Maven Central — no inventada) + `kotlin("plugin.spring")`/
+    `kotlin("plugin.jpa")` en la misma versión que `kotlin("jvm")` (2.4.10) ya
+    fijada en F1.D1, añadidos en `build.gradle.kts` raíz.
+  - `ddl-auto: update` (Hibernate) en vez de una herramienta de migración: no
+    hay ninguna decisión de Flyway/Liquibase en ninguna spec y decidir una
+    aquí habría sido la misma clase de invención de arquitectura que bloqueó
+    T-14 — documentado en `application.yml` como revisable.
+  - Formato de error: default de Spring Boot vía `ResponseStatusException`
+    (404 con cuerpo estándar), sin fijar RFC 7807 — la spec §5/§7 deja esto
+    en `[CLARIFICAR]` explícitamente como "no bloqueante"; T-16 no lo resuelve,
+    solo no lo necesita para sus tres endpoints.
+  - Serialización: defaults de Jackson que trae Spring Boot (fechas ISO-8601
+    vía `jackson-datatype-jsr310` autoconfigurado, `camelCase`); se añadió
+    `jackson-module-kotlin` (estándar en cualquier proyecto Kotlin+Boot) para
+    (de)serializar `List<String>` sin boilerplate de tipo genérico.
+  TDD: 4 tests nuevos (`LotesControllerTest`, `@SpringBootTest` con
+  `TestRestTemplate` sobre puerto aleatorio) escritos contra la tabla de
+  endpoints de la spec §3 antes de escribir controlador/persistencia/entidad
+  alguna — no hay Dado/Cuando/Entonces propio porque T-16 es infraestructura,
+  no un RF (mismo tratamiento que T-12). Los tests cubren: `POST /lotes`
+  traduce `cargarLote` correctamente (RF-CI-001/RF-CI-007), `GET .../conteo`
+  lee un lote persistido en una petición POST anterior — prueba la
+  persistencia entre peticiones que pide la spec, no solo el cálculo puro ya
+  cubierto por T-05 (RF-CI-008), `GET .../conciliacion` igual para RF-CI-002,
+  y un 404 sobre lote inexistente.
+  Nota de entorno (no bloqueante, no es parte de esta tarea): en esta sesión
+  `/repo/.gradle` y `/repo/.venv` son puntos de montaje con propietario
+  `root`, no escribibles por el usuario `agent` (`Cannot create directory
+  '/repo/.gradle/9.7.0/fileHashes'` / `Permission denied` en
+  `.venv/CACHEDIR.TAG`) — no viene de este cambio (los directorios ya
+  existían con ese dueño antes de tocar código, timestamps `Aug 21 00:42`).
+  Verificado con overrides fuera del árbol del repo (`--project-cache-dir` /
+  `-g` de Gradle, `UV_PROJECT_ENVIRONMENT` de uv) que no tocan ningún archivo
+  versionado: `./gradlew test` completo (todos los módulos, incluidos los 4
+  tests nuevos) y `pytest` del arnés (4 passed) en verde. No se modificó
+  `test.sh` para no alterar el árbitro del loop sin que un humano decida cómo
+  quiere resolver la propiedad de esos volúmenes/mounts.
+  Siguiente paso: T-17 (records-custodia como servicio HTTP + persistencia
+  Postgres, specs/spec-infra-servicios.md §4) es la próxima tarea abierta en
+  TODO.md.
 
 ## Camino a F2 (checklist, 2026-08-20)
 
