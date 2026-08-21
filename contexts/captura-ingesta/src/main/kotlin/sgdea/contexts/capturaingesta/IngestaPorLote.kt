@@ -16,8 +16,16 @@ data class InventarioOrigen(
     val registros: List<String>,
 )
 
+// Estados del ítem de ingesta (spec §3). RECIBIDO es el único estado que
+// produce `cargarLote` (RF-CI-001); los demás se declaran aquí porque
+// RF-CI-008 exige poder contarlos, aunque las transiciones que los alcanzan
+// (validación/cuarentena de RF-CI-006, entrega de RF-CI-010) todavía no están
+// implementadas — RF-CI-006 sigue bloqueada por [CLARIFICAR] en la spec.
 enum class EstadoItemIngesta {
     RECIBIDO,
+    ENTREGADO,
+    RECHAZADO,
+    EN_CUARENTENA,
 }
 
 // Procedencia de un ítem de ingesta (spec §2/§3, RF-CI-007): fuente, fecha,
@@ -71,4 +79,26 @@ fun cargarLote(
         )
     }
     return LoteIngesta(id = loteId, inventario = inventario, items = items)
+}
+
+// RF-CI-008: invariante "cero pérdida silenciosa" — la cuenta de ítems en un
+// estado terminal (Entregado, Rechazado, En cuarentena) debe igualar el total
+// de ítems recibidos en el lote. Si no cuadra, hay ítems atascados en un
+// estado no terminal (procesamiento incompleto) o ausentes.
+data class ConteoPorEstado(
+    val porEstado: Map<EstadoItemIngesta, Int>,
+    val total: Int,
+) {
+    val terminales: Int
+        get() = (porEstado[EstadoItemIngesta.ENTREGADO] ?: 0) +
+            (porEstado[EstadoItemIngesta.RECHAZADO] ?: 0) +
+            (porEstado[EstadoItemIngesta.EN_CUARENTENA] ?: 0)
+
+    val sinPerdidaSilenciosa: Boolean
+        get() = terminales == total
+}
+
+fun contarPorEstado(lote: LoteIngesta): ConteoPorEstado {
+    val porEstado = lote.items.groupingBy { it.estado }.eachCount()
+    return ConteoPorEstado(porEstado = porEstado, total = lote.items.size)
 }

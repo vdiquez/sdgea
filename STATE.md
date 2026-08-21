@@ -86,6 +86,22 @@ Hecho:
   `./test.sh` en verde (Gradle BUILD SUCCESSFUL — 3+1 tests en
   captura-ingesta, 2+1 en records-custodia, todos passing; pytest del
   arnés: 3 passed). No se tocó ningún `[CLARIFICAR]` de las specs.
+- F2: T-05 (RF-CI-008, cero pérdida silenciosa) implementado en
+  `contexts/captura-ingesta`: se amplió `EstadoItemIngesta` con los tres
+  estados terminales de spec §3 (`ENTREGADO`, `RECHAZADO`, `EN_CUARENTENA`,
+  además del `RECIBIDO` ya existente) y se añadió `contarPorEstado(lote)`,
+  que devuelve un `ConteoPorEstado` con `total`, `terminales` (suma de
+  Entregado+Rechazado+En cuarentena) y `sinPerdidaSilenciosa` (el invariante
+  del RF). Alcance deliberadamente angosto: esta tarea NO implementa las
+  transiciones que llevan a esos estados terminales (eso es RF-CI-006 —
+  bloqueada por [CLARIFICAR], ver T-02 — y RF-CI-010, ninguna de las dos es
+  tarea abierta en TODO.md); los tests construyen `ItemIngesta` directamente
+  en cada estado terminal para probar solo el invariante de conteo, sin
+  inventar la política de negocio de cuarentena/rechazo que sigue pendiente.
+  TDD: 2 tests nuevos (`CeroPerdidaSilenciosaTest`) escritos contra el
+  Dado/Cuando/Entonces de RF-CI-008 antes de la implementación (confirmado
+  el fallo de compilación por referencias no definidas antes de implementar);
+  `./test.sh` en verde.
 
 ## Camino a F2 (checklist, 2026-08-20)
 

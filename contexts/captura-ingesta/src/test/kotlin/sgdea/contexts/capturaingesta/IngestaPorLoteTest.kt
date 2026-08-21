@@ -90,3 +90,70 @@ class RegistroDeProcedenciaTest {
         assertEquals("lote-001", item.procedencia.loteOFlujoId)
     }
 }
+
+// RF-CI-008 · Cero pérdida silenciosa
+// Dado un lote procesado, Cuando se suma por estado, Entonces la cuenta de
+// `Entregado` + `Rechazado` + `En cuarentena` iguala el total de ítems
+// recibidos.
+//
+// Las transiciones reales Recibido -> ... -> estado terminal las produce la
+// lógica de validación/entrega de RF-CI-006/RF-CI-010 (fuera de alcance de
+// esta tarea, T-02 sigue bloqueada por [CLARIFICAR]). Aquí se construyen
+// ítems ya en sus estados terminales/no terminales para probar únicamente el
+// invariante de conteo del §3 de la spec, sin inventar esa lógica de
+// transición.
+class CeroPerdidaSilenciosaTest {
+
+    private val fecha = Instant.parse("2026-08-20T10:00:00Z")
+
+    private fun item(id: String, estado: EstadoItemIngesta) = ItemIngesta(
+        id = id,
+        loteId = "lote-001",
+        artefacto = ArtefactoOrigen(id = id, nombre = "$id.pdf"),
+        estado = estado,
+        procedencia = Procedencia(
+            fuente = "escaner-sala-3",
+            fecha = fecha,
+            disparador = "carga_por_lote",
+            loteOFlujoId = "lote-001",
+        ),
+    )
+
+    @Test
+    fun `un lote completamente procesado no pierde items la cuenta terminal iguala el total recibido`() {
+        val lote = LoteIngesta(
+            id = "lote-001",
+            inventario = InventarioOrigen(registros = listOf("a1", "a2", "a3", "a4")),
+            items = listOf(
+                item("a1", EstadoItemIngesta.ENTREGADO),
+                item("a2", EstadoItemIngesta.ENTREGADO),
+                item("a3", EstadoItemIngesta.RECHAZADO),
+                item("a4", EstadoItemIngesta.EN_CUARENTENA),
+            ),
+        )
+
+        val conteo = contarPorEstado(lote)
+
+        assertEquals(4, conteo.total)
+        assertEquals(4, conteo.terminales)
+        assertEquals(true, conteo.sinPerdidaSilenciosa)
+    }
+
+    @Test
+    fun `un lote con un item aun no terminal no cuadra y delata perdida potencial`() {
+        val lote = LoteIngesta(
+            id = "lote-002",
+            inventario = InventarioOrigen(registros = listOf("a1", "a2")),
+            items = listOf(
+                item("a1", EstadoItemIngesta.ENTREGADO),
+                item("a2", EstadoItemIngesta.RECIBIDO),
+            ),
+        )
+
+        val conteo = contarPorEstado(lote)
+
+        assertEquals(2, conteo.total)
+        assertEquals(1, conteo.terminales)
+        assertEquals(false, conteo.sinPerdidaSilenciosa)
+    }
+}
