@@ -262,6 +262,26 @@ Hecho:
   Siguiente paso: T-13 (CI: build + tests + arnés; gates AgentShield +
   security-review) es la próxima tarea abierta en TODO.md.
 
+- F2/F3: T-13 (CI: build + tests + arnés; gates AgentShield + security-review)
+  BLOQUEADA — marcada `- [?]` en TODO.md. La parte "build + tests + arnés" ya
+  existe en `.github/workflows/ci.yml` desde F1 (`build-kotlin` +
+  `build-python` corriendo `pytest` sobre `eval-harness/`). Lo que falta son
+  los dos gates de seguridad nombrados en `plan-ejecucion-agentica.md`
+  (líneas 59/135): "AgentShield" no tiene ninguna referencia técnica en todo
+  el repo (ni paquete, ni GitHub Action, ni config) — es una decisión que el
+  humano dice tener ya tomada pero nunca volcó al repo. Cablearlo exigiría
+  inventar una referencia de acción de terceros para un job que se supone
+  debe *prevenir* riesgo de cadena de suministro, no introducirlo. El gate de
+  security-review sí es identificable (plugin de Anthropic, disponible como
+  skill en este entorno) pero se dejó también sin implementar: cablear solo
+  la mitad del gate dejaría el CI en verde con apariencia de estar protegido
+  sin estarlo. Pregunta registrada en QUESTIONS.md (2026-08-21). No se tocó
+  `.github/workflows/ci.yml`.
+  Siguiente paso: un humano responde la referencia concreta de AgentShield y
+  confirma la acción de security-review en QUESTIONS.md; T-14 (empaquetado
+  dual P-02) es la próxima tarea abierta en TODO.md que no depende de esa
+  respuesta.
+
 ## Camino a F2 (checklist, 2026-08-20)
 
 - [ ] 1. Enviar el one-pager a 3–5 entidades calificadas (F4, hilo comercial —

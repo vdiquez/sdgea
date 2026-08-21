@@ -108,3 +108,54 @@ los tests Dado/Cuando/Entonces concretos e implementar RF-CI-006.
 No se modificó ningún archivo de código para esta tarea. `TODO.md` queda con
 T-02 marcada `- [?]`. Sigo con la siguiente tarea abierta que no dependa de
 esta respuesta.
+
+## 2026-08-21 · T-13 CI: gates AgentShield + security-review bloqueada — [?]
+
+Tarea tomada de TODO.md: "T-13 CI: build + tests + arnés; gates AgentShield +
+security-review" (primera `- [ ]` abierta; T-02 sigue `- [?]` sin resolver).
+
+La parte "build + tests + arnés" ya existe en `.github/workflows/ci.yml`
+(`build-kotlin` corre `./gradlew build`, `build-python` corre `uv sync` +
+`pytest` sobre `eval-harness/`). Lo que falta y da nombre a la tarea son los
+dos gates de seguridad, citados en `plan-ejecucion-agentica.md` líneas 59 y
+135: "AgentShield + plugin security-review de Anthropic".
+
+Revisé todo el repo buscando una referencia técnica concreta a **AgentShield**
+(`grep -rli` sobre árbol completo, incluido `.github/`, `orquestador.sh`,
+`CLAUDE-CODE-KICKOFF.md`, `agent-sandbox/`): no existe ningún paquete, acción
+de GitHub, URL, binario ni archivo de configuración precedente. Las tres únicas
+apariciones del nombre en todo el repo son en prosa
+(`plan-ejecucion-agentica.md`, `STATE.md`, `TODO.md`/`orquestador.sh` — estas
+últimas son solo el texto sembrado de la propia tarea T-13). El plan lo
+describe como algo que el humano "ya tiene elegido" ("los gates de seguridad
+que ya tienes elegidos"), es decir, es una decisión tomada fuera del repo cuya
+integración concreta nunca se documentó aquí.
+
+No puedo escribir el job de CI para este gate sin inventar: nombre de paquete,
+referencia de acción de GitHub Marketplace (org/repo@versión), secretos
+requeridos o forma de invocación. Adivinar cualquiera de esos datos equivale a
+instalar una acción de terceros no verificada en el pipeline actuando como
+"gate de seguridad" — exactamente el tipo de riesgo de cadena de suministro
+que ese gate debería prevenir, no introducir. Es una ambigüedad real (decisión
+de herramienta/infraestructura ya tomada por el humano pero no volcada al
+repo), no procedimental.
+
+El gate de **security-review** (plugin de Anthropic para Claude Code, ya
+disponible como skill en este entorno) sí es identificable, pero decidí no
+implementarlo solo y dejar el otro bloqueado: cablear la mitad de "gates
+AgentShield + security-review" dejaría el job de CI en verde con apariencia de
+gate de seguridad completo cuando en realidad falta la mitad, lo que es peor
+que no tener ninguno. Prefiero resolver ambos gates juntos una vez esté claro
+qué es AgentShield.
+
+**Qué necesito para desbloquear:**
+1. Referencia concreta de AgentShield: ¿es una GitHub Action de Marketplace
+   (org/repo), un CLI/paquete a instalar, o un servicio SaaS con webhook? Con
+   qué versión/tag fijar y qué secretos de CI requiere.
+2. Confirmar que "plugin security-review de Anthropic" se refiere a la acción
+   pública `anthropics/claude-code-security-review` (o indicar la referencia
+   correcta) y qué secreto (p. ej. `ANTHROPIC_API_KEY`) debe configurarse en
+   el repo de GitHub para que el job la use.
+
+No se modificó `.github/workflows/ci.yml` ni ningún otro archivo de código
+para esta tarea. `TODO.md` queda con T-13 marcada `- [?]`.
