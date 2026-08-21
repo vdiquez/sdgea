@@ -1,6 +1,6 @@
 # STATE
-Fase: F2 en curso — T-13/T-14 resueltas y desglosadas en T-15..T-18 (T-15 y
-T-16 hechas; T-17, T-18 abiertas). T-02 sigue bloqueada. Ver
+Fase: F2 en curso — T-13/T-14 resueltas y desglosadas en T-15..T-18 (T-15,
+T-16 y T-17 hechas; T-18 abierta). T-02 sigue bloqueada. Ver
 plan-ejecucion-agentica.md.
 
 Hecho:
@@ -380,6 +380,69 @@ Hecho:
   Siguiente paso: T-17 (records-custodia como servicio HTTP + persistencia
   Postgres, specs/spec-infra-servicios.md §4) es la próxima tarea abierta en
   TODO.md.
+
+- F3: T-17 (records-custodia como servicio HTTP + persistencia Postgres)
+  implementado contra `specs/spec-infra-servicios.md` §4, sin tocar ninguna
+  regla de dominio ya probada (T-03/T-08/T-09/T-11). A diferencia de
+  captura-ingesta (T-16, funciones puras + repositorio externo),
+  `CustodiaOriginales`/`BitacoraAuditoria`/`CapaAnticorrupcionSugerencias`/
+  `RegistroTrd` ya mantenían su propio estado en mapas/listas en memoria; la
+  spec §4 pide explícitamente "reemplazar ese estado en memoria por tablas,
+  sin cambiar el contrato de los métodos". Se resolvió así: cada una de esas
+  cuatro clases gana un parámetro de constructor `Almacen...` (puerto) con
+  una implementación en memoria por defecto idéntica a la que ya tenían —
+  ningún test de dominio de T-03..T-11 cambió una sola línea, todos siguen en
+  verde con `CustodiaOriginales()` sin argumentos — y una implementación
+  respaldada por Postgres (`persistencia/Almacenes.kt`) que el servicio HTTP
+  inyecta vía `configuracion/RecordsCustodiaConfig.kt`. Los once endpoints de
+  la tabla de la spec §4 están en `http/` (`DocumentosController`,
+  `SugerenciasController`, `VerificacionIntegridadController`,
+  `TrdController`), cada uno invocando directo el método de dominio
+  correspondiente; `intentarModificar` y las mutaciones de la bitácora
+  siguen sin exponerse, tal como exige la spec.
+  Decisión técnica (no normativa): `originales_inmutables` y
+  `eventos_auditoria` (las dos tablas que la spec marca como "de solo
+  inserción" / WORM) se escriben con `EntityManager.persist` en vez de
+  `JpaRepository.save`, porque `save` sobre una entidad con `@Id` ya asignado
+  hace `merge` (INSERT o UPDATE según exista la fila) — `persist` solo emite
+  INSERT y falla en vez de sobrescribir, que es la garantía "a nivel de
+  acceso a datos" que la spec pide literalmente para esas dos tablas.
+  `documentos_archivo`, `sugerencias` y `trd_versiones` sí se actualizan con
+  el `save()` normal de Spring Data porque no tienen esa exigencia (el
+  documento cambia de clasificación en RF-RC-004). `evidencia` (lista) y el
+  árbol de series/subseries de la TRD se serializan a JSON en una columna de
+  texto, misma decisión que `inventario` en captura-ingesta (T-16).
+  El formato de error HTTP sigue en `[CLARIFICAR]` (spec §5, no bloqueante):
+  se añadió un `@RestControllerAdvice` mínimo que traduce
+  `NoSuchElementException` (que ahora lanzan `consultar`/`consultarDocumento`/
+  `consultarProcedencia`/`materializar`/`version` sobre un id inexistente,
+  reemplazando el `getValue` de `Map` que lanzaba lo mismo antes del
+  refactor) a 404, sin fijar RFC 7807.
+  TDD: 9 tests nuevos (`RecordsCustodiaHttpTest`, `@SpringBootTest` con
+  `TestRestTemplate` sobre puerto aleatorio) escritos contra la tabla de
+  endpoints de la spec §4 antes de escribir controlador/persistencia/config
+  alguna — no hay Dado/Cuando/Entonces propio porque T-17 es infraestructura,
+  no un RF (mismo tratamiento que T-12/T-16). Cubren: custodiar + consultar
+  original/documento/procedencia persistidos entre peticiones separadas
+  (RF-RC-001/002), 404 sobre id inexistente, materializar decisión humana con
+  persistencia entre peticiones (RF-RC-004), recibir sugerencia + consultarla
+  (RF-RC-003), verificar integridad por documento y agregada (RF-RC-009), y
+  publicar/consultar versión de TRD incluyendo 404 sobre versión inexistente
+  (RF-RC-006). `./gradlew test` (todos los módulos, incluidos los 2 tests
+  existentes de records-custodia sin cambios y los 4 de captura-ingesta) y
+  `pytest` del arnés (4 passed) en verde.
+  Nota de entorno (no bloqueante, misma causa que T-16): `/repo/.gradle` y
+  `/repo/.venv` siguen siendo puntos de montaje de propietario `root` en esta
+  sesión: verificado con overrides fuera del árbol del repo
+  (`--project-cache-dir`/`-g` de Gradle, `UV_PROJECT_ENVIRONMENT` de uv), sin
+  tocar `test.sh`. Nota adicional propia de esta tarea: el `application.yml`
+  de test usa H2 **sin** `MODE=PostgreSQL` (a diferencia de captura-ingesta)
+  porque ese modo de compatibilidad rechaza el tipo `BLOB` que Hibernate
+  genera para la columna `bytes` de `originales_inmutables`; documentado en
+  el propio archivo.
+  Siguiente paso: T-18 (Dockerfiles reales + wiring en
+  deploy/docker-compose.{saas,onprem}.yml) es la próxima tarea abierta en
+  TODO.md — y la última de T-15..T-18.
 
 ## Camino a F2 (checklist, 2026-08-20)
 
