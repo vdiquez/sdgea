@@ -329,6 +329,19 @@ class TrdComoObjetoVersionadoTest {
         assertEquals(1, registro.version(1).version)
         assertEquals(2, registro.version(2).version)
     }
+
+    @Test
+    fun `dada una version ya publicada, cuando se publica de nuevo, la publicacion se rechaza y no la sobrescribe`() {
+        val registro = RegistroTrd()
+        registro.publicar(trd(1))
+
+        val trdModificada = trd(1).copy(vigenteDesde = Instant.parse("2026-08-25T00:00:00Z"))
+
+        assertFailsWith<PublicacionDeTrdRechazadaException> {
+            registro.publicar(trdModificada)
+        }
+        assertEquals(trd(1).vigenteDesde, registro.version(1).vigenteDesde)
+    }
 }
 
 // RF-RC-009 · Verificación de integridad

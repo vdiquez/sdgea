@@ -2,10 +2,13 @@ package sgdea.contexts.recordscustodia.persistencia
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
 import jakarta.persistence.Lob
+import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import java.time.Instant
 import org.springframework.data.jpa.repository.JpaRepository
@@ -39,14 +42,18 @@ class OriginalEntity(
 // documentos_archivo, con original_id como llave foránea". A diferencia del
 // original, el documento sí se actualiza (RF-RC-004 cambia su clasificación),
 // así que esta entidad usa el guardado normal de Spring Data (merge/insert).
+// `original` es `@ManyToOne`/`@JoinColumn` (T-19, corrige VETO de Codex: antes
+// era una columna escalar sin FK real) para que el DDL de Hibernate impida un
+// `original_id` que no exista en `originales_inmutables`.
 @Entity
 @Table(name = "documentos_archivo")
 class DocumentoEntity(
     @Id
     var id: String = "",
 
-    @Column(name = "original_id", nullable = false)
-    var originalId: String = "",
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "original_id", nullable = false)
+    var original: OriginalEntity? = null,
 
     @Column(name = "procedencia_fuente", nullable = false)
     var procedenciaFuente: String = "",
@@ -99,7 +106,10 @@ class EventoAuditoriaEntity(
 // documento_id como llave foránea". `evidencia` (List<String>) se serializa a
 // JSON en una columna de texto, misma decisión que `inventario` en
 // captura-ingesta (T-16): representar una lista de longitud variable sin una
-// tabla hija que la spec no pide.
+// tabla hija que la spec no pide. `documento` es `@ManyToOne`/`@JoinColumn`
+// (T-19, corrige VETO de Codex: antes era una columna escalar sin FK real)
+// para que el DDL de Hibernate impida un `documento_id` que no exista en
+// `documentos_archivo`.
 @Entity
 @Table(name = "sugerencias")
 class SugerenciaEntity(
@@ -107,8 +117,9 @@ class SugerenciaEntity(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
 
-    @Column(name = "documento_id", nullable = false)
-    var documentoId: String = "",
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "documento_id", nullable = false)
+    var documento: DocumentoEntity? = null,
 
     @Column(nullable = false)
     var tipo: String = "",
@@ -150,7 +161,5 @@ class TrdVersionEntity(
 interface DocumentoJpaRepository : JpaRepository<DocumentoEntity, String>
 
 interface SugerenciaJpaRepository : JpaRepository<SugerenciaEntity, Long> {
-    fun findByDocumentoId(documentoId: String): List<SugerenciaEntity>
+    fun findByDocumento_Id(documentoId: String): List<SugerenciaEntity>
 }
-
-interface TrdVersionJpaRepository : JpaRepository<TrdVersionEntity, Int>

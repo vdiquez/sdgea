@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.server.ResponseStatusException
 import sgdea.contexts.capturaingesta.ArtefactoOrigen
 import sgdea.contexts.capturaingesta.ConteoPorEstado
 import sgdea.contexts.capturaingesta.InventarioOrigen
@@ -67,7 +66,12 @@ class LotesController(
         return conciliar(lote)
     }
 
+    // specs/spec-infra-servicios.md §5 (T-19, corrige VETO de Codex): antes
+    // usaba ResponseStatusException, que produce un cuerpo distinto al de
+    // records-custodia. NoSuchElementException + ManejoDeErrores es la misma
+    // excepción de dominio y el mismo cuerpo {"error": ...} que usa
+    // records-custodia para "id no encontrado" — una sola convención de
+    // error aplicada en los dos contextos.
     private fun buscarOFallar(loteId: String): LoteIngesta =
-        repositorio.buscar(loteId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Lote no encontrado: $loteId")
+        repositorio.buscar(loteId) ?: throw NoSuchElementException("Lote no encontrado: $loteId")
 }

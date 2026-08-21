@@ -59,17 +59,24 @@ class AlmacenDeOriginalesJpa : AlmacenDeOriginales {
 
 // El documento sí se actualiza (RF-RC-004), así que este puerto usa el
 // guardado normal de Spring Data en vez de EntityManager.persist.
+// `entityManager.getReference` evita una consulta extra para obtener el
+// `OriginalEntity` que respalda la FK (T-19, corrige VETO de Codex): el
+// original siempre existe ya en la base cuando se guarda el documento
+// (`CustodiaOriginales.custodiar` guarda el original antes que el documento).
 @Component
 @Transactional
 class AlmacenDeDocumentosJpa(
     private val jpaRepository: DocumentoJpaRepository,
 ) : AlmacenDeDocumentos {
 
+    @PersistenceContext
+    private lateinit var entityManager: EntityManager
+
     override fun guardar(documento: DocumentoDeArchivo) {
         jpaRepository.save(
             DocumentoEntity(
                 id = documento.id,
-                originalId = documento.originalId,
+                original = entityManager.getReference(OriginalEntity::class.java, documento.originalId),
                 procedenciaFuente = documento.procedencia.fuente,
                 procedenciaFecha = documento.procedencia.fecha,
                 procedenciaLoteOFlujoId = documento.procedencia.loteOFlujoId,
@@ -85,7 +92,7 @@ class AlmacenDeDocumentosJpa(
 
     private fun DocumentoEntity.toDominio() = DocumentoDeArchivo(
         id = id,
-        originalId = originalId,
+        originalId = original!!.id,
         procedencia = Procedencia(fuente = procedenciaFuente, fecha = procedenciaFecha, loteOFlujoId = procedenciaLoteOFlujoId),
         clasificacion = clasificacionTrdVersion?.let { version ->
             Clasificacion(documentoId = id, trdVersion = version, serieId = clasificacionSerieId!!, subserieId = clasificacionSubserieId)
@@ -124,6 +131,10 @@ class AlmacenDeEventosJpa : AlmacenDeEventos {
     override fun en(indice: Int): EventoAuditoria = todos()[indice]
 }
 
+// `entityManager.getReference` evita una consulta extra para obtener el
+// `DocumentoEntity` que respalda la FK (T-19, corrige VETO de Codex): la capa
+// anticorrupción ya exige que el documento exista (`consultarDocumento`)
+// antes de guardar la sugerencia.
 @Component
 @Transactional
 class AlmacenDeSugerenciasJpa(
@@ -131,10 +142,13 @@ class AlmacenDeSugerenciasJpa(
     private val objectMapper: ObjectMapper,
 ) : AlmacenDeSugerencias {
 
+    @PersistenceContext
+    private lateinit var entityManager: EntityManager
+
     override fun guardar(sugerencia: Sugerencia) {
         jpaRepository.save(
             SugerenciaEntity(
-                documentoId = sugerencia.documentoId,
+                documento = entityManager.getReference(DocumentoEntity::class.java, sugerencia.documentoId),
                 tipo = sugerencia.tipo,
                 contenidoPropuesto = sugerencia.contenidoPropuesto,
                 modeloId = sugerencia.modeloId,
@@ -146,9 +160,9 @@ class AlmacenDeSugerenciasJpa(
     }
 
     override fun de(documentoId: String): List<Sugerencia> =
-        jpaRepository.findByDocumentoId(documentoId).map { entity ->
+        jpaRepository.findByDocumento_Id(documentoId).map { entity ->
             Sugerencia(
-                documentoId = entity.documentoId,
+                documentoId = entity.documento!!.id,
                 tipo = entity.tipo,
                 contenidoPropuesto = entity.contenidoPropuesto,
                 modeloId = entity.modeloId,
@@ -159,15 +173,22 @@ class AlmacenDeSugerenciasJpa(
         }
 }
 
+// T-19 (corrige VETO de Codex): `trd_versiones` recibe el mismo tratamiento
+// de solo-inserción que `originales_inmutables`/`eventos_auditoria` —
+// `entityManager.persist` en vez de `JpaRepository.save`, para que un
+// `version` repetido falle también a nivel de acceso a datos y no solo
+// dependa del rechazo que ya hace `RegistroTrd.publicar` en el dominio.
 @Component
 @Transactional
 class AlmacenDeTrdJpa(
-    private val jpaRepository: TrdVersionJpaRepository,
     private val objectMapper: ObjectMapper,
 ) : AlmacenDeTrd {
 
+    @PersistenceContext
+    private lateinit var entityManager: EntityManager
+
     override fun guardar(trd: Trd) {
-        jpaRepository.save(
+        entityManager.persist(
             TrdVersionEntity(
                 version = trd.version,
                 vigenteDesde = trd.vigenteDesde,
@@ -177,7 +198,7 @@ class AlmacenDeTrdJpa(
     }
 
     override fun buscar(version: Int): Trd? =
-        jpaRepository.findById(version).orElse(null)?.let { entity ->
+        entityManager.find(TrdVersionEntity::class.java, version)?.let { entity ->
             Trd(version = entity.version, vigenteDesde = entity.vigenteDesde, series = objectMapper.readValue<List<Serie>>(entity.seriesJson))
         }
 }

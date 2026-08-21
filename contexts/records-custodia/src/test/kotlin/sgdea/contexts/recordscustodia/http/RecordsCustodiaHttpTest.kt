@@ -70,10 +70,11 @@ class RecordsCustodiaHttpTest {
     }
 
     @Test
-    fun `GET documentos de un id inexistente responde 404`() {
+    fun `GET documentos de un id inexistente responde 404 con el formato de error unificado - specs-infra-servicios §5`() {
         val response = restTemplate.getForEntity(url("/documentos/no-existe"), Map::class.java)
 
         assertEquals(HttpStatus.NOT_FOUND, response.statusCode)
+        assertTrue((response.body!!["error"] as String).contains("no-existe"))
     }
 
     @Test
@@ -173,5 +174,29 @@ class RecordsCustodiaHttpTest {
         val response = restTemplate.getForEntity(url("/trd/999"), Map::class.java)
 
         assertEquals(HttpStatus.NOT_FOUND, response.statusCode)
+    }
+
+    @Test
+    fun `POST trd sobre una version ya publicada se rechaza y no la sobrescribe - RF-RC-006, T-19`() {
+        val trd = mapOf(
+            "version" to 8,
+            "vigenteDesde" to fecha,
+            "series" to listOf(
+                mapOf(
+                    "id" to "serie-1",
+                    "nombre" to "Gestión documental",
+                    "reglaRetencion" to mapOf("tiempoRetencionAnios" to 5, "disposicionFinal" to "Conservación total"),
+                    "subseries" to emptyList<Any>(),
+                ),
+            ),
+        )
+        restTemplate.postForEntity(url("/trd"), trd, Map::class.java)
+
+        val trdModificada = trd + mapOf("vigenteDesde" to "2026-09-01T00:00:00Z")
+        val response = restTemplate.postForEntity(url("/trd"), trdModificada, Map::class.java)
+
+        assertEquals(HttpStatus.CONFLICT, response.statusCode)
+        val getResponse = restTemplate.getForEntity(url("/trd/8"), Map::class.java)
+        assertEquals(fecha, getResponse.body!!["vigenteDesde"])
     }
 }

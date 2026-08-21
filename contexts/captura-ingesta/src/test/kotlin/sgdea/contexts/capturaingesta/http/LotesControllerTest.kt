@@ -91,9 +91,10 @@ class LotesControllerTest {
     }
 
     @Test
-    fun `GET conteo de un lote inexistente responde 404`() {
+    fun `GET conteo de un lote inexistente responde 404 con el formato de error unificado - specs-infra-servicios §5`() {
         val response = restTemplate.getForEntity(url("/lotes/no-existe/conteo"), Map::class.java)
 
         assertEquals(HttpStatus.NOT_FOUND, response.statusCode)
+        assertTrue((response.body!!["error"] as String).contains("no-existe"))
     }
 }

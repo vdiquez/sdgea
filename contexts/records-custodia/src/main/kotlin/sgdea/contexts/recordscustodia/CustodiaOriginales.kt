@@ -424,14 +424,25 @@ class AlmacenDeTrdEnMemoria : AlmacenDeTrd {
     override fun buscar(version: Int): Trd? = versiones[version]
 }
 
+class PublicacionDeTrdRechazadaException(mensaje: String) : RuntimeException(mensaje)
+
 // RF-RC-006: registro de versiones publicadas de la TRD. Publicar una nueva
 // versión solo añade una entrada; nunca sobrescribe ni retira una versión
 // anterior, así que toda `Clasificacion` que referencia una versión ya
 // publicada sigue resolviendo contra esa misma versión después de que se
-// publique una nueva.
+// publique una nueva. La comprobación de "ya existe" vive aquí, en el
+// dominio, y no en cada `AlmacenDeTrd` (P-03): así la garantía es la misma
+// sin importar la implementación del puerto (en memoria o Postgres, T-19 —
+// corrige VETO de Codex, que encontró que la implementación JPA sobrescribía
+// una versión ya publicada porque nunca llegaba a rechazarla).
 class RegistroTrd(private val almacen: AlmacenDeTrd = AlmacenDeTrdEnMemoria()) {
 
     fun publicar(trd: Trd) {
+        if (almacen.buscar(trd.version) != null) {
+            throw PublicacionDeTrdRechazadaException(
+                "La versión ${trd.version} de la TRD ya fue publicada; no se puede sobrescribir.",
+            )
+        }
         almacen.guardar(trd)
     }
 
