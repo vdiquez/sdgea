@@ -6,7 +6,7 @@
 - [x] T-05 RF-CI-008 Cero pérdida silenciosa: suma de estados terminales cuadra
 - [x] T-06 RF-CI-002 Conciliación contra inventario (FUID): faltantes y sobrantes
 - [x] T-07 RF-RC-006 TRD como objeto versionado (estructura mínima)
-- [ ] T-08 RF-RC-003 Sugerencia vía capa anticorrupción, con EMISOR FICTICIO; no toca estado
+- [x] T-08 RF-RC-003 Sugerencia vía capa anticorrupción, con EMISOR FICTICIO; no toca estado
 - [ ] T-09 RF-RC-004 Materialización solo por decisión humana (actor + fecha)
 - [ ] T-10 RF-RC-005 Bitácora inmutable de solo anexado; modificar/borrar se rechaza
 - [ ] T-11 RF-RC-009 Verificación de integridad por demanda con reporte de discrepancias

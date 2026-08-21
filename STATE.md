@@ -136,6 +136,24 @@ Hecho:
   RF-RC-006 antes de la implementación; `./test.sh` en verde (Gradle BUILD
   SUCCESSFUL — 2 nuevos tests pasando en records-custodia; pytest del arnés:
   3 passed).
+- F2: T-08 (RF-RC-003, recepción de sugerencias como propuestas) implementado
+  en `contexts/records-custodia`: `Sugerencia` (spec §3: modelo, evidencia,
+  confianza, tipo, contenido propuesto, fecha, vinculada a un documento) más
+  `SugerenciaEntrante` (la entrada cruda que llega a la capa anticorrupción
+  de spec §4) y `CapaAnticorrupcionSugerencias.recibir(...)`, que exige que
+  el documento ya esté custodiado, traduce la entrada a `Sugerencia` y la
+  guarda vinculada al documento — sin tocar `DocumentoDeArchivo` ni ningún
+  estado. El "EMISOR FICTICIO" de TODO.md es `SugerenciaEntrante`: representa
+  la salida de Clasificación/Enriquecimiento sin implementar ningún
+  clasificador real, en línea con la constitución. Se añadió
+  `CustodiaOriginales.consultarDocumento(id)` (mínimo necesario para probar
+  que el documento no cambia). TDD: 2 tests nuevos
+  (`RecepcionDeSugerenciasTest`) escritos contra el Dado/Cuando/Entonces de
+  RF-RC-003 antes de la implementación (confirmado el fallo de compilación
+  por símbolos no definidos); `./test.sh` en verde (Gradle BUILD
+  SUCCESSFUL — records-custodia ahora con 2+1+2+2 tests; pytest del arnés:
+  3 passed). No se tocó ningún `[CLARIFICAR]` de la spec — RF-RC-003 no
+  tiene ninguno pendiente.
 
 ## Camino a F2 (checklist, 2026-08-20)
 
