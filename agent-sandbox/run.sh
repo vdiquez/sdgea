@@ -16,19 +16,24 @@ for f in "$CLAUDE_CREDS" "$CLAUDE_CONFIG" "$CODEX_AUTH"; do
     [ -f "$f" ] || { echo "Falta $f — inicia sesión en el host primero (claude /login, codex login)." >&2; exit 1; }
 done
 
+# .venv y .gradle van en carpetas del host FUERA del repo, NO en un volumen
+# nombrado de Docker: los volúmenes nombrados se crean root:root la primera
+# vez que se montan y el usuario 'agent' no puede escribir ahí (mismo bug que
+# tuvo /home/agent/.codex — Gradle fallaba con "Cannot create directory" en
+# CADA iteración del loop, y el watchdog de tests-en-rojo se disparó por eso,
+# no por el código). Un bind mount a una carpeta del host sí funciona sin
+# líos de permisos (igual que /repo), y tampoco se mezcla con el .venv/.gradle
+# del host porque vive en una ruta aparte.
+SANDBOX_STATE="$HOST_HOME/.sgdea-agent-sandbox"
+mkdir -p "$SANDBOX_STATE/venv" "$SANDBOX_STATE/gradle"
+
 # MSYS_NO_PATHCONV: Git Bash en Windows reescribe rutas tipo /repo como si
 # fueran rutas de host — esto evita que mangle las rutas internas del contenedor.
-#
-# .venv y .gradle van en volúmenes nombrados, NO en el bind mount del repo:
-# son artefactos específicos de plataforma (venv de Linux, caché de Gradle) y
-# compartirlos con el host los corrompe — ya pasó una vez (uv no podía borrar
-# un symlink de Linux estando en Windows). Persisten entre corridas del loop,
-# solo no se mezclan con lo que ve el host.
 MSYS_NO_PATHCONV=1 docker run --rm -it \
     --name sgdea-agent-loop \
     -v "$REPO_ROOT:/repo" \
-    -v sgdea-agent-venv:/repo/.venv \
-    -v sgdea-agent-gradle:/repo/.gradle \
+    -v "$SANDBOX_STATE/venv:/repo/.venv" \
+    -v "$SANDBOX_STATE/gradle:/repo/.gradle" \
     -v "$CLAUDE_CREDS:/home/agent/.claude/.credentials.json:ro" \
     -v "$CLAUDE_CONFIG:/home/agent/.claude.json:ro" \
     -v "$CODEX_AUTH:/home/agent/.codex/auth.json:ro" \

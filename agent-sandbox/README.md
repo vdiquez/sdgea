@@ -37,14 +37,24 @@ Verificado (2026-08-20): `codex login status` → "Logged in using ChatGPT";
 `claude -p "..." --dangerously-skip-permissions` devuelve una respuesta real
 (no simulada) usando las credenciales montadas.
 
-## `.venv` y `.gradle` — no van en el bind mount
+## `.venv` y `.gradle` — no van en el bind mount del repo, ni en un volumen nombrado
 
-`run.sh` los monta como volúmenes nombrados (`sgdea-agent-venv`,
-`sgdea-agent-gradle`), no como parte del bind mount del repo. Son artefactos
-de plataforma (venv de Linux, caché de Gradle); compartirlos con el host los
-corrompe — pasó una vez: `uv` no podía borrar un symlink que el contenedor
-Linux había creado, estando ya en Windows. Si corres el sandbox con `docker
-run` a mano en vez de `run.sh`, replica esos dos `-v`.
+`run.sh` los monta desde `~/.sgdea-agent-sandbox/{venv,gradle}` (carpeta en
+el HOST, fuera del repo), no como parte del bind mount de `/repo` ni como
+volumen nombrado de Docker. Dos problemas reales, en ese orden:
+1. Compartir `.venv`/`.gradle` con el bind mount del repo corrompe el venv
+   del host — pasó una vez: `uv` no podía borrar un symlink que el
+   contenedor Linux había creado, estando ya en Windows.
+2. Un volumen nombrado de Docker (`docker volume create` / `-v nombre:...`)
+   se crea `root:root` la primera vez que se monta, y el usuario `agent` no
+   puede escribir ahí — Gradle fallaba con "Cannot create directory" en
+   **cada** iteración del loop, y el watchdog de "tests en rojo" se disparó
+   por eso, no por el código (pasó de verdad, T-16/T-17/T-18: el código
+   estaba bien, el arnés de CI no podía correr).
+
+Un bind mount a una carpeta del host sí funciona sin líos de permisos (igual
+que `/repo` mismo). Si corres el sandbox con `docker run` a mano en vez de
+`run.sh`, replica esos dos `-v` contra esa misma carpeta del host.
 
 ## Correr
 
