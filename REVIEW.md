@@ -1,84 +1,74 @@
-VETO: P-06 / specs/spec-infra-servicios.md §4 — `POST /trd` puede sobrescribir una versión de TRD ya publicada.
+VETO: P-08 — la recepción de una sugerencia persiste la sugerencia sin anexar el evento de auditoría obligatorio.
 
-# Revisión de T-16, T-17 y T-18
+# Revisión de `HEAD` — `582dd67` (T-19)
 
-Commits revisados: `e1473aa` (T-16), `760875f` y `6282640` (T-17), y
-`82a7bc3` (T-18). Se revisaron contra `AGENTS.md`,
-`.specify/memory/constitution.md`, `STATE.md` y
-`specs/spec-infra-servicios.md`, en ese orden, y contra el contenido real de
-los commits con `git show`.
+Revisado contra `AGENTS.md`, `.specify/memory/constitution.md`, `STATE.md` y
+`specs/spec-infra-servicios.md`, contrastando el diff de `git show HEAD` y el
+código efectivo de `HEAD` (no sus comentarios).
 
-## Motivos del veto
+## Resultado de los cuatro motivos del veto anterior
 
-1. **RF-RC-006 queda violado por la persistencia de TRD.**
-   `AlmacenDeTrdJpa.guardar` en
-   `contexts/records-custodia/src/main/kotlin/sgdea/contexts/recordscustodia/persistencia/Almacenes.kt`
-   llama `TrdVersionJpaRepository.save(...)` con una entidad cuyo `@Id` es la
-   versión. Para una versión que ya existe, Spring Data JPA usa `merge`, por lo
-   que el segundo `POST /trd` para la misma versión actualiza `vigente_desde` y
-   `series_json`. Esto contradice directamente §4: una versión publicada
-   «nunca se sobrescribe», y contradice el contrato que el dominio declara para
-   `RegistroTrd.publicar`. La prueba HTTP solo publica una vez; no cubre el
-   caso que debe rechazar la segunda publicación.
+1. **RF-RC-006 — corregido.** `RegistroTrd.publicar` consulta el puerto y
+   rechaza una versión existente antes de guardar; además,
+   `AlmacenDeTrdJpa.guardar` usa `EntityManager.persist`, no
+   `JpaRepository.save`. Una segunda publicación ya no puede convertir el
+   adaptador JPA en un `merge` que sobrescriba `trd_versiones`. Las pruebas de
+   dominio y HTTP añadidas intentan la segunda publicación, esperan rechazo y
+   verifican que permanece la fecha original.
 
-2. **Faltan dos llaves foráneas exigidas de forma expresa por §4.**
-   `DocumentoEntity.originalId` y `SugerenciaEntity.documentoId` son columnas
-   escalares: no tienen `@ManyToOne`/`@JoinColumn` ni una FK equivalente. Por
-   tanto, el DDL de Hibernate no impide un `original_id` inexistente en
-   `documentos_archivo`, ni un `documento_id` inexistente en `sugerencias`.
-   La spec exige respectivamente esas dos llaves foráneas. El mapeo de
-   `items_ingesta.lote_id` sí usa `@ManyToOne` y `@JoinColumn`; los dos mapeos
-   de Records/Custodia deben alcanzar el mismo nivel de garantía.
+2. **FK de documento y sugerencia — corregido.** `DocumentoEntity.original`
+   es `@ManyToOne` con `@JoinColumn(name = "original_id", nullable = false)`
+   hacia `OriginalEntity`; `SugerenciaEntity.documento` aplica el mismo mapeo
+   para `documento_id` hacia `DocumentoEntity`. Los adaptadores obtienen las
+   referencias con `EntityManager.getReference` y las consultas derivadas usan
+   `findByDocumento_Id`. Ya no son las dos columnas escalares huérfanas del
+   veto anterior.
 
-3. **El formato de errores no se aplicó de forma consistente entre ambos
-   servicios.** §5 lo deja como decisión técnica no bloqueante, pero requiere
-   fijarla, documentarla y aplicarla consistentemente. Captura/Ingesta delega
-   el 404 a `ResponseStatusException` y a la respuesta por defecto de Spring;
-   Records/Custodia añade `ManejoDeErrores` y devuelve `{"error": ...}` para
-   solo una familia de errores. Esto sí fija dos convenciones distintas, pese a
-   que el comentario dice no fijar un formato. Debe definirse una única
-   convención y aplicarse en los dos contextos (incluidos los 404).
+3. **Formato de error entre servicios — corregido para el caso común que
+   motivó el veto.** Captura/Ingesta dejó de lanzar `ResponseStatusException`:
+   ambos servicios manejan `NoSuchElementException` con
+   `@RestControllerAdvice`, HTTP 404 y el cuerpo `{"error": mensaje}`. Las dos
+   pruebas HTTP comprueban tanto el 404 como el campo `error`. El 409 añadido
+   para publicación TRD usa esa misma forma de cuerpo. Esto es una convención
+   técnica permitida por §5; no fija RFC 7807, que sigue marcado
+   `[CLARIFICAR]`.
 
-## Comprobaciones que pasan
+4. **P-08 — sigue presente y es una violación real.**
+   `CapaAnticorrupcionSugerencias.recibir(entrada, fecha)` consulta el
+   documento, crea una `Sugerencia` y ejecuta `almacen.guardar(sugerencia)`.
+   No recibe una `BitacoraAuditoria`, no llama `anexar` y no hay otro camino
+   que anexe un evento al recibirla. El cableado Spring también la construye
+   solo con `CustodiaOriginales` y `AlmacenDeSugerenciasJpa`; por tanto la
+   inserción de `sugerencias` queda sin una inserción correspondiente en
+   `eventos_auditoria`.
 
-- **P-01 / RF-RC-004:** no hay endpoint que aplique una sugerencia al estado
-  del documento. `POST /sugerencias` solo construye `SugerenciaEntrante` y la
-  entrega a `CapaAnticorrupcionSugerencias.recibir`; esa capa continúa siendo
-  la única puerta de sugerencias. La única ruta que materializa clasificación
-  es `POST /documentos/{id}/decisiones`, que crea una `DecisionHumana` con
-  actor y fecha y llama a `CustodiaOriginales.materializar`.
-- **P-03 / aislamiento del dominio:** los puertos `AlmacenDeOriginales`,
-  `AlmacenDeDocumentos`, `AlmacenDeEventos`, `AlmacenDeSugerencias` y
-  `AlmacenDeTrd` están en el paquete de dominio; sus adaptadores JPA están en
-  `persistencia/`, y el cableado de clases concretas queda en la configuración
-  Spring. El dominio no importa JPA, Spring ni las implementaciones JPA.
-  Captura/Ingesta tampoco anota sus tipos de dominio con JPA: el mapeo está en
-  su adaptador de persistencia.
-- **RF-RC-001 / RF-RC-005 a nivel de acceso a datos:** inspeccionado el código,
-  `AlmacenDeOriginalesJpa.guardar` y `AlmacenDeEventosJpa.anexar` usan
-  exclusivamente `EntityManager.persist`. No llaman `merge`, `update` ni
-  `save`; sus lecturas son `find`/consultas. Esto satisface el tratamiento
-  solicitado de INSERT solamente en esos dos adaptadores.
-- **H2 de pruebas:** las justificaciones de ambos `src/test/resources/application.yml`
-  son razonables para un sandbox sin Docker. Captura/Ingesta no tiene una
-  garantía específica de Postgres que se esté eludiendo. En Records/Custodia,
-  la garantía WORM evaluada aquí depende de que esos adaptadores usen `persist`
-  y no de una característica propietaria de Postgres; H2 no la oculta. Sería
-  conveniente añadir una prueba de integración que intente una segunda
-  escritura del mismo original y compruebe su rechazo, pero no sustituye el
-  hallazgo de TRD ni requiere Testcontainers para ser válida.
-- **T-18 / P-02 y frontera de red:** los Dockerfiles usan el mismo código
-  multi-módulo y Java 21 que el proyecto. Ambos compose conectan los servicios
-  al `postgres` declarado y no publican `ports`, coherente con §7 mientras no
-  exista Seguridad y Acceso. No se introdujo una capacidad probabilística,
-  referencia normativa ni umbral nuevo.
+   P-08 nombra expresamente la «recepción de sugerencia» como transición que
+   debe producir un evento inmutable, atribuible, fechado y con estado anterior
+   y posterior. Que el documento no cambie protege P-01, pero no elimina la
+   obligación de auditoría. El commit no modifica esta ruta ni incorpora una
+   prueba que compruebe dicho evento. Se mantiene por ello el VETO.
+
+## Comprobaciones adicionales
+
+- **P-01:** pasa en el código revisado. La sugerencia se conserva como
+  propuesta; `recibir` no llama a `materializar` ni guarda un
+  `DocumentoDeArchivo` modificado. La materialización continúa requiriendo
+  `DecisionHumana`.
+- **P-03:** el cambio no introduce consumo directo de una capacidad externa en
+  el dominio. Los almacenes siguen tras sus puertos y los adaptadores JPA
+  permanecen en `persistencia/`; no se detectó violación nueva de P-03.
+- **P-08 restante:** custodia, decisión humana, intento rechazado de modificar
+  el original y discrepancia de integridad sí anexan eventos. La omisión de la
+  recepción de sugerencia basta por sí sola para vetar. El acceso sin evento es
+  deuda ya declarada fuera del contrato mínimo (RF-RC-010), no una regresión
+  introducida por este commit.
+- **Referencias y umbrales:** el diff no introduce referencia normativa ni
+  valor umbral inventado. La mención de RFC 7807 ya figura en la spec como
+  decisión pendiente y el commit no la adopta.
 
 ## Verificación ejecutable
 
-En este entorno de revisión, `./gradlew test --no-daemon` no pudo iniciarse:
-el wrapper intenta crear su lock bajo `C:\\.gradle\\wrapper` y recibe permiso
-denegado. Es una limitación de este sandbox, no un resultado rojo atribuible a
-estos commits. La conclusión anterior se basa en inspección del código real;
-la ejecución verde en el host y el smoke test con Postgres reportados para la
-revisión siguen siendo evidencia complementaria, pero no corrigen los tres
-incumplimientos señalados.
+`./test.sh` terminó correctamente (exit code 0) con un `GRADLE_USER_HOME`
+temporal dentro del entorno de revisión. La suite verde no cubre el motivo
+P-08: no existe una prueba que reciba una sugerencia y exija el evento de
+auditoría atribuible con estados anterior y posterior.

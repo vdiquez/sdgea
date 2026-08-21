@@ -25,13 +25,24 @@
       contra specs/spec-infra-servicios.md §4
 - [x] T-18 Dockerfiles reales (captura-ingesta, records-custodia) + wiring en
       deploy/docker-compose.{saas,onprem}.yml
-- [ ] T-19 Corrige el VETO de Codex sobre T-16/T-17/T-18 (ver REVIEW.md):
-      1) AlmacenDeTrdJpa.guardar debe RECHAZAR una versión de TRD ya
-         publicada, no sobrescribirla (usar entityManager.persist, o una
-         verificación explícita que lance excepción) — RF-RC-006. Añadir
-         test que publique la misma versión dos veces y confirme el rechazo.
-      2) Añadir @ManyToOne/@JoinColumn a DocumentoEntity.originalId y
-         SugerenciaEntity.documentoId (specs/spec-infra-servicios.md §4).
-      3) Unificar el formato de error HTTP entre captura-ingesta y
-         records-custodia (specs/spec-infra-servicios.md §5) — una sola
-         convención, aplicada en los dos contextos incluidos los 404.
+- [x] T-19 Corrige el VETO de Codex sobre T-16/T-17/T-18 (ver commit 582dd67):
+      RF-RC-006 (RegistroTrd.publicar rechaza versión repetida a nivel de
+      dominio + entityManager.persist), FK reales en DocumentoEntity y
+      SugerenciaEntity, formato de error unificado entre los dos servicios.
+      Verificado por una segunda revisión de Codex — los tres puntos quedan
+      confirmados como corregidos.
+- [ ] T-20 P-08: recepción de sugerencia sin evento de auditoría (VETO de
+      Codex sobre T-19, ver REVIEW.md — se mantiene tras revisar T-19,
+      confirmado independientemente por segunda vez, no es un falso positivo).
+      CapaAnticorrupcionSugerencias.recibir(entrada, fecha) guarda la
+      Sugerencia pero nunca anexa un EventoAuditoria a BitacoraAuditoria — P-08
+      exige evento inmutable, atribuible, fechado, con estado anterior y
+      posterior para "recepción de sugerencia" expresamente. Inyectar
+      BitacoraAuditoria en CapaAnticorrupcionSugerencias (mismo patrón que ya
+      usa CustodiaOriginales) y anexar el evento al recibir. Actor atribuible:
+      P-08 permite actor "humano o de sistema"; SugerenciaEntrante.modeloId ya
+      es dato existente en el contrato (T-08) — úsalo como actor de sistema en
+      vez de pedir un campo nuevo no especificado. Test: recibir una sugerencia
+      y verificar que BitacoraAuditoria.todos() incluye el evento nuevo con
+      ese actor y la fecha. Actualizar RecordsCustodiaConfig para que
+      capaAnticorrupcionSugerencias reciba la BitacoraAuditoria ya cableada.
