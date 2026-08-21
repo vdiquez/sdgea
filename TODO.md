@@ -25,3 +25,13 @@
       contra specs/spec-infra-servicios.md §4
 - [x] T-18 Dockerfiles reales (captura-ingesta, records-custodia) + wiring en
       deploy/docker-compose.{saas,onprem}.yml
+- [ ] T-19 Corrige el VETO de Codex sobre T-16/T-17/T-18 (ver REVIEW.md):
+      1) AlmacenDeTrdJpa.guardar debe RECHAZAR una versión de TRD ya
+         publicada, no sobrescribirla (usar entityManager.persist, o una
+         verificación explícita que lance excepción) — RF-RC-006. Añadir
+         test que publique la misma versión dos veces y confirme el rechazo.
+      2) Añadir @ManyToOne/@JoinColumn a DocumentoEntity.originalId y
+         SugerenciaEntity.documentoId (specs/spec-infra-servicios.md §4).
+      3) Unificar el formato de error HTTP entre captura-ingesta y
+         records-custodia (specs/spec-infra-servicios.md §5) — una sola
+         convención, aplicada en los dos contextos incluidos los 404.
