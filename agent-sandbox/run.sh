@@ -18,9 +18,17 @@ done
 
 # MSYS_NO_PATHCONV: Git Bash en Windows reescribe rutas tipo /repo como si
 # fueran rutas de host — esto evita que mangle las rutas internas del contenedor.
+#
+# .venv y .gradle van en volúmenes nombrados, NO en el bind mount del repo:
+# son artefactos específicos de plataforma (venv de Linux, caché de Gradle) y
+# compartirlos con el host los corrompe — ya pasó una vez (uv no podía borrar
+# un symlink de Linux estando en Windows). Persisten entre corridas del loop,
+# solo no se mezclan con lo que ve el host.
 MSYS_NO_PATHCONV=1 docker run --rm -it \
     --name sgdea-agent-loop \
     -v "$REPO_ROOT:/repo" \
+    -v sgdea-agent-venv:/repo/.venv \
+    -v sgdea-agent-gradle:/repo/.gradle \
     -v "$CLAUDE_CREDS:/home/agent/.claude/.credentials.json:ro" \
     -v "$CLAUDE_CONFIG:/home/agent/.claude.json:ro" \
     -v "$CODEX_AUTH:/home/agent/.codex/auth.json:ro" \

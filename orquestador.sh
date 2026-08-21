@@ -109,7 +109,7 @@ run_codex() { # run_codex <prompt> <etiqueta>
   local prompt="$1" tag="$2" out wait="$BACKOFF_START" attempt=0
   while :; do
     attempt=$((attempt+1)); out="$LOG_DIR/codex-$tag-$attempt.log"
-    timeout "$STEP_TIMEOUT" codex exec --json "$prompt" >"$out" 2>&1 && rc=0 || rc=$?
+    timeout "$STEP_TIMEOUT" codex exec --json --sandbox workspace-write "$prompt" >"$out" 2>&1 && rc=0 || rc=$?
     if [ "$rc" -eq 0 ]; then return 0; fi
     if is_rate_limited "$out"; then
       log "Codex rate-limited (intento $attempt). Backoff ${wait}s."

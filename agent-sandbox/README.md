@@ -37,6 +37,15 @@ Verificado (2026-08-20): `codex login status` → "Logged in using ChatGPT";
 `claude -p "..." --dangerously-skip-permissions` devuelve una respuesta real
 (no simulada) usando las credenciales montadas.
 
+## `.venv` y `.gradle` — no van en el bind mount
+
+`run.sh` los monta como volúmenes nombrados (`sgdea-agent-venv`,
+`sgdea-agent-gradle`), no como parte del bind mount del repo. Son artefactos
+de plataforma (venv de Linux, caché de Gradle); compartirlos con el host los
+corrompe — pasó una vez: `uv` no podía borrar un symlink que el contenedor
+Linux había creado, estando ya en Windows. Si corres el sandbox con `docker
+run` a mano en vez de `run.sh`, replica esos dos `-v`.
+
 ## Correr
 
 ```
