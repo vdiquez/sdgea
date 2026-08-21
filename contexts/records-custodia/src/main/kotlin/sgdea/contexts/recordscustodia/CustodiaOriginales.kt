@@ -83,6 +83,8 @@ class CustodiaOriginales {
 
     fun consultarProcedencia(id: String): Procedencia = documentos.getValue(id).procedencia
 
+    fun consultarDocumento(id: String): DocumentoDeArchivo = documentos.getValue(id)
+
     // El original ya custodiado nunca se sobrescribe: toda solicitud de cambio se
     // rechaza y deja evento de auditoría, sin tocar los bytes ni la huella almacenados.
     fun intentarModificar(id: String, bytesNuevos: ByteArray, actor: String, fecha: Instant) {
@@ -112,6 +114,63 @@ class CustodiaOriginales {
         // además se necesita otro algoritmo o encadenamiento de huellas (RF-RC-005).
         const val ALGORITMO_HUELLA = "SHA-256"
     }
+}
+
+// Sugerencia (spec §2/§3, RF-RC-003): propuesta emitida por un contexto
+// probabilístico (Clasificación, Enriquecimiento); porta modelo, evidencia y
+// confianza. No es estado: nunca modifica la clasificación, los metadatos ni
+// el estado de un documento (spec §3 invariante 2 / P-01).
+data class Sugerencia(
+    val documentoId: String,
+    val tipo: String,
+    val contenidoPropuesto: String,
+    val modeloId: String,
+    val evidencia: List<String>,
+    val confianza: Double,
+    val fecha: Instant,
+)
+
+// Entrada cruda proveniente de un contexto probabilístico (spec §4, entradas
+// "Sugerencia de serie/subserie" y "Sugerencia de metadatos"), antes de cruzar
+// la capa anticorrupción. EMISOR FICTICIO: sustituye a Clasificación o
+// Enriquecimiento — la constitución prohíbe implementar aquí un componente
+// probabilístico real; esto solo ejercita el contrato de traducción de
+// RF-RC-003.
+data class SugerenciaEntrante(
+    val documentoId: String,
+    val tipo: String,
+    val contenidoPropuesto: String,
+    val modeloId: String,
+    val evidencia: List<String>,
+    val confianza: Double,
+)
+
+// Capa anticorrupción (spec §4): traduce la entrada de un contexto
+// probabilístico en una Sugerencia vinculada a un documento ya custodiado,
+// sin tocar su clasificación ni su estado. Es la materialización de P-01: la
+// única forma de cambiar el estado de un documento es una decisión humana
+// (RF-RC-004), nunca una sugerencia.
+class CapaAnticorrupcionSugerencias(private val custodia: CustodiaOriginales) {
+
+    private val sugerencias = mutableListOf<Sugerencia>()
+
+    fun recibir(entrada: SugerenciaEntrante, fecha: Instant): Sugerencia {
+        custodia.consultarDocumento(entrada.documentoId)
+        val sugerencia = Sugerencia(
+            documentoId = entrada.documentoId,
+            tipo = entrada.tipo,
+            contenidoPropuesto = entrada.contenidoPropuesto,
+            modeloId = entrada.modeloId,
+            evidencia = entrada.evidencia,
+            confianza = entrada.confianza,
+            fecha = fecha,
+        )
+        sugerencias.add(sugerencia)
+        return sugerencia
+    }
+
+    fun sugerenciasDe(documentoId: String): List<Sugerencia> =
+        sugerencias.filter { it.documentoId == documentoId }
 }
 
 // Regla de retención de una serie/subserie de la TRD (spec §2/§3): tiempo de

@@ -87,6 +87,67 @@ class RegistroDeProcedenciaTest {
     }
 }
 
+// RF-RC-003 · Recepción de sugerencias como propuestas
+class RecepcionDeSugerenciasTest {
+
+    private val procedenciaDePrueba = Procedencia(
+        fuente = "escaner-sala-3",
+        fecha = Instant.parse("2026-08-21T00:00:00Z"),
+        loteOFlujoId = "lote-001",
+    )
+
+    // EMISOR FICTICIO: no representa un clasificador real (constitución: ningún
+    // componente probabilístico real se implementa fuera del arnés); solo
+    // ejercita el contrato de traducción de la capa anticorrupción.
+    private val sugerenciaFicticiaEntrante = SugerenciaEntrante(
+        documentoId = "doc-1",
+        tipo = "clasificacion",
+        contenidoPropuesto = "serie-1",
+        modeloId = "emisor-ficticio-v0",
+        evidencia = listOf("pagina-1"),
+        confianza = 0.42,
+    )
+
+    @Test
+    fun `dado un documento sin decision humana, cuando se recibe una sugerencia, su clasificacion y estado permanecen sin cambio`() {
+        val custodia = CustodiaOriginales()
+        custodia.custodiar(
+            id = "doc-1",
+            bytes = "contenido".toByteArray(),
+            actor = "sistema-ingesta",
+            fecha = Instant.parse("2026-08-21T00:00:00Z"),
+            procedencia = procedenciaDePrueba,
+        )
+        val documentoAntes = custodia.consultarDocumento("doc-1")
+        val capa = CapaAnticorrupcionSugerencias(custodia)
+
+        capa.recibir(sugerenciaFicticiaEntrante, fecha = Instant.parse("2026-08-21T01:00:00Z"))
+
+        assertEquals(documentoAntes, custodia.consultarDocumento("doc-1"))
+    }
+
+    @Test
+    fun `dada una sugerencia almacenada, cuando se consulta, expone modelo, evidencia y confianza`() {
+        val custodia = CustodiaOriginales()
+        custodia.custodiar(
+            id = "doc-1",
+            bytes = "contenido".toByteArray(),
+            actor = "sistema-ingesta",
+            fecha = Instant.parse("2026-08-21T00:00:00Z"),
+            procedencia = procedenciaDePrueba,
+        )
+        val capa = CapaAnticorrupcionSugerencias(custodia)
+
+        capa.recibir(sugerenciaFicticiaEntrante, fecha = Instant.parse("2026-08-21T01:00:00Z"))
+        val sugerencias = capa.sugerenciasDe("doc-1")
+
+        assertEquals(1, sugerencias.size)
+        assertEquals("emisor-ficticio-v0", sugerencias[0].modeloId)
+        assertEquals(listOf("pagina-1"), sugerencias[0].evidencia)
+        assertEquals(0.42, sugerencias[0].confianza)
+    }
+}
+
 // RF-RC-006 · TRD como objeto versionado
 class TrdComoObjetoVersionadoTest {
 
