@@ -37,13 +37,15 @@ data class Procedencia(
 )
 
 // Documento de archivo (spec §3): boceto mínimo que referencia su original
-// inmutable y conserva su procedencia. El resto del agregado (metadatos,
-// clasificación, estado de ciclo de vida) es alcance de otras tareas
-// (RF-RC-003 en adelante).
+// inmutable, conserva su procedencia y, una vez materializada, su
+// clasificación (RF-RC-004). Los metadatos y el estado de ciclo de vida
+// completo quedan fuera de alcance (spec §8, [CLARIFICAR] del modelo de
+// estados).
 data class DocumentoDeArchivo(
     val id: String,
     val originalId: String,
     val procedencia: Procedencia,
+    val clasificacion: Clasificacion? = null,
 )
 
 // RF-RC-001: custodia el original en modo de una sola escritura y registra su huella
@@ -84,6 +86,27 @@ class CustodiaOriginales {
     fun consultarProcedencia(id: String): Procedencia = documentos.getValue(id).procedencia
 
     fun consultarDocumento(id: String): DocumentoDeArchivo = documentos.getValue(id)
+
+    // RF-RC-004: única operación que puede cambiar la clasificación de un
+    // documento. No existe ningún otro método público que la mute — recibir
+    // una Sugerencia (CapaAnticorrupcionSugerencias.recibir) nunca la toca
+    // (spec §3 invariante 2). Deja un evento de auditoría con el actor y la
+    // fecha de la decisión humana, tal como exige el criterio.
+    fun materializar(decision: DecisionHumana): DocumentoDeArchivo {
+        val documentoActual = documentos.getValue(decision.documentoId)
+        val documentoActualizado = documentoActual.copy(clasificacion = decision.clasificacionResultante)
+        documentos[decision.documentoId] = documentoActualizado
+        eventos.add(
+            EventoAuditoria(
+                actor = decision.actor,
+                fecha = decision.fecha,
+                tipo = "DECISION_HUMANA_MATERIALIZADA",
+                estadoAnterior = documentoActual.clasificacion?.serieId,
+                estadoPosterior = decision.clasificacionResultante.serieId,
+            ),
+        )
+        return documentoActualizado
+    }
 
     // El original ya custodiado nunca se sobrescribe: toda solicitud de cambio se
     // rechaza y deja evento de auditoría, sin tocar los bytes ni la huella almacenados.
@@ -143,6 +166,19 @@ data class SugerenciaEntrante(
     val modeloId: String,
     val evidencia: List<String>,
     val confianza: Double,
+)
+
+// Decisión humana (spec §2/§3, RF-RC-004): acto explícito de un usuario que
+// materializa una clasificación sobre un documento, referenciando las
+// sugerencias que la motivaron (si las hubo) o actuando de forma manual
+// (sugerenciasReferenciadas vacía). Es lo único que transiciona el estado de
+// un documento (P-01).
+data class DecisionHumana(
+    val documentoId: String,
+    val actor: String,
+    val fecha: Instant,
+    val sugerenciasReferenciadas: List<Sugerencia>,
+    val clasificacionResultante: Clasificacion,
 )
 
 // Capa anticorrupción (spec §4): traduce la entrada de un contexto

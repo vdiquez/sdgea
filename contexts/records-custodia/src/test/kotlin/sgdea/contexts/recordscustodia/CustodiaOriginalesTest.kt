@@ -148,6 +148,71 @@ class RecepcionDeSugerenciasTest {
     }
 }
 
+// RF-RC-004 · Materialización por decisión humana
+class MaterializacionPorDecisionHumanaTest {
+
+    private val procedenciaDePrueba = Procedencia(
+        fuente = "escaner-sala-3",
+        fecha = Instant.parse("2026-08-21T00:00:00Z"),
+        loteOFlujoId = "lote-001",
+    )
+
+    @Test
+    fun `dada una decision humana sobre un documento, cuando se aplica, el cambio queda registrado con el actor y la fecha`() {
+        val custodia = CustodiaOriginales()
+        custodia.custodiar(
+            id = "doc-1",
+            bytes = "contenido".toByteArray(),
+            actor = "sistema-ingesta",
+            fecha = Instant.parse("2026-08-21T00:00:00Z"),
+            procedencia = procedenciaDePrueba,
+        )
+        val clasificacion = Clasificacion(documentoId = "doc-1", trdVersion = 1, serieId = "serie-1")
+        val decision = DecisionHumana(
+            documentoId = "doc-1",
+            actor = "archivista-1",
+            fecha = Instant.parse("2026-08-21T02:00:00Z"),
+            sugerenciasReferenciadas = emptyList(),
+            clasificacionResultante = clasificacion,
+        )
+
+        val documento = custodia.materializar(decision)
+
+        assertEquals(clasificacion, documento.clasificacion)
+        assertEquals(clasificacion, custodia.consultarDocumento("doc-1").clasificacion)
+        assertTrue(
+            custodia.eventosDeAuditoria.any {
+                it.tipo == "DECISION_HUMANA_MATERIALIZADA" && it.actor == "archivista-1" && it.fecha == decision.fecha
+            },
+        )
+    }
+
+    @Test
+    fun `dado cualquier cambio de clasificacion sin decision humana asociada, el sistema lo impide`() {
+        val custodia = CustodiaOriginales()
+        custodia.custodiar(
+            id = "doc-1",
+            bytes = "contenido".toByteArray(),
+            actor = "sistema-ingesta",
+            fecha = Instant.parse("2026-08-21T00:00:00Z"),
+            procedencia = procedenciaDePrueba,
+        )
+        val capa = CapaAnticorrupcionSugerencias(custodia)
+        val sugerenciaFicticiaEntrante = SugerenciaEntrante(
+            documentoId = "doc-1",
+            tipo = "clasificacion",
+            contenidoPropuesto = "serie-1",
+            modeloId = "emisor-ficticio-v0",
+            evidencia = listOf("pagina-1"),
+            confianza = 0.42,
+        )
+
+        capa.recibir(sugerenciaFicticiaEntrante, fecha = Instant.parse("2026-08-21T01:00:00Z"))
+
+        assertEquals(null, custodia.consultarDocumento("doc-1").clasificacion)
+    }
+}
+
 // RF-RC-006 · TRD como objeto versionado
 class TrdComoObjetoVersionadoTest {
 
