@@ -157,3 +157,70 @@ class CeroPerdidaSilenciosaTest {
         assertEquals(false, conteo.sinPerdidaSilenciosa)
     }
 }
+
+// RF-CI-002 · Conciliación contra inventario
+// Dado un lote conciliado, Cuando se consulta el reporte, Entonces lista los
+// registros del inventario sin ítem recibido y los ítems sin registro en
+// inventario.
+class ConciliacionContraInventarioTest {
+
+    private val fecha = Instant.parse("2026-08-20T10:00:00Z")
+
+    @Test
+    fun `un lote donde inventario e items recibidos coinciden no reporta faltantes ni sobrantes`() {
+        val artefactos = listOf(
+            ArtefactoOrigen(id = "a1", nombre = "expediente-001.pdf"),
+            ArtefactoOrigen(id = "a2", nombre = "expediente-002.tif"),
+        )
+        val lote = cargarLote(
+            loteId = "lote-001",
+            artefactos = artefactos,
+            inventario = InventarioOrigen(registros = listOf("a1", "a2")),
+            fuente = "escaner-sala-3",
+            fecha = fecha,
+        )
+
+        val reporte = conciliar(lote)
+
+        assertEquals(emptyList(), reporte.faltantes)
+        assertEquals(emptyList(), reporte.sobrantes)
+    }
+
+    @Test
+    fun `un registro del inventario sin item recibido aparece como faltante`() {
+        val artefactos = listOf(ArtefactoOrigen(id = "a1", nombre = "expediente-001.pdf"))
+        val lote = cargarLote(
+            loteId = "lote-001",
+            artefactos = artefactos,
+            inventario = InventarioOrigen(registros = listOf("a1", "a2")),
+            fuente = "escaner-sala-3",
+            fecha = fecha,
+        )
+
+        val reporte = conciliar(lote)
+
+        assertEquals(listOf("a2"), reporte.faltantes)
+        assertEquals(emptyList(), reporte.sobrantes)
+    }
+
+    @Test
+    fun `un item recibido sin registro en inventario aparece como sobrante`() {
+        val artefactos = listOf(
+            ArtefactoOrigen(id = "a1", nombre = "expediente-001.pdf"),
+            ArtefactoOrigen(id = "a2", nombre = "expediente-002.tif"),
+        )
+        val lote = cargarLote(
+            loteId = "lote-001",
+            artefactos = artefactos,
+            inventario = InventarioOrigen(registros = listOf("a1")),
+            fuente = "escaner-sala-3",
+            fecha = fecha,
+        )
+
+        val reporte = conciliar(lote)
+
+        assertEquals(emptyList(), reporte.faltantes)
+        val sobrante = reporte.sobrantes.single()
+        assertEquals("a2", sobrante.artefacto.id)
+    }
+}

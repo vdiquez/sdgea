@@ -102,6 +102,19 @@ Hecho:
   Dado/Cuando/Entonces de RF-CI-008 antes de la implementación (confirmado
   el fallo de compilación por referencias no definidas antes de implementar);
   `./test.sh` en verde.
+- F2: T-06 (RF-CI-002, conciliación contra inventario) implementado en
+  `contexts/captura-ingesta`: `conciliar(lote)` compara los ids de
+  `InventarioOrigen.registros` contra los `ArtefactoOrigen.id` de los ítems
+  recibidos y devuelve un `ReporteConciliacion` con `faltantes` (registros del
+  inventario sin ítem recibido) y `sobrantes` (ítems recibidos sin registro en
+  el inventario), tal como exige el Dado/Cuando/Entonces de RF-CI-002 y el
+  invariante 4 de spec §3 ("cada registro del inventario y cada ítem recibido
+  quedan explicados"). TDD: 3 tests nuevos (`ConciliacionContraInventarioTest`
+  — cuadre exacto, faltante, sobrante) escritos contra el criterio antes de
+  implementar (confirmado el fallo de compilación por `conciliar` no
+  definido); `./test.sh` en verde (Gradle BUILD SUCCESSFUL; pytest del arnés:
+  3 passed). No se tocó ningún `[CLARIFICAR]` de la spec — RF-CI-002 no tiene
+  ninguno pendiente.
 
 ## Camino a F2 (checklist, 2026-08-20)
 

@@ -102,3 +102,21 @@ fun contarPorEstado(lote: LoteIngesta): ConteoPorEstado {
     val porEstado = lote.items.groupingBy { it.estado }.eachCount()
     return ConteoPorEstado(porEstado = porEstado, total = lote.items.size)
 }
+
+// RF-CI-002: reporte de conciliación de un lote contra su inventario de
+// origen (spec §2/§3, invariante 4). `faltantes` son los registros del
+// inventario que no tienen ítem recibido con ese id de artefacto; `sobrantes`
+// son los ítems recibidos cuyo artefacto no aparece en el inventario.
+data class ReporteConciliacion(
+    val faltantes: List<String>,
+    val sobrantes: List<ItemIngesta>,
+)
+
+fun conciliar(lote: LoteIngesta): ReporteConciliacion {
+    val idsRecibidos = lote.items.map { it.artefacto.id }.toSet()
+    val idsInventario = lote.inventario.registros.toSet()
+    return ReporteConciliacion(
+        faltantes = lote.inventario.registros.filter { it !in idsRecibidos },
+        sobrantes = lote.items.filter { it.artefacto.id !in idsInventario },
+    )
+}

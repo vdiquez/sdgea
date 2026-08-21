@@ -4,7 +4,7 @@
 - [x] T-03 RF-RC-001 Custodia del original inmutable (WORM + huella verificable)
 - [x] T-04 RF-RC-002 + RF-CI-007 Procedencia completa de punta a punta
 - [x] T-05 RF-CI-008 Cero pérdida silenciosa: suma de estados terminales cuadra
-- [ ] T-06 RF-CI-002 Conciliación contra inventario (FUID): faltantes y sobrantes
+- [x] T-06 RF-CI-002 Conciliación contra inventario (FUID): faltantes y sobrantes
 - [ ] T-07 RF-RC-006 TRD como objeto versionado (estructura mínima)
 - [ ] T-08 RF-RC-003 Sugerencia vía capa anticorrupción, con EMISOR FICTICIO; no toca estado
 - [ ] T-09 RF-RC-004 Materialización solo por decisión humana (actor + fecha)
