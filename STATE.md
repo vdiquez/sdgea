@@ -176,8 +176,30 @@ Hecho:
   nuevos (`MaterializacionPorDecisionHumanaTest`) escritos contra el
   Dado/Cuando/Entonces de RF-RC-004 antes de la implementación; `./test.sh`
   en verde (Gradle BUILD SUCCESSFUL; pytest del arnés: 3 passed).
-  Siguiente paso: T-10 (RF-RC-005, bitácora inmutable de solo anexado) es
-  la próxima tarea abierta en TODO.md.
+
+- F2: T-10 (RF-RC-005, bitácora inmutable de solo anexado) implementado en
+  `contexts/records-custodia`: se extrajo `BitacoraAuditoria` (spec §3/§5),
+  que reemplaza la lista privada de eventos que usaba `CustodiaOriginales`
+  directamente. `anexar(evento)` es la única operación que añade contenido;
+  `intentarModificar(indice, eventoNuevo)` e `intentarBorrar(indice)` son
+  operaciones explícitas que siempre rechazan con
+  `ModificacionDeEventoAuditoriaRechazadaException` sobre un evento ya
+  anexado, satisfaciendo el segundo Dado/Cuando/Entonces del RF. El primer
+  criterio ("existe un evento con actor, fecha, tipo, estado anterior y
+  posterior") ya lo cumplían `custodiar`/`materializar`/`intentarModificar`
+  de `CustodiaOriginales` desde T-03/T-09; el test nuevo lo verifica
+  explícitamente sobre el evento `ORIGINAL_CUSTODIADO`. No se implementó
+  encadenamiento de huellas entre eventos (spec §8 `[CLARIFICAR]`, "si la
+  bitácora de auditoría usa además una cadena de huellas encadenadas para
+  prueba de manipulación") — es una decisión de diseño adicional distinta
+  del invariante "solo anexado, sin modificar ni borrar" que exige
+  RF-RC-005 y que esta tarea sí prueba. TDD: 3 tests nuevos
+  (`BitacoraDeAuditoriaInmutableTest`) escritos contra el Dado/Cuando/Entonces
+  antes de la implementación (confirmado el fallo de compilación por
+  símbolos no definidos); `./test.sh` en verde (Gradle BUILD SUCCESSFUL;
+  pytest del arnés: 3 passed).
+  Siguiente paso: T-11 (RF-RC-009, verificación de integridad por demanda)
+  es la próxima tarea abierta en TODO.md.
 
 ## Camino a F2 (checklist, 2026-08-20)
 
