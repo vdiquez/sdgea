@@ -25,6 +25,39 @@ data class EventoAuditoria(
 
 class ModificacionDeOriginalRechazadaException(mensaje: String) : RuntimeException(mensaje)
 
+class ModificacionDeEventoAuditoriaRechazadaException(mensaje: String) : RuntimeException(mensaje)
+
+// RF-RC-005 / RNF-RC-002: bitácora de auditoría de solo anexado. `anexar` es
+// la única operación que añade contenido; todo intento de modificar o borrar
+// un evento ya anexado se rechaza. No implementa encadenamiento de huellas
+// entre eventos (spec §8 [CLARIFICAR] sobre si la bitácora además necesita
+// una cadena de huellas) — eso es una decisión pendiente distinta de "solo
+// anexado, sin modificar ni borrar", que es lo único que exige RF-RC-005.
+class BitacoraAuditoria {
+
+    private val eventos = mutableListOf<EventoAuditoria>()
+
+    val todos: List<EventoAuditoria> get() = eventos.toList()
+
+    fun anexar(evento: EventoAuditoria) {
+        eventos.add(evento)
+    }
+
+    fun intentarModificar(indice: Int, eventoNuevo: EventoAuditoria) {
+        eventos[indice]
+        throw ModificacionDeEventoAuditoriaRechazadaException(
+            "El evento de auditoría en la posición $indice ya existe; modificarlo se rechaza.",
+        )
+    }
+
+    fun intentarBorrar(indice: Int) {
+        eventos[indice]
+        throw ModificacionDeEventoAuditoriaRechazadaException(
+            "El evento de auditoría en la posición $indice ya existe; borrarlo se rechaza.",
+        )
+    }
+}
+
 // Procedencia de un documento de archivo (spec §2/§3, RF-RC-002): fuente,
 // fecha de ingesta e identificador del lote o flujo de origen. Es la misma
 // información que Captura/Ingesta expone por ítem vía RF-CI-007 (ver
@@ -55,9 +88,9 @@ class CustodiaOriginales {
 
     private val originales = mutableMapOf<String, OriginalInmutable>()
     private val documentos = mutableMapOf<String, DocumentoDeArchivo>()
-    private val eventos = mutableListOf<EventoAuditoria>()
+    private val bitacora = BitacoraAuditoria()
 
-    val eventosDeAuditoria: List<EventoAuditoria> get() = eventos.toList()
+    val eventosDeAuditoria: List<EventoAuditoria> get() = bitacora.todos
 
     fun custodiar(id: String, bytes: ByteArray, actor: String, fecha: Instant, procedencia: Procedencia): OriginalInmutable {
         val original = OriginalInmutable(
@@ -69,7 +102,7 @@ class CustodiaOriginales {
         )
         originales[id] = original
         documentos[id] = DocumentoDeArchivo(id = id, originalId = id, procedencia = procedencia)
-        eventos.add(
+        bitacora.anexar(
             EventoAuditoria(
                 actor = actor,
                 fecha = fecha,
@@ -96,7 +129,7 @@ class CustodiaOriginales {
         val documentoActual = documentos.getValue(decision.documentoId)
         val documentoActualizado = documentoActual.copy(clasificacion = decision.clasificacionResultante)
         documentos[decision.documentoId] = documentoActualizado
-        eventos.add(
+        bitacora.anexar(
             EventoAuditoria(
                 actor = decision.actor,
                 fecha = decision.fecha,
@@ -112,7 +145,7 @@ class CustodiaOriginales {
     // rechaza y deja evento de auditoría, sin tocar los bytes ni la huella almacenados.
     fun intentarModificar(id: String, bytesNuevos: ByteArray, actor: String, fecha: Instant) {
         originales.getValue(id)
-        eventos.add(
+        bitacora.anexar(
             EventoAuditoria(
                 actor = actor,
                 fecha = fecha,

@@ -213,6 +213,84 @@ class MaterializacionPorDecisionHumanaTest {
     }
 }
 
+// RF-RC-005 · Bitácora de auditoría inmutable
+class BitacoraDeAuditoriaInmutableTest {
+
+    private val procedenciaDePrueba = Procedencia(
+        fuente = "escaner-sala-3",
+        fecha = Instant.parse("2026-08-21T00:00:00Z"),
+        loteOFlujoId = "lote-001",
+    )
+
+    @Test
+    fun `dada una transicion de estado, cuando ocurre, existe un evento con actor, fecha, tipo, estado anterior y posterior`() {
+        val custodia = CustodiaOriginales()
+        val fecha = Instant.parse("2026-08-21T00:00:00Z")
+
+        custodia.custodiar(
+            id = "doc-1",
+            bytes = "contenido".toByteArray(),
+            actor = "sistema-ingesta",
+            fecha = fecha,
+            procedencia = procedenciaDePrueba,
+        )
+
+        val evento = custodia.eventosDeAuditoria.single { it.tipo == "ORIGINAL_CUSTODIADO" }
+        assertEquals("sistema-ingesta", evento.actor)
+        assertEquals(fecha, evento.fecha)
+        assertEquals(null, evento.estadoAnterior)
+        assertEquals("CUSTODIADO", evento.estadoPosterior)
+    }
+
+    @Test
+    fun `dado un evento de auditoria existente, cuando se intenta modificar, se rechaza`() {
+        val bitacora = BitacoraAuditoria()
+        bitacora.anexar(
+            EventoAuditoria(
+                actor = "sistema-ingesta",
+                fecha = Instant.parse("2026-08-21T00:00:00Z"),
+                tipo = "ORIGINAL_CUSTODIADO",
+                estadoAnterior = null,
+                estadoPosterior = "CUSTODIADO",
+            ),
+        )
+
+        assertFailsWith<ModificacionDeEventoAuditoriaRechazadaException> {
+            bitacora.intentarModificar(
+                indice = 0,
+                eventoNuevo = EventoAuditoria(
+                    actor = "atacante",
+                    fecha = Instant.parse("2026-08-21T01:00:00Z"),
+                    tipo = "ORIGINAL_CUSTODIADO",
+                    estadoAnterior = null,
+                    estadoPosterior = "ALTERADO",
+                ),
+            )
+        }
+        assertEquals(1, bitacora.todos.size)
+        assertEquals("CUSTODIADO", bitacora.todos[0].estadoPosterior)
+    }
+
+    @Test
+    fun `dado un evento de auditoria existente, cuando se intenta borrar, se rechaza`() {
+        val bitacora = BitacoraAuditoria()
+        bitacora.anexar(
+            EventoAuditoria(
+                actor = "sistema-ingesta",
+                fecha = Instant.parse("2026-08-21T00:00:00Z"),
+                tipo = "ORIGINAL_CUSTODIADO",
+                estadoAnterior = null,
+                estadoPosterior = "CUSTODIADO",
+            ),
+        )
+
+        assertFailsWith<ModificacionDeEventoAuditoriaRechazadaException> {
+            bitacora.intentarBorrar(indice = 0)
+        }
+        assertEquals(1, bitacora.todos.size)
+    }
+}
+
 // RF-RC-006 · TRD como objeto versionado
 class TrdComoObjetoVersionadoTest {
 
