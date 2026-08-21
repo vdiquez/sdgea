@@ -27,31 +27,51 @@ class ModificacionDeOriginalRechazadaException(mensaje: String) : RuntimeExcepti
 
 class ModificacionDeEventoAuditoriaRechazadaException(mensaje: String) : RuntimeException(mensaje)
 
+// specs/spec-infra-servicios.md §4: puertos de almacenamiento (P-03) que
+// reemplazan los mapas/listas en memoria de este contexto por una
+// implementación intercambiable. El valor por defecto de cada puerto es la
+// misma implementación en memoria que estas clases ya usaban, así que ningún
+// test de dominio existente (T-01..T-11) cambia; la tarea que ejecuta esta
+// spec (T-17) inyecta implementaciones respaldadas por Postgres detrás de
+// estos mismos puertos, sin tocar el contrato de los métodos públicos.
+interface AlmacenDeEventos {
+    fun anexar(evento: EventoAuditoria)
+    fun todos(): List<EventoAuditoria>
+    fun en(indice: Int): EventoAuditoria
+}
+
+class AlmacenDeEventosEnMemoria : AlmacenDeEventos {
+    private val eventos = mutableListOf<EventoAuditoria>()
+    override fun anexar(evento: EventoAuditoria) {
+        eventos.add(evento)
+    }
+    override fun todos(): List<EventoAuditoria> = eventos.toList()
+    override fun en(indice: Int): EventoAuditoria = eventos[indice]
+}
+
 // RF-RC-005 / RNF-RC-002: bitácora de auditoría de solo anexado. `anexar` es
 // la única operación que añade contenido; todo intento de modificar o borrar
 // un evento ya anexado se rechaza. No implementa encadenamiento de huellas
 // entre eventos (spec §8 [CLARIFICAR] sobre si la bitácora además necesita
 // una cadena de huellas) — eso es una decisión pendiente distinta de "solo
 // anexado, sin modificar ni borrar", que es lo único que exige RF-RC-005.
-class BitacoraAuditoria {
+class BitacoraAuditoria(private val almacen: AlmacenDeEventos = AlmacenDeEventosEnMemoria()) {
 
-    private val eventos = mutableListOf<EventoAuditoria>()
-
-    val todos: List<EventoAuditoria> get() = eventos.toList()
+    val todos: List<EventoAuditoria> get() = almacen.todos()
 
     fun anexar(evento: EventoAuditoria) {
-        eventos.add(evento)
+        almacen.anexar(evento)
     }
 
     fun intentarModificar(indice: Int, eventoNuevo: EventoAuditoria) {
-        eventos[indice]
+        almacen.en(indice)
         throw ModificacionDeEventoAuditoriaRechazadaException(
             "El evento de auditoría en la posición $indice ya existe; modificarlo se rechaza.",
         )
     }
 
     fun intentarBorrar(indice: Int) {
-        eventos[indice]
+        almacen.en(indice)
         throw ModificacionDeEventoAuditoriaRechazadaException(
             "El evento de auditoría en la posición $indice ya existe; borrarlo se rechaza.",
         )
@@ -97,6 +117,36 @@ data class ReporteVerificacionIntegridad(
     val discrepancias: List<ResultadoVerificacionIntegridad> get() = resultados.filterNot { it.coincide }
 }
 
+interface AlmacenDeOriginales {
+    fun guardar(original: OriginalInmutable)
+    fun buscar(id: String): OriginalInmutable?
+    fun todos(): List<OriginalInmutable>
+}
+
+class AlmacenDeOriginalesEnMemoria : AlmacenDeOriginales {
+    private val originales = mutableMapOf<String, OriginalInmutable>()
+    override fun guardar(original: OriginalInmutable) {
+        originales[original.id] = original
+    }
+    override fun buscar(id: String): OriginalInmutable? = originales[id]
+    override fun todos(): List<OriginalInmutable> = originales.values.toList()
+}
+
+interface AlmacenDeDocumentos {
+    fun guardar(documento: DocumentoDeArchivo)
+    fun buscar(id: String): DocumentoDeArchivo?
+}
+
+class AlmacenDeDocumentosEnMemoria : AlmacenDeDocumentos {
+    private val documentos = mutableMapOf<String, DocumentoDeArchivo>()
+    override fun guardar(documento: DocumentoDeArchivo) {
+        documentos[documento.id] = documento
+    }
+    override fun buscar(id: String): DocumentoDeArchivo? = documentos[id]
+}
+
+private fun <T> T?.oClaveFaltante(id: String): T = this ?: throw NoSuchElementException("Key $id is missing in the map.")
+
 // RF-RC-001: custodia el original en modo de una sola escritura y registra su huella
 // criptográfica; un intento de modificarlo se rechaza y genera un evento de auditoría.
 // RF-RC-002: cada documento conserva su procedencia completa.
@@ -110,11 +160,10 @@ data class ReporteVerificacionIntegridad(
 // `consultar`/`custodiar`.
 class CustodiaOriginales(
     private val lectorDeAlmacenamiento: ((id: String) -> ByteArray)? = null,
+    private val almacenDeOriginales: AlmacenDeOriginales = AlmacenDeOriginalesEnMemoria(),
+    private val almacenDeDocumentos: AlmacenDeDocumentos = AlmacenDeDocumentosEnMemoria(),
+    private val bitacora: BitacoraAuditoria = BitacoraAuditoria(),
 ) {
-
-    private val originales = mutableMapOf<String, OriginalInmutable>()
-    private val documentos = mutableMapOf<String, DocumentoDeArchivo>()
-    private val bitacora = BitacoraAuditoria()
 
     val eventosDeAuditoria: List<EventoAuditoria> get() = bitacora.todos
 
@@ -126,8 +175,8 @@ class CustodiaOriginales(
             huella = calcularHuella(bytes),
             fechaCustodia = fecha,
         )
-        originales[id] = original
-        documentos[id] = DocumentoDeArchivo(id = id, originalId = id, procedencia = procedencia)
+        almacenDeOriginales.guardar(original)
+        almacenDeDocumentos.guardar(DocumentoDeArchivo(id = id, originalId = id, procedencia = procedencia))
         bitacora.anexar(
             EventoAuditoria(
                 actor = actor,
@@ -140,11 +189,11 @@ class CustodiaOriginales(
         return original
     }
 
-    fun consultar(id: String): OriginalInmutable = originales.getValue(id)
+    fun consultar(id: String): OriginalInmutable = almacenDeOriginales.buscar(id).oClaveFaltante(id)
 
-    fun consultarProcedencia(id: String): Procedencia = documentos.getValue(id).procedencia
+    fun consultarProcedencia(id: String): Procedencia = almacenDeDocumentos.buscar(id).oClaveFaltante(id).procedencia
 
-    fun consultarDocumento(id: String): DocumentoDeArchivo = documentos.getValue(id)
+    fun consultarDocumento(id: String): DocumentoDeArchivo = almacenDeDocumentos.buscar(id).oClaveFaltante(id)
 
     // RF-RC-004: única operación que puede cambiar la clasificación de un
     // documento. No existe ningún otro método público que la mute — recibir
@@ -152,9 +201,9 @@ class CustodiaOriginales(
     // (spec §3 invariante 2). Deja un evento de auditoría con el actor y la
     // fecha de la decisión humana, tal como exige el criterio.
     fun materializar(decision: DecisionHumana): DocumentoDeArchivo {
-        val documentoActual = documentos.getValue(decision.documentoId)
+        val documentoActual = almacenDeDocumentos.buscar(decision.documentoId).oClaveFaltante(decision.documentoId)
         val documentoActualizado = documentoActual.copy(clasificacion = decision.clasificacionResultante)
-        documentos[decision.documentoId] = documentoActualizado
+        almacenDeDocumentos.guardar(documentoActualizado)
         bitacora.anexar(
             EventoAuditoria(
                 actor = decision.actor,
@@ -170,7 +219,7 @@ class CustodiaOriginales(
     // El original ya custodiado nunca se sobrescribe: toda solicitud de cambio se
     // rechaza y deja evento de auditoría, sin tocar los bytes ni la huella almacenados.
     fun intentarModificar(id: String, bytesNuevos: ByteArray, actor: String, fecha: Instant) {
-        originales.getValue(id)
+        almacenDeOriginales.buscar(id).oClaveFaltante(id)
         bitacora.anexar(
             EventoAuditoria(
                 actor = actor,
@@ -192,7 +241,7 @@ class CustodiaOriginales(
     // (cron/scheduler) que invoque este mismo método u `verificarTodos`; no es
     // lógica de dominio y queda fuera de alcance de esta tarea.
     fun verificarIntegridad(id: String, actor: String, fecha: Instant): ResultadoVerificacionIntegridad {
-        val original = originales.getValue(id)
+        val original = almacenDeOriginales.buscar(id).oClaveFaltante(id)
         val bytesAlmacenados = lectorDeAlmacenamiento?.invoke(id) ?: original.bytes
         val huellaCalculada = calcularHuella(bytesAlmacenados)
         val resultado = ResultadoVerificacionIntegridad(
@@ -218,7 +267,7 @@ class CustodiaOriginales(
     // RF-RC-009: corre `verificarIntegridad` sobre todos los originales
     // custodiados y agrega el resultado en un único reporte de discrepancias.
     fun verificarTodos(actor: String, fecha: Instant): ReporteVerificacionIntegridad =
-        ReporteVerificacionIntegridad(originales.keys.map { verificarIntegridad(it, actor, fecha) })
+        ReporteVerificacionIntegridad(almacenDeOriginales.todos().map { verificarIntegridad(it.id, actor, fecha) })
 
     private fun calcularHuella(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance(ALGORITMO_HUELLA).digest(bytes)
@@ -275,14 +324,28 @@ data class DecisionHumana(
     val clasificacionResultante: Clasificacion,
 )
 
+interface AlmacenDeSugerencias {
+    fun guardar(sugerencia: Sugerencia)
+    fun de(documentoId: String): List<Sugerencia>
+}
+
+class AlmacenDeSugerenciasEnMemoria : AlmacenDeSugerencias {
+    private val sugerencias = mutableListOf<Sugerencia>()
+    override fun guardar(sugerencia: Sugerencia) {
+        sugerencias.add(sugerencia)
+    }
+    override fun de(documentoId: String): List<Sugerencia> = sugerencias.filter { it.documentoId == documentoId }
+}
+
 // Capa anticorrupción (spec §4): traduce la entrada de un contexto
 // probabilístico en una Sugerencia vinculada a un documento ya custodiado,
 // sin tocar su clasificación ni su estado. Es la materialización de P-01: la
 // única forma de cambiar el estado de un documento es una decisión humana
 // (RF-RC-004), nunca una sugerencia.
-class CapaAnticorrupcionSugerencias(private val custodia: CustodiaOriginales) {
-
-    private val sugerencias = mutableListOf<Sugerencia>()
+class CapaAnticorrupcionSugerencias(
+    private val custodia: CustodiaOriginales,
+    private val almacen: AlmacenDeSugerencias = AlmacenDeSugerenciasEnMemoria(),
+) {
 
     fun recibir(entrada: SugerenciaEntrante, fecha: Instant): Sugerencia {
         custodia.consultarDocumento(entrada.documentoId)
@@ -295,12 +358,11 @@ class CapaAnticorrupcionSugerencias(private val custodia: CustodiaOriginales) {
             confianza = entrada.confianza,
             fecha = fecha,
         )
-        sugerencias.add(sugerencia)
+        almacen.guardar(sugerencia)
         return sugerencia
     }
 
-    fun sugerenciasDe(documentoId: String): List<Sugerencia> =
-        sugerencias.filter { it.documentoId == documentoId }
+    fun sugerenciasDe(documentoId: String): List<Sugerencia> = almacen.de(documentoId)
 }
 
 // Regla de retención de una serie/subserie de la TRD (spec §2/§3): tiempo de
@@ -349,18 +411,29 @@ data class Clasificacion(
     val subserieId: String? = null,
 )
 
+interface AlmacenDeTrd {
+    fun guardar(trd: Trd)
+    fun buscar(version: Int): Trd?
+}
+
+class AlmacenDeTrdEnMemoria : AlmacenDeTrd {
+    private val versiones = mutableMapOf<Int, Trd>()
+    override fun guardar(trd: Trd) {
+        versiones[trd.version] = trd
+    }
+    override fun buscar(version: Int): Trd? = versiones[version]
+}
+
 // RF-RC-006: registro de versiones publicadas de la TRD. Publicar una nueva
 // versión solo añade una entrada; nunca sobrescribe ni retira una versión
 // anterior, así que toda `Clasificacion` que referencia una versión ya
 // publicada sigue resolviendo contra esa misma versión después de que se
 // publique una nueva.
-class RegistroTrd {
-
-    private val versiones = mutableMapOf<Int, Trd>()
+class RegistroTrd(private val almacen: AlmacenDeTrd = AlmacenDeTrdEnMemoria()) {
 
     fun publicar(trd: Trd) {
-        versiones[trd.version] = trd
+        almacen.guardar(trd)
     }
 
-    fun version(numero: Int): Trd = versiones.getValue(numero)
+    fun version(numero: Int): Trd = almacen.buscar(numero).oClaveFaltante(numero.toString())
 }

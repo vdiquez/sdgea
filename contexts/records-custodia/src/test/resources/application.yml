@@ -1,0 +1,21 @@
+# Mismo tratamiento que captura-ingesta (T-16): sin Docker disponible en el
+# entorno de ejecución del agente, H2 sustituye a Postgres real solo para
+# poder correr `./test.sh` aquí. El invariante WORM de
+# originales_inmutables/eventos_auditoria (RF-RC-001, RF-RC-005) lo garantiza
+# el código de AlmacenDeOriginalesJpa/AlmacenDeEventosJpa (solo usan
+# EntityManager.persist, nunca merge/update) — es independiente del motor de
+# base de datos, así que sustituir el motor para test no oculta esa garantía.
+# Sin `MODE=PostgreSQL` (a diferencia de captura-ingesta): ese modo de
+# compatibilidad rechaza el tipo BLOB que Hibernate genera para la columna
+# `bytes` de `originales_inmutables`; captura-ingesta no tiene ninguna
+# columna binaria y por eso no lo necesitó evitar.
+spring:
+  datasource:
+    url: jdbc:h2:mem:records-custodia;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
