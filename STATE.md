@@ -155,6 +155,30 @@ Hecho:
   3 passed). No se tocó ningún `[CLARIFICAR]` de la spec — RF-RC-003 no
   tiene ninguno pendiente.
 
+- F2: T-09 (RF-RC-004, materialización solo por decisión humana) implementado
+  en `contexts/records-custodia`: se añadió `Clasificacion?` (nulable) a
+  `DocumentoDeArchivo` y `DecisionHumana` (documentoId, actor, fecha,
+  sugerenciasReferenciadas, clasificacionResultante) según spec §3.
+  `CustodiaOriginales.materializar(decision)` es la única operación que
+  puede fijar esa clasificación: actualiza el documento y añade un
+  `EventoAuditoria` (`DECISION_HUMANA_MATERIALIZADA`) con el actor y la
+  fecha de la decisión, satisfaciendo el primer Dado/Cuando/Entonces. El
+  segundo ("sin decisión humana, el sistema lo impide") se prueba de forma
+  estructural, igual que el patrón ya usado en T-03/T-08: no existe ningún
+  otro método público que mute `clasificacion` — recibir una `Sugerencia`
+  vía `CapaAnticorrupcionSugerencias.recibir` no la toca (ya lo garantizaba
+  T-08 vía RF-RC-003, invariante 2 de spec §3), así que el test reconfirma
+  que `clasificacion` sigue `null` tras recibir una sugerencia sin decisión
+  aplicada. No se implementó el modelo completo de estados de ciclo de vida
+  (spec §8 `[CLARIFICAR]`, "enumerar las transiciones válidas") — esta
+  tarea solo materializa la clasificación, que es lo único que TODO.md pide
+  y lo único que RF-RC-004 ejercita sin inventar esa taxonomía. TDD: 2 tests
+  nuevos (`MaterializacionPorDecisionHumanaTest`) escritos contra el
+  Dado/Cuando/Entonces de RF-RC-004 antes de la implementación; `./test.sh`
+  en verde (Gradle BUILD SUCCESSFUL; pytest del arnés: 3 passed).
+  Siguiente paso: T-10 (RF-RC-005, bitácora inmutable de solo anexado) es
+  la próxima tarea abierta en TODO.md.
+
 ## Camino a F2 (checklist, 2026-08-20)
 
 - [ ] 1. Enviar el one-pager a 3–5 entidades calificadas (F4, hilo comercial —
