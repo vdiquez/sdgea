@@ -236,6 +236,32 @@ Hecho:
   Siguiente paso: T-12 (arnés — cargar set de juguete, correr componente
   ficticio, emitir boleta versionada) es la próxima tarea abierta en TODO.md.
 
+- F2: T-12 (arnés — boleta versionada) implementado en `eval-harness/`. Cargar
+  el set de juguete y correr el componente ficticio ya existían desde F1
+  (`a890e83`); lo que faltaba, per `edd-harness.md` §3.6 ("el set patrón se
+  versiona... una métrica solo es comparable entre corridas sobre la misma
+  versión del set patrón") y §5.4 ("cada corrida produce una boleta de
+  resultados versionada y comparable entre corridas"), era que la boleta
+  cargara esa versión. Se añadió `SetPatron` (version + registros) como tipo
+  de retorno de `cargar_set_patron`, se cambió el formato de la fixture JSON
+  de un array plano a `{"version": ..., "registros": [...]}`, y `Boleta` ganó
+  el campo `version`, tomado del `SetPatron` usado en `correr_arnes`. No se
+  construyó una función de comparación entre boletas — "comparable" en la
+  spec es la propiedad que da compartir el mismo campo `version`, no una
+  operación nueva; añadir un comparador sería alcance no pedido. T-12 no
+  referencia ningún RF de una spec de contexto (es infraestructura del arnés
+  EDD, gobernada por `edd-harness.md`, no por un RF con Dado/Cuando/Entonces
+  propio), así que las pruebas se derivaron directamente de los dos párrafos
+  normativos del arnés citados arriba. TDD: 1 test nuevo
+  (`test_boletas_de_la_misma_version_de_set_patron_son_comparables`) y los 3
+  tests existentes actualizados para el nuevo formato, escritos antes de
+  tocar `harness.py` (confirmado el fallo por `ImportError: cannot import
+  name 'SetPatron'` antes de implementar); `./test.sh` en verde (Gradle BUILD
+  SUCCESSFUL; pytest del arnés: 4 passed, antes 3). No se tocó ningún
+  `[CLARIFICAR]` de `edd-harness.md` ni de `eval-clasificacion.md`.
+  Siguiente paso: T-13 (CI: build + tests + arnés; gates AgentShield +
+  security-review) es la próxima tarea abierta en TODO.md.
+
 ## Camino a F2 (checklist, 2026-08-20)
 
 - [ ] 1. Enviar el one-pager a 3–5 entidades calificadas (F4, hilo comercial —

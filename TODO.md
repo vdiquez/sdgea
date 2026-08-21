@@ -10,6 +10,6 @@
 - [x] T-09 RF-RC-004 Materialización solo por decisión humana (actor + fecha)
 - [x] T-10 RF-RC-005 Bitácora inmutable de solo anexado; modificar/borrar se rechaza
 - [x] T-11 RF-RC-009 Verificación de integridad por demanda con reporte de discrepancias
-- [ ] T-12 Arnés: cargar set de juguete, correr componente ficticio, emitir boleta versionada
+- [x] T-12 Arnés: cargar set de juguete, correr componente ficticio, emitir boleta versionada
 - [ ] T-13 CI: build + tests + arnés; gates AgentShield + security-review
 - [ ] T-14 Empaquetado dual (P-02): mismos contenedores como SaaS y como instalador appliance
