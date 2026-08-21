@@ -11,30 +11,44 @@ class RegistroSetPatron:
     referencia: str
 
 
+@dataclass(frozen=True)
+class SetPatron:
+    version: str
+    registros: list[RegistroSetPatron]
+
+
 class Componente(Protocol):
     def predecir(self, entrada: str) -> str: ...
 
 
 @dataclass(frozen=True)
 class Boleta:
+    version: str
     total: int
     aciertos: int
     exactitud: float
     detalle: list[tuple[str, bool]]
 
 
-def cargar_set_patron(ruta: Path) -> list[RegistroSetPatron]:
+def cargar_set_patron(ruta: Path) -> SetPatron:
     datos = json.loads(ruta.read_text(encoding="utf-8"))
-    return [RegistroSetPatron(**registro) for registro in datos]
+    registros = [RegistroSetPatron(**registro) for registro in datos["registros"]]
+    return SetPatron(version=datos["version"], registros=registros)
 
 
-def correr_arnes(set_patron: list[RegistroSetPatron], componente: Componente) -> Boleta:
+def correr_arnes(set_patron: SetPatron, componente: Componente) -> Boleta:
     detalle: list[tuple[str, bool]] = []
     aciertos = 0
-    for registro in set_patron:
+    for registro in set_patron.registros:
         acierto = componente.predecir(registro.entrada) == registro.referencia
         aciertos += acierto
         detalle.append((registro.id, acierto))
-    total = len(set_patron)
+    total = len(set_patron.registros)
     exactitud = aciertos / total if total else 0.0
-    return Boleta(total=total, aciertos=aciertos, exactitud=exactitud, detalle=detalle)
+    return Boleta(
+        version=set_patron.version,
+        total=total,
+        aciertos=aciertos,
+        exactitud=exactitud,
+        detalle=detalle,
+    )

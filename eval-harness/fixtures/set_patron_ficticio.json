@@ -1,7 +1,10 @@
-[
-  {"id": "doc-1", "entrada": "Resolucion de nombramiento del funcionario", "referencia": "resolucion"},
-  {"id": "doc-2", "entrada": "Contrato de prestacion de servicios", "referencia": "contrato"},
-  {"id": "doc-3", "entrada": "Memorando interno sobre vacaciones", "referencia": "oficio"},
-  {"id": "doc-4", "entrada": "Acta de reunion del comite", "referencia": "acta"},
-  {"id": "doc-5", "entrada": "Circular informativa de la direccion", "referencia": "circular"}
-]
+{
+  "version": "set-ficticio-v1",
+  "registros": [
+    {"id": "doc-1", "entrada": "Resolucion de nombramiento del funcionario", "referencia": "resolucion"},
+    {"id": "doc-2", "entrada": "Contrato de prestacion de servicios", "referencia": "contrato"},
+    {"id": "doc-3", "entrada": "Memorando interno sobre vacaciones", "referencia": "oficio"},
+    {"id": "doc-4", "entrada": "Acta de reunion del comite", "referencia": "acta"},
+    {"id": "doc-5", "entrada": "Circular informativa de la direccion", "referencia": "circular"}
+  ]
+}
