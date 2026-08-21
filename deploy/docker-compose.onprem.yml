@@ -2,12 +2,15 @@
 #
 # Mismo código base que docker-compose.saas.yml. En este modo TODA capacidad
 # externa debe ser autoalojada — el appliance debe operar sin conectividad
-# saliente, incluso en entornos aislados (P-10). Aún no hay Dockerfiles reales —
-# se añaden cuando cada contexto tenga código (empezando por records-custodia y
-# captura-ingesta).
+# saliente, incluso en entornos aislados (P-10). Dockerfiles reales ya
+# wireados para captura-ingesta y records-custodia (T-18,
+# specs/spec-infra-servicios.md) — son los mismos que en modo SaaS (P-02: un
+# solo código base), sin ninguna capacidad externa de P-03 todavía.
 #
-# TODO por contexto, cuando exista su Dockerfile: los mismos nueve de
-# docker-compose.saas.yml.
+# TODO por contexto, cuando exista su Dockerfile: los mismos siete restantes
+# de docker-compose.saas.yml (seguridad-acceso, validacion-humana,
+# normalizacion, extraccion, clasificacion, enriquecimiento,
+# indexacion-busqueda).
 #
 # TODO — implementaciones self-hosted de las seis capacidades de P-03, cada una
 # como contenedor local (candidatas a evaluar, no decididas todavía):
@@ -28,6 +31,42 @@ services:
       POSTGRES_PASSWORD: sgdea
     volumes:
       - postgres-data:/var/lib/postgresql/data
+
+  # specs/spec-infra-servicios.md §2: Postgres por contexto sin esquema
+  # compartido, pero el mismo servidor `postgres` de arriba — cada contexto
+  # solo toca sus propias tablas (lotes_ingesta/items_ingesta aquí;
+  # originales_inmutables/documentos_archivo/... en records-custodia).
+  captura-ingesta:
+    build:
+      context: ..
+      dockerfile: contexts/captura-ingesta/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+    depends_on:
+      - postgres
+    # Sin `ports:` a propósito — specs/spec-infra-servicios.md §7: sin el
+    # contexto Seguridad y Acceso, este servicio no debe exponerse fuera de
+    # la red interna de docker-compose. Otros servicios del compose lo
+    # alcanzan por nombre (`captura-ingesta:8081`).
+
+  records-custodia:
+    build:
+      context: ..
+      dockerfile: contexts/records-custodia/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+    depends_on:
+      - postgres
+    # Mismo tratamiento que captura-ingesta: sin `ports:` hasta que exista
+    # Seguridad y Acceso (specs/spec-infra-servicios.md §7).
 
 volumes:
   postgres-data:

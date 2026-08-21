@@ -1,0 +1,13 @@
+# Los Dockerfiles de contexts/*/Dockerfile usan la raíz del repo como
+# contexto de build (build multi-módulo Gradle). Se excluye lo que no hace
+# falta para `./gradlew :contexts:<x>:bootJar` y que solo infla el contexto
+# de build o filtra estado local que no debe entrar a la imagen.
+.git/
+.gradle/
+.venv/
+build/
+**/build/
+.specify/
+agent-sandbox/
+eval-harness/.venv/
+**/__pycache__/

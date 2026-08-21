@@ -3,12 +3,11 @@
 # Mismo código base que docker-compose.onprem.yml; lo que cambia por modo es la
 # IMPLEMENTACIÓN detrás de cada interfaz de P-03 (almacenamiento de objetos, OCR,
 # embeddings, inferencia LLM, índice vectorial, índice léxico), nunca el código de
-# orquestación. Aún no hay Dockerfiles reales — se añaden cuando cada contexto
-# tenga código (empezando por records-custodia y captura-ingesta).
+# orquestación. Dockerfiles reales ya wireados para captura-ingesta y
+# records-custodia (T-18, specs/spec-infra-servicios.md); el resto de contextos
+# los suma cuando tengan código.
 #
 # TODO por contexto, cuando exista su Dockerfile:
-#   - contexts/captura-ingesta     (Kotlin/Spring)
-#   - contexts/records-custodia    (Kotlin/Spring)
 #   - contexts/seguridad-acceso    (Kotlin/Spring)
 #   - contexts/validacion-humana   (Kotlin/Spring)
 #   - contexts/normalizacion       (Python/FastAPI)
@@ -31,6 +30,42 @@ services:
       POSTGRES_PASSWORD: sgdea
     volumes:
       - postgres-data:/var/lib/postgresql/data
+
+  # specs/spec-infra-servicios.md §2: Postgres por contexto sin esquema
+  # compartido, pero el mismo servidor `postgres` de arriba — cada contexto
+  # solo toca sus propias tablas (lotes_ingesta/items_ingesta aquí;
+  # originales_inmutables/documentos_archivo/... en records-custodia).
+  captura-ingesta:
+    build:
+      context: ..
+      dockerfile: contexts/captura-ingesta/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+    depends_on:
+      - postgres
+    # Sin `ports:` a propósito — specs/spec-infra-servicios.md §7: sin el
+    # contexto Seguridad y Acceso, este servicio no debe exponerse fuera de
+    # la red interna de docker-compose. Otros servicios del compose lo
+    # alcanzan por nombre (`captura-ingesta:8081`).
+
+  records-custodia:
+    build:
+      context: ..
+      dockerfile: contexts/records-custodia/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+    depends_on:
+      - postgres
+    # Mismo tratamiento que captura-ingesta: sin `ports:` hasta que exista
+    # Seguridad y Acceso (specs/spec-infra-servicios.md §7).
 
 volumes:
   postgres-data:

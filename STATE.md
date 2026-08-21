@@ -1,7 +1,7 @@
 # STATE
-Fase: F2 en curso — T-13/T-14 resueltas y desglosadas en T-15..T-18 (T-15,
-T-16 y T-17 hechas; T-18 abierta). T-02 sigue bloqueada. Ver
-plan-ejecucion-agentica.md.
+Fase: F2/F3 — T-13/T-14 resueltas y desglosadas en T-15..T-18, las cuatro
+hechas. T-02 sigue bloqueada; es la única tarea `- [?]` que queda en TODO.md.
+Ver plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -443,6 +443,56 @@ Hecho:
   Siguiente paso: T-18 (Dockerfiles reales + wiring en
   deploy/docker-compose.{saas,onprem}.yml) es la próxima tarea abierta en
   TODO.md — y la última de T-15..T-18.
+
+- F3: T-18 (Dockerfiles reales + wiring en
+  deploy/docker-compose.{saas,onprem}.yml) implementado, cerrando T-15..T-18.
+  `contexts/captura-ingesta/Dockerfile` y `contexts/records-custodia/Dockerfile`:
+  build multi-etapa `eclipse-temurin:21-jdk` (coincide con `jvmToolchain(21)`
+  de ambos `build.gradle.kts`) → `./gradlew :contexts:<x>:bootJar -x test` →
+  runtime `eclipse-temurin:21-jre` copiando el jar ejecutable
+  (`<contexto>.jar`, ya observado en `build/libs/` desde T-16/T-17, no el
+  `-plain.jar`). Tests omitidos en el build de imagen (`-x test`): decisión de
+  implementación, no recorte de cobertura — `./test.sh` ya los corre en CI
+  antes de que exista una imagen que construir. Como el build es multi-módulo
+  (cada contexto depende de `platform-kotlin`), el contexto de build de Docker
+  es la raíz del repo, no el directorio del contexto: los `Dockerfile` viven
+  en `contexts/<x>/Dockerfile` pero se invocan con `context: ..` desde
+  `deploy/`, documentado en el propio archivo. Se añadió `.dockerignore` en la
+  raíz (excluye `.git/`, `.gradle/`, `.venv/`, `build/`, `.specify/`,
+  `agent-sandbox/`) para no inflar ese contexto de build compartido.
+  `deploy/docker-compose.{saas,onprem}.yml` ganan los servicios
+  `captura-ingesta` y `records-custodia`, ambos apuntando al mismo `postgres`
+  ya declarado (specs/spec-infra-servicios.md §2: Postgres por contexto sin
+  esquema compartido, pero un solo servidor) vía las variables de entorno que
+  ya leía `application.yml` desde T-16/T-17 (`DB_HOST=postgres`, etc.).
+  Decisión deliberada: **sin `ports:`** (no se publica ningún puerto al host)
+  en ninguno de los dos servicios, en ninguno de los dos modos — cita directa
+  de `specs/spec-infra-servicios.md` §7 ("sin el contexto Seguridad y Acceso,
+  estos servicios no deben exponerse fuera de una red de confianza"); otros
+  servicios del mismo compose los alcanzan por nombre de servicio
+  (`captura-ingesta:8081`, `records-custodia:8082`), no hace falta publicar
+  puerto para eso. SaaS y on-premise quedan con el mismo wiring (P-02: un solo
+  código base) porque ninguna de las seis capacidades de P-03 está en juego
+  todavía para estos dos contextos.
+  T-18 es infraestructura de empaquetado (como T-12/T-16/T-17), no un RF con
+  Dado/Cuando/Entonces propio, así que no aplica TDD sobre criterios de
+  negocio. Verificación de honestidad en su lugar: `./gradlew test` completo
+  (16 tareas, BUILD SUCCESSFUL, sin tocar ningún test ni código de dominio) y
+  `pytest` del arnés (4 passed) en verde tras el cambio — confirma que
+  Dockerfiles/compose no rompieron nada existente. Los dos `docker-compose*.yml`
+  se parsearon con PyYAML (`yaml.safe_load`) confirmando sintaxis válida y la
+  ausencia de `ports:` en los dos servicios nuevos. **Límite de esta
+  verificación, documentado explícitamente**: `docker` no está instalado en
+  este entorno (mismo hallazgo que T-16/T-17 registraron para Testcontainers),
+  así que ni la imagen ni el `docker compose up` real se construyeron ni se
+  corrieron aquí — falta esa verificación de punta a punta cuando alguien la
+  corra en un entorno con Docker disponible.
+  Siguiente paso: con T-15..T-18 cerradas, T-02 (RF-CI-006, bloqueada por
+  `[CLARIFICAR]`, ver QUESTIONS.md 2026-08-20) es la única tarea que queda
+  `- [?]` en TODO.md — no queda ninguna tarea `- [ ]` abierta. Un humano debe
+  responder la taxonomía de condiciones de cuarentena/rechazo para
+  desbloquearla; hasta entonces no hay más trabajo autónomo de F2/F3 que
+  tomar de TODO.md.
 
 ## Camino a F2 (checklist, 2026-08-20)
 

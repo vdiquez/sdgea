@@ -23,5 +23,5 @@
       contra specs/spec-infra-servicios.md §3
 - [x] T-17 records-custodia como servicio HTTP (Spring Boot) + persistencia Postgres,
       contra specs/spec-infra-servicios.md §4
-- [ ] T-18 Dockerfiles reales (captura-ingesta, records-custodia) + wiring en
+- [x] T-18 Dockerfiles reales (captura-ingesta, records-custodia) + wiring en
       deploy/docker-compose.{saas,onprem}.yml
