@@ -312,7 +312,13 @@ Hecho:
 - [x] 3. TEST_CMD fijado a `./test.sh`.
 - [x] 4. TODO.md sembrado (14 tareas T-01..T-14).
 - [x] 5. Sandbox Docker construido y verificado (`agent-sandbox/`).
-- [ ] 6. Arrancar F2: `./agent-sandbox/run.sh` y dentro, `./orquestador.sh loop`.
+- [x] 6. F2 corrido — 11/14 tareas hechas (T-01, T-03..T-12), 3 bloqueadas
+      (T-02, T-13, T-14). Dos bugs reales encontrados y corregidos en el
+      camino: `.venv` compartido entre host/contenedor se corrompía
+      (aislado en volúmenes Docker nombrados), y `codex exec` corría en
+      sandbox de solo lectura — podía revisar pero nunca escribir
+      REVIEW.md, así que el VETO nunca se materializaba aunque el loop se
+      veía en verde (corregido con `--sandbox workspace-write`).
 - [ ] 7. Skill_Seekers sobre el PDF del Acuerdo AGN 001 de 2024 → skill
       normativa (F4, automatizable en paralelo).
 - [ ] 8. Completar F3: gates AgentShield + security-review en CI; Dockerfiles
