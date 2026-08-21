@@ -113,3 +113,65 @@ class CustodiaOriginales {
         const val ALGORITMO_HUELLA = "SHA-256"
     }
 }
+
+// Regla de retención de una serie/subserie de la TRD (spec §2/§3): tiempo de
+// retención y disposición final. El tiempo y la disposición concretos son
+// dato del design partner, no una referencia normativa inventada por esta
+// tarea; aquí solo se modela la estructura que los porta.
+data class ReglaRetencion(
+    val tiempoRetencionAnios: Int,
+    val disposicionFinal: String,
+)
+
+// Subserie: nodo hoja del árbol de clasificación de la TRD (spec §2).
+data class Subserie(
+    val id: String,
+    val nombre: String,
+    val reglaRetencion: ReglaRetencion,
+)
+
+// Serie: nodo del árbol de clasificación de la TRD (spec §2); puede tener
+// subseries.
+data class Serie(
+    val id: String,
+    val nombre: String,
+    val reglaRetencion: ReglaRetencion,
+    val subseries: List<Subserie> = emptyList(),
+)
+
+// TRD/CCD (spec §2/§3, RF-RC-006): objeto versionado — versión, vigencia y
+// árbol de series/subseries con sus reglas de retención y disposición final.
+data class Trd(
+    val version: Int,
+    val vigenteDesde: Instant,
+    val series: List<Serie>,
+)
+
+// Clasificación de un documento contra una versión específica de la TRD
+// (spec §3, RF-RC-006): referencia la serie/subserie y el número de versión
+// de TRD usada en el momento de clasificar, de modo que esa referencia
+// sobrevive a la publicación de versiones posteriores de la TRD. El resto
+// del agregado Documento de archivo (metadatos, estado de ciclo de vida) es
+// alcance de RF-RC-003 en adelante, no de esta tarea.
+data class Clasificacion(
+    val documentoId: String,
+    val trdVersion: Int,
+    val serieId: String,
+    val subserieId: String? = null,
+)
+
+// RF-RC-006: registro de versiones publicadas de la TRD. Publicar una nueva
+// versión solo añade una entrada; nunca sobrescribe ni retira una versión
+// anterior, así que toda `Clasificacion` que referencia una versión ya
+// publicada sigue resolviendo contra esa misma versión después de que se
+// publique una nueva.
+class RegistroTrd {
+
+    private val versiones = mutableMapOf<Int, Trd>()
+
+    fun publicar(trd: Trd) {
+        versiones[trd.version] = trd
+    }
+
+    fun version(numero: Int): Trd = versiones.getValue(numero)
+}

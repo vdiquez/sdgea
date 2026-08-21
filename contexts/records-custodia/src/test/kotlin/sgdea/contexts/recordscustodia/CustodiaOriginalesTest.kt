@@ -86,3 +86,43 @@ class RegistroDeProcedenciaTest {
         assertEquals(procedencia, custodia.consultarProcedencia("doc-1"))
     }
 }
+
+// RF-RC-006 · TRD como objeto versionado
+class TrdComoObjetoVersionadoTest {
+
+    private fun trd(version: Int) = Trd(
+        version = version,
+        vigenteDesde = Instant.parse("2026-08-2${version}T00:00:00Z"),
+        series = listOf(
+            Serie(
+                id = "serie-1",
+                nombre = "Gestión documental",
+                reglaRetencion = ReglaRetencion(tiempoRetencionAnios = 5, disposicionFinal = "Conservación total"),
+            ),
+        ),
+    )
+
+    @Test
+    fun `dada una clasificacion de documento, cuando se consulta, referencia una version especifica de la TRD`() {
+        val registro = RegistroTrd()
+        registro.publicar(trd(1))
+
+        val clasificacion = Clasificacion(documentoId = "doc-1", trdVersion = 1, serieId = "serie-1")
+
+        assertEquals(1, clasificacion.trdVersion)
+        assertEquals(1, registro.version(clasificacion.trdVersion).version)
+    }
+
+    @Test
+    fun `dada una nueva version de la TRD, cuando se publica, las clasificaciones previas conservan su referencia a la version anterior`() {
+        val registro = RegistroTrd()
+        registro.publicar(trd(1))
+        val clasificacionPrevia = Clasificacion(documentoId = "doc-1", trdVersion = 1, serieId = "serie-1")
+
+        registro.publicar(trd(2))
+
+        assertEquals(1, clasificacionPrevia.trdVersion)
+        assertEquals(1, registro.version(1).version)
+        assertEquals(2, registro.version(2).version)
+    }
+}

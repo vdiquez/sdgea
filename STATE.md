@@ -115,6 +115,27 @@ Hecho:
   definido); `./test.sh` en verde (Gradle BUILD SUCCESSFUL; pytest del arnés:
   3 passed). No se tocó ningún `[CLARIFICAR]` de la spec — RF-CI-002 no tiene
   ninguno pendiente.
+- F2: T-07 (RF-RC-006, TRD como objeto versionado) implementado en
+  `contexts/records-custodia`: se añadieron `ReglaRetencion`, `Serie`,
+  `Subserie` y `Trd` (versión, vigencia, árbol de series/subseries con sus
+  reglas de retención) según el modelo de spec §3; `Clasificacion` referencia
+  un documento, una serie/subserie y el número de versión de TRD usado; y
+  `RegistroTrd.publicar(trd)` solo añade versiones — nunca sobrescribe ni
+  retira una ya publicada, así que `registro.version(n)` sigue devolviendo la
+  misma versión después de publicar una posterior. Alcance deliberadamente
+  angosto ("estructura mínima" en TODO.md): no implementa la política de
+  importación/publicación de una nueva versión de TRD (spec §8
+  `[CLARIFICAR]`, "cómo se importa y se publica... sin afectar clasificaciones
+  vigentes") — ese clarificar es sobre el mecanismo de publicación, no sobre
+  el invariante estructural que exige RF-RC-006 (que las clasificaciones
+  previas conserven su referencia de versión), que es lo único que esta tarea
+  prueba. `Clasificacion` no está vinculada todavía a `DocumentoDeArchivo`
+  (ese campo de clasificación es alcance de RF-RC-003 en adelante, ya
+  señalado como fuera de alcance en T-04). TDD: 2 tests nuevos
+  (`TrdComoObjetoVersionadoTest`) escritos contra el Dado/Cuando/Entonces de
+  RF-RC-006 antes de la implementación; `./test.sh` en verde (Gradle BUILD
+  SUCCESSFUL — 2 nuevos tests pasando en records-custodia; pytest del arnés:
+  3 passed).
 
 ## Camino a F2 (checklist, 2026-08-20)
 
