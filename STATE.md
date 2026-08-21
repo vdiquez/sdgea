@@ -201,6 +201,41 @@ Hecho:
   Siguiente paso: T-11 (RF-RC-009, verificación de integridad por demanda)
   es la próxima tarea abierta en TODO.md.
 
+- F2: T-11 (RF-RC-009, verificación de integridad por demanda) implementado
+  en `contexts/records-custodia`: `CustodiaOriginales.verificarIntegridad(id,
+  actor, fecha)` recalcula la huella del original y la compara contra la
+  huella registrada; si no coincide, anexa un evento de auditoría
+  (`DISCREPANCIA_DE_INTEGRIDAD`) y el `ResultadoVerificacionIntegridad`
+  devuelto marca `coincide = false`, satisfaciendo el único
+  Dado/Cuando/Entonces de RF-RC-009. `verificarTodos(actor, fecha)` corre esa
+  verificación sobre todos los originales custodiados y agrega el resultado
+  en un `ReporteVerificacionIntegridad` (con `discrepancias` derivado), para
+  cubrir el "reportar discrepancias" (plural) del enunciado del RF sin
+  inventar alcance adicional. La ejecución "de forma programada" que
+  menciona el RF es responsabilidad de un disparador externo (cron/scheduler)
+  que invoque este mismo método — no es lógica de dominio y queda fuera de
+  esta tarea, documentado como tal en el código.
+  Decisión de diseño: como el original inmutable nunca se puede mutar por API
+  pública (invariante 1, ya garantizado desde T-03), no hay forma de producir
+  una discrepancia real sin un seam. Se añadió un parámetro de constructor
+  opcional `lectorDeAlmacenamiento: ((id) -> ByteArray)?` a
+  `CustodiaOriginales`, con default `null` que hace que la verificación lea
+  del propio registro en memoria (por lo que en operación normal siempre
+  coincide); las pruebas lo sustituyen para simular divergencia del medio de
+  almacenamiento (bit-rot / corrupción), sin exponer ninguna API de mutación
+  del original. No es una capacidad externa real (P-03 ya cubre eso con
+  `ObjectStorage` en `platform-kotlin`, sin usar todavía aquí) — es solo el
+  seam mínimo para poder probar la rama de discrepancia del RF.
+  TDD: 3 tests nuevos (`VerificacionDeIntegridadTest` — coincide, no
+  coincide, reporte agregado con `verificarTodos`) escritos contra el
+  Dado/Cuando/Entonces de RF-RC-009 antes de la implementación (confirmado
+  el fallo de compilación por símbolos no definidos); `./test.sh` en verde
+  (Gradle BUILD SUCCESSFUL — records-custodia con 3 tests nuevos pasando;
+  pytest del arnés: 3 passed). No se tocó ningún `[CLARIFICAR]` de la spec —
+  RF-RC-009 no tiene ninguno pendiente.
+  Siguiente paso: T-12 (arnés — cargar set de juguete, correr componente
+  ficticio, emitir boleta versionada) es la próxima tarea abierta en TODO.md.
+
 ## Camino a F2 (checklist, 2026-08-20)
 
 - [ ] 1. Enviar el one-pager a 3–5 entidades calificadas (F4, hilo comercial —

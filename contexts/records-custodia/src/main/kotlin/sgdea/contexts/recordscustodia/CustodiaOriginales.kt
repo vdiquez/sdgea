@@ -81,10 +81,36 @@ data class DocumentoDeArchivo(
     val clasificacion: Clasificacion? = null,
 )
 
+// RF-RC-009: resultado de verificar un original contra su huella registrada.
+data class ResultadoVerificacionIntegridad(
+    val id: String,
+    val coincide: Boolean,
+    val huellaRegistrada: String,
+    val huellaCalculada: String,
+)
+
+// RF-RC-009: reporte de una corrida de verificación sobre todos los originales
+// custodiados; `discrepancias` es el subconjunto que no coincide con su huella.
+data class ReporteVerificacionIntegridad(
+    val resultados: List<ResultadoVerificacionIntegridad>,
+) {
+    val discrepancias: List<ResultadoVerificacionIntegridad> get() = resultados.filterNot { it.coincide }
+}
+
 // RF-RC-001: custodia el original en modo de una sola escritura y registra su huella
 // criptográfica; un intento de modificarlo se rechaza y genera un evento de auditoría.
 // RF-RC-002: cada documento conserva su procedencia completa.
-class CustodiaOriginales {
+//
+// `lectorDeAlmacenamiento` es el seam mínimo de RF-RC-009: la verificación de
+// integridad debe poder detectar que el medio de almacenamiento divergió de la
+// huella registrada (bit-rot, corrupción del medio) sin que este contexto exponga
+// ninguna API pública para mutar un original ya custodiado (invariante 1). Por
+// defecto lee el propio registro en memoria, así que en operación normal siempre
+// coincide; las pruebas lo sustituyen para simular la divergencia sin tocar
+// `consultar`/`custodiar`.
+class CustodiaOriginales(
+    private val lectorDeAlmacenamiento: ((id: String) -> ByteArray)? = null,
+) {
 
     private val originales = mutableMapOf<String, OriginalInmutable>()
     private val documentos = mutableMapOf<String, DocumentoDeArchivo>()
@@ -158,6 +184,41 @@ class CustodiaOriginales {
             "El original '$id' está bajo custodia inmutable; la modificación se rechaza.",
         )
     }
+
+    // RF-RC-009: verifica, por demanda, que el original almacenado bajo `id`
+    // coincide con su huella registrada; si no coincide, se reporta como
+    // discrepancia y se genera un evento de auditoría. La ejecución "de forma
+    // programada" que menciona el RF es responsabilidad de un disparador externo
+    // (cron/scheduler) que invoque este mismo método u `verificarTodos`; no es
+    // lógica de dominio y queda fuera de alcance de esta tarea.
+    fun verificarIntegridad(id: String, actor: String, fecha: Instant): ResultadoVerificacionIntegridad {
+        val original = originales.getValue(id)
+        val bytesAlmacenados = lectorDeAlmacenamiento?.invoke(id) ?: original.bytes
+        val huellaCalculada = calcularHuella(bytesAlmacenados)
+        val resultado = ResultadoVerificacionIntegridad(
+            id = id,
+            coincide = huellaCalculada == original.huella,
+            huellaRegistrada = original.huella,
+            huellaCalculada = huellaCalculada,
+        )
+        if (!resultado.coincide) {
+            bitacora.anexar(
+                EventoAuditoria(
+                    actor = actor,
+                    fecha = fecha,
+                    tipo = "DISCREPANCIA_DE_INTEGRIDAD",
+                    estadoAnterior = "CUSTODIADO",
+                    estadoPosterior = "DISCREPANCIA_DETECTADA",
+                ),
+            )
+        }
+        return resultado
+    }
+
+    // RF-RC-009: corre `verificarIntegridad` sobre todos los originales
+    // custodiados y agrega el resultado en un único reporte de discrepancias.
+    fun verificarTodos(actor: String, fecha: Instant): ReporteVerificacionIntegridad =
+        ReporteVerificacionIntegridad(originales.keys.map { verificarIntegridad(it, actor, fecha) })
 
     private fun calcularHuella(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance(ALGORITMO_HUELLA).digest(bytes)

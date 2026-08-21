@@ -330,3 +330,78 @@ class TrdComoObjetoVersionadoTest {
         assertEquals(2, registro.version(2).version)
     }
 }
+
+// RF-RC-009 · Verificación de integridad
+class VerificacionDeIntegridadTest {
+
+    private val procedenciaDePrueba = Procedencia(
+        fuente = "escaner-sala-3",
+        fecha = Instant.parse("2026-08-21T00:00:00Z"),
+        loteOFlujoId = "lote-001",
+    )
+
+    @Test
+    fun `dado un original que coincide con su huella, cuando se verifica, no se reporta discrepancia ni se genera evento`() {
+        val custodia = CustodiaOriginales()
+        custodia.custodiar(
+            id = "doc-1",
+            bytes = "contenido original".toByteArray(),
+            actor = "sistema-ingesta",
+            fecha = Instant.parse("2026-08-21T00:00:00Z"),
+            procedencia = procedenciaDePrueba,
+        )
+
+        val resultado = custodia.verificarIntegridad(
+            id = "doc-1",
+            actor = "auditor-1",
+            fecha = Instant.parse("2026-08-21T03:00:00Z"),
+        )
+
+        assertTrue(resultado.coincide)
+        assertEquals(resultado.huellaRegistrada, resultado.huellaCalculada)
+        assertTrue(custodia.eventosDeAuditoria.none { it.tipo == "DISCREPANCIA_DE_INTEGRIDAD" })
+    }
+
+    @Test
+    fun `dada una verificacion de integridad, cuando un original no coincide con su huella, se reporta como discrepancia y se genera un evento de auditoria`() {
+        val bytesOriginales = "contenido original".toByteArray()
+        val bytesDivergentesEnElMedio = "contenido corrompido en el medio".toByteArray()
+        val custodia = CustodiaOriginales(lectorDeAlmacenamiento = { bytesDivergentesEnElMedio })
+        custodia.custodiar(
+            id = "doc-1",
+            bytes = bytesOriginales,
+            actor = "sistema-ingesta",
+            fecha = Instant.parse("2026-08-21T00:00:00Z"),
+            procedencia = procedenciaDePrueba,
+        )
+
+        val resultado = custodia.verificarIntegridad(
+            id = "doc-1",
+            actor = "auditor-1",
+            fecha = Instant.parse("2026-08-21T03:00:00Z"),
+        )
+
+        assertTrue(!resultado.coincide)
+        assertTrue(
+            custodia.eventosDeAuditoria.any {
+                it.tipo == "DISCREPANCIA_DE_INTEGRIDAD" && it.actor == "auditor-1" && it.fecha == Instant.parse("2026-08-21T03:00:00Z")
+            },
+        )
+    }
+
+    @Test
+    fun `verificarTodos agrega las discrepancias de todos los originales custodiados en un unico reporte`() {
+        val bytesOk = "contenido intacto".toByteArray()
+        val bytesDivergentes = "contenido corrompido".toByteArray()
+        val custodia = CustodiaOriginales(
+            lectorDeAlmacenamiento = { id -> if (id == "doc-corrupto") bytesDivergentes else bytesOk },
+        )
+        custodia.custodiar("doc-1", bytesOk, "sistema-ingesta", Instant.parse("2026-08-21T00:00:00Z"), procedenciaDePrueba)
+        custodia.custodiar("doc-corrupto", bytesOk, "sistema-ingesta", Instant.parse("2026-08-21T00:00:00Z"), procedenciaDePrueba)
+
+        val reporte = custodia.verificarTodos(actor = "auditor-1", fecha = Instant.parse("2026-08-21T03:00:00Z"))
+
+        assertEquals(2, reporte.resultados.size)
+        assertEquals(listOf("doc-corrupto"), reporte.discrepancias.map { it.id })
+    }
+}
