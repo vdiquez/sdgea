@@ -577,17 +577,24 @@ Hecho:
 - [x] 3. TEST_CMD fijado a `./test.sh`.
 - [x] 4. TODO.md sembrado (14 tareas T-01..T-14).
 - [x] 5. Sandbox Docker construido y verificado (`agent-sandbox/`).
-- [x] 6. F2 corrido — 11/14 tareas hechas (T-01, T-03..T-12), 3 bloqueadas
-      (T-02, T-13, T-14). Dos bugs reales encontrados y corregidos en el
-      camino: `.venv` compartido entre host/contenedor se corrompía
-      (aislado en volúmenes Docker nombrados), y `codex exec` corría en
-      sandbox de solo lectura — podía revisar pero nunca escribir
-      REVIEW.md, así que el VETO nunca se materializaba aunque el loop se
-      veía en verde (corregido con `--sandbox workspace-write`).
-- [ ] 7. Skill_Seekers sobre el PDF del Acuerdo AGN 001 de 2024 → skill
-      normativa (F4, automatizable en paralelo).
-- [ ] 8. Completar F3: gates AgentShield + security-review en CI; Dockerfiles
-      reales por contexto a medida que el loop les da código.
+- [x] 6. F2 corrido en varias corridas — T-01..T-21 hechas salvo T-02
+      (bloqueada, ver abajo). Bugs reales de infraestructura encontrados y
+      corregidos en el camino: `.venv`/`.gradle` compartidos con el host se
+      corrompían (aislados en carpetas del host fuera del bind mount, no
+      volúmenes nombrados — esos también se crean root:root); `codex exec`
+      corría en sandbox de solo lectura, podía revisar pero nunca escribir
+      REVIEW.md (corregido con `--sandbox workspace-write`); el loop se
+      negaba a seguir con tareas independientes en cuanto una quedaba `- [?]`
+      (corregido en `cmd_loop`). Codex vetó dos veces de verdad (T-16/17/18
+      por RF-RC-006/FKs/formato de error, y T-20 por atomicidad P-08) — ambas
+      veces el hallazgo era real, no falso positivo, y quedaron corregidos
+      (T-19, T-21) con revisión de Codex confirmando el cierre.
+- [x] 7. Security-review cableado en CI (T-13); AgentShield queda PENDIENTE
+      explícito a propósito (sin herramienta decidida). Skill_Seekers sobre
+      el Acuerdo AGN 001 de 2024 sigue sin hacer — es F4, no depende de esto.
+- [x] 8. F3: gates de CI resueltos (T-13); Dockerfiles reales para
+      captura-ingesta y records-custodia wireados en docker-compose (T-18).
+      Falta el mismo tratamiento para los contextos que aún no tienen código.
 - [ ] 9. Empezar el ritual `./orquestador.sh digest`; decidir si configurar
       NTFY_TOPIC.
 - [ ] 10. En la reunión/convenio de F4: proteger 9.2, negociar el Anexo 1 como
