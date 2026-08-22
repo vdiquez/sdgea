@@ -1,0 +1,504 @@
+{
+  "info": {
+    "_postman_id": "a1e2c3d4-5f60-4a7b-8c9d-sgdea0000001",
+    "name": "SGDEA - Corte vertical (captura-ingesta + records-custodia)",
+    "description": "Cubre los 14 endpoints reales de specs/spec-infra-servicios.md (T-16/T-17), en el mismo orden en que se probaron manualmente con curl. Corre la carpeta completa de arriba a abajo con el Collection Runner: cada request encadena su ID con la siguiente vía variables de entorno (lote_id, documento_id, trd_version). Requiere el stack levantado con el overlay de puertos locales:\n\ndocker compose -f deploy/docker-compose.saas.yml -f deploy/docker-compose.local-ports.yml up -d --build",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Captura-Ingesta",
+      "item": [
+        {
+          "name": "01 Cargar lote (RF-CI-001, RF-CI-007)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"lote_id\", \"lote-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"devuelve el mismo loteId\", () => pm.expect(body.id).to.eql(pm.environment.get(\"lote_id\")));",
+                  "pm.test(\"dos items en estado RECIBIDO\", () => {",
+                  "  pm.expect(body.items).to.have.lengthOf(2);",
+                  "  body.items.forEach((it) => pm.expect(it.estado).to.eql(\"RECIBIDO\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loteId\": \"{{lote_id}}\",\n  \"artefactos\": [\n    { \"id\": \"art-1\", \"nombre\": \"documento-1.pdf\" },\n    { \"id\": \"art-2\", \"nombre\": \"documento-2.pdf\" }\n  ],\n  \"inventario\": [\"art-1\", \"art-2\", \"art-3\"],\n  \"fuente\": \"escaner-postman\",\n  \"fecha\": \"2026-08-22T12:00:00Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{captura_ingesta_base_url}}/lotes",
+              "host": ["{{captura_ingesta_base_url}}"],
+              "path": ["lotes"]
+            },
+            "description": "RF-CI-001: produce un ItemIngesta en estado Recibido por cada artefacto. inventario incluye 'art-3' a propósito, que no llega como artefacto — lo usa la petición 03 (conciliación) para demostrar 'faltantes'."
+          }
+        },
+        {
+          "name": "02 Conteo por estado (RF-CI-008)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"total 2, sin pérdida silenciosa reportable aún (ninguno terminal)\", () => {",
+                  "  pm.expect(body.total).to.eql(2);",
+                  "  pm.expect(body.porEstado.RECIBIDO).to.eql(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{captura_ingesta_base_url}}/lotes/{{lote_id}}/conteo",
+              "host": ["{{captura_ingesta_base_url}}"],
+              "path": ["lotes", "{{lote_id}}", "conteo"]
+            },
+            "description": "RF-CI-008: conteo por estado del lote — base del invariante 'cero pérdida silenciosa' (terminales == total)."
+          }
+        },
+        {
+          "name": "03 Conciliación contra inventario (RF-CI-002)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"art-3 reportado como faltante, nada sobrante\", () => {",
+                  "  pm.expect(body.faltantes).to.include(\"art-3\");",
+                  "  pm.expect(body.sobrantes).to.have.lengthOf(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{captura_ingesta_base_url}}/lotes/{{lote_id}}/conciliacion",
+              "host": ["{{captura_ingesta_base_url}}"],
+              "path": ["lotes", "{{lote_id}}", "conciliacion"]
+            },
+            "description": "RF-CI-002: compara el inventario declarado contra los items recibidos."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Records-Custodia",
+      "item": [
+        {
+          "name": "04 Custodiar original (RF-RC-001, RF-RC-002)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"documento_id\", \"doc-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"huella SHA-256 calculada\", () => {",
+                  "  pm.expect(body.algoritmoHuella).to.eql(\"SHA-256\");",
+                  "  pm.expect(body.huella).to.be.a(\"string\").and.have.lengthOf(64);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{documento_id}}\",\n  \"bytesBase64\": \"SG9sYSBTR0RFQQ==\",\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-22T12:00:00Z\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-22T12:00:00Z\",\n    \"loteOFlujoId\": \"{{lote_id}}\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["documentos"]
+            },
+            "description": "RF-RC-001/002: custodia el original (escritura de una sola vez, huella SHA-256) y su procedencia. bytesBase64 = base64(\"Hola SGDEA\")."
+          }
+        },
+        {
+          "name": "05 Consultar original custodiado (RF-RC-001)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"bytes originales intactos\", () => pm.expect(body.bytes).to.eql(\"SG9sYSBTR0RFQQ==\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}/original",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["documentos", "{{documento_id}}", "original"]
+            }
+          }
+        },
+        {
+          "name": "06 Consultar documento (sin clasificación aún)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"clasificacion null antes de la decisión humana (P-01)\", () => pm.expect(body.clasificacion).to.be.null);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["documentos", "{{documento_id}}"]
+            }
+          }
+        },
+        {
+          "name": "07 Consultar procedencia (RF-RC-002)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"procedencia conserva el lote de origen\", () => pm.expect(body.loteOFlujoId).to.eql(pm.environment.get(\"lote_id\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}/procedencia",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["documentos", "{{documento_id}}", "procedencia"]
+            }
+          }
+        },
+        {
+          "name": "08 Publicar TRD v1 (RF-RC-006)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"trd_version\", Math.floor(Date.now() / 1000));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"versión publicada coincide\", () => pm.expect(body.version).to.eql(pm.environment.get(\"trd_version\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{trd_version}},\n  \"vigenteDesde\": \"2026-01-01T00:00:00Z\",\n  \"series\": [\n    {\n      \"id\": \"serie-1\",\n      \"nombre\": \"Serie de prueba\",\n      \"reglaRetencion\": { \"tiempoRetencionAnios\": 5, \"disposicionFinal\": \"Conservacion total\" },\n      \"subseries\": []\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{records_custodia_base_url}}/trd",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["trd"]
+            },
+            "description": "Primera publicación de esta versión — debe crear (201)."
+          }
+        },
+        {
+          "name": "09 Publicar TRD v1 otra vez -> 409 (T-19, fix del VETO de Codex)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"409 Conflict\", () => pm.response.to.have.status(409));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"mensaje de rechazo explícito\", () => pm.expect(body.error).to.include(\"ya fue publicada\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{trd_version}},\n  \"vigenteDesde\": \"2099-01-01T00:00:00Z\",\n  \"series\": []\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{records_custodia_base_url}}/trd",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["trd"]
+            },
+            "description": "Misma versión, cuerpo distinto (otra vigenteDesde) — antes de T-19 esto sobrescribía en silencio (HTTP 201); ahora debe rechazarse con 409 sin tocar la versión ya publicada."
+          }
+        },
+        {
+          "name": "10 Consultar TRD por versión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"conserva la fecha ORIGINAL, no la del intento rechazado\", () => pm.expect(body.vigenteDesde).to.eql(\"2026-01-01T00:00:00Z\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/trd/{{trd_version}}",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["trd", "{{trd_version}}"]
+            }
+          }
+        },
+        {
+          "name": "11 Recibir sugerencia (RF-RC-003, EMISOR FICTICIO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"queda vinculada al documento\", () => pm.expect(body.documentoId).to.eql(pm.environment.get(\"documento_id\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentoId\": \"{{documento_id}}\",\n  \"tipo\": \"clasificacion\",\n  \"contenidoPropuesto\": \"serie-1\",\n  \"modeloId\": \"clasificador-ficticio-v1\",\n  \"evidencia\": [\"heuristica-postman\"],\n  \"confianza\": 0.42,\n  \"fecha\": \"2026-08-22T12:05:00Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{records_custodia_base_url}}/sugerencias",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["sugerencias"]
+            },
+            "description": "modeloId es el EMISOR FICTICIO que exige la constitución (nunca un clasificador real). No modifica el documento (P-01) — solo la petición 13 (decisión humana) lo hace."
+          }
+        },
+        {
+          "name": "12 Consultar sugerencias del documento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"al menos una sugerencia registrada\", () => pm.expect(body.length).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}/sugerencias",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["documentos", "{{documento_id}}", "sugerencias"]
+            }
+          }
+        },
+        {
+          "name": "13 Materializar decisión humana (RF-RC-004)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"clasificación materializada con la serie decidida\", () => pm.expect(body.clasificacion.serieId).to.eql(\"serie-1\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-22T12:10:00Z\",\n  \"sugerenciasReferenciadas\": [],\n  \"clasificacionResultante\": {\n    \"documentoId\": \"{{documento_id}}\",\n    \"trdVersion\": {{trd_version}},\n    \"serieId\": \"serie-1\",\n    \"subserieId\": null\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}/decisiones",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["documentos", "{{documento_id}}", "decisiones"]
+            },
+            "description": "Única operación que puede cambiar la clasificación del documento (P-01). sugerenciasReferenciadas vacía = decisión manual, sin referenciar la sugerencia de la petición 11 (ambos caminos son válidos según el dominio)."
+          }
+        },
+        {
+          "name": "14 Verificar integridad de un documento (RF-RC-009)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"huella coincide (sin corrupción)\", () => pm.expect(body.coincide).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-22T12:15:00Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}/verificacion-integridad",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["documentos", "{{documento_id}}", "verificacion-integridad"]
+            }
+          }
+        },
+        {
+          "name": "15 Verificar integridad de todos los originales (RF-RC-009)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"sin discrepancias\", () => pm.expect(body.discrepancias).to.have.lengthOf(0));",
+                  "pm.test(\"incluye el documento custodiado en esta corrida\", () => {",
+                  "  const ids = body.resultados.map((r) => r.id);",
+                  "  pm.expect(ids).to.include(pm.environment.get(\"documento_id\"));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-22T12:15:00Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{records_custodia_base_url}}/verificacion-integridad",
+              "host": ["{{records_custodia_base_url}}"],
+              "path": ["verificacion-integridad"]
+            },
+            "description": "Recorre TODOS los originales custodiados en la base — si corriste la colección varias veces, el reporte crece; el test solo exige que el documento de ESTA corrida aparezca sin discrepancia."
+          }
+        }
+      ]
+    }
+  ]
+}
