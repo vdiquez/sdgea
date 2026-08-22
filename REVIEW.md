@@ -1,74 +1,39 @@
-VETO: P-08 — la recepción de una sugerencia persiste la sugerencia sin anexar el evento de auditoría obligatorio.
+OK: sin objeciones al commit 8d89b69; elimina un marcador de bloqueo obsoleto sin alterar producto, specs ni pruebas.
 
-# Revisión de `HEAD` — `582dd67` (T-19)
+# Revisión de `HEAD` — `8d89b69`
 
-Revisado contra `AGENTS.md`, `.specify/memory/constitution.md`, `STATE.md` y
-`specs/spec-infra-servicios.md`, contrastando el diff de `git show HEAD` y el
-código efectivo de `HEAD` (no sus comentarios).
+Revisado contra `AGENTS.md`, `.specify/memory/constitution.md`, `STATE.md`,
+`TODO.md`, `QUESTIONS.md`, `plan-ejecucion-agentica.md` y el comportamiento de
+`orquestador.sh`, además del diff completo de `git show HEAD`.
 
-## Resultado de los cuatro motivos del veto anterior
+## Resultado
 
-1. **RF-RC-006 — corregido.** `RegistroTrd.publicar` consulta el puerto y
-   rechaza una versión existente antes de guardar; además,
-   `AlmacenDeTrdJpa.guardar` usa `EntityManager.persist`, no
-   `JpaRepository.save`. Una segunda publicación ya no puede convertir el
-   adaptador JPA en un `merge` que sobrescriba `trd_versiones`. Las pruebas de
-   dominio y HTTP añadidas intentan la segunda publicación, esperan rechazo y
-   verifican que permanece la fecha original.
+El commit solo elimina `BLOCKED.md`, cuyo contenido indicaba que el loop estaba
+detenido porque existían tareas `- [?]`. La eliminación es correcta: aunque T-02
+sigue bloqueada y pendiente de respuesta humana, `TODO.md` contiene T-20 abierta
+como `- [ ]`. Según `orquestador.sh`, al iniciar un loop se elimina primero
+`BLOCKED.md`; el archivo solo se vuelve a crear por una causa de detención actual.
+No representa el inventario permanente de preguntas, función que corresponde a
+`TODO.md` y `QUESTIONS.md`.
 
-2. **FK de documento y sugerencia — corregido.** `DocumentoEntity.original`
-   es `@ManyToOne` con `@JoinColumn(name = "original_id", nullable = false)`
-   hacia `OriginalEntity`; `SugerenciaEntity.documento` aplica el mismo mapeo
-   para `documento_id` hacia `DocumentoEntity`. Los adaptadores obtienen las
-   referencias con `EntityManager.getReference` y las consultas derivadas usan
-   `findByDocumento_Id`. Ya no son las dos columnas escalares huérfanas del
-   veto anterior.
+Además, el texto borrado no reflejaba la causa inmediata vigente: la revisión
+anterior mantenía un VETO P-08 y ese hallazgo ya fue convertido en la tarea
+abierta T-20. Quitar el marcador obsoleto no resuelve ni oculta el hallazgo; este
+permanece expresamente registrado en `TODO.md`.
 
-3. **Formato de error entre servicios — corregido para el caso común que
-   motivó el veto.** Captura/Ingesta dejó de lanzar `ResponseStatusException`:
-   ambos servicios manejan `NoSuchElementException` con
-   `@RestControllerAdvice`, HTTP 404 y el cuerpo `{"error": mensaje}`. Las dos
-   pruebas HTTP comprueban tanto el 404 como el campo `error`. El 409 añadido
-   para publicación TRD usa esa misma forma de cuerpo. Esto es una convención
-   técnica permitida por §5; no fija RFC 7807, que sigue marcado
-   `[CLARIFICAR]`.
+## Comprobaciones constitucionales
 
-4. **P-08 — sigue presente y es una violación real.**
-   `CapaAnticorrupcionSugerencias.recibir(entrada, fecha)` consulta el
-   documento, crea una `Sugerencia` y ejecuta `almacen.guardar(sugerencia)`.
-   No recibe una `BitacoraAuditoria`, no llama `anexar` y no hay otro camino
-   que anexe un evento al recibirla. El cableado Spring también la construye
-   solo con `CustodiaOriginales` y `AlmacenDeSugerenciasJpa`; por tanto la
-   inserción de `sugerencias` queda sin una inserción correspondiente en
-   `eventos_auditoria`.
+- **P-01:** no aplica al diff; no cambia código ni flujo de sugerencias o
+  decisiones humanas.
+- **P-03:** no aplica al diff; no introduce ni modifica capacidades externas.
+- **P-08:** no aplica al diff de producto. La omisión de auditoría detectada en
+  la recepción de sugerencias sigue registrada como T-20 y no se afirma corregida
+  en este commit.
+- **Honestidad de tests:** el commit no añade, modifica ni elimina pruebas, ni
+  afirma satisfacer un criterio de aceptación. No hay tests amañados que evaluar.
+- **Specs, normativa y umbrales:** el commit no toca ningún archivo bajo `specs/`
+  y no introduce referencias normativas ni valores numéricos.
 
-   P-08 nombra expresamente la «recepción de sugerencia» como transición que
-   debe producir un evento inmutable, atribuible, fechado y con estado anterior
-   y posterior. Que el documento no cambie protege P-01, pero no elimina la
-   obligación de auditoría. El commit no modifica esta ruta ni incorpora una
-   prueba que compruebe dicho evento. Se mantiene por ello el VETO.
-
-## Comprobaciones adicionales
-
-- **P-01:** pasa en el código revisado. La sugerencia se conserva como
-  propuesta; `recibir` no llama a `materializar` ni guarda un
-  `DocumentoDeArchivo` modificado. La materialización continúa requiriendo
-  `DecisionHumana`.
-- **P-03:** el cambio no introduce consumo directo de una capacidad externa en
-  el dominio. Los almacenes siguen tras sus puertos y los adaptadores JPA
-  permanecen en `persistencia/`; no se detectó violación nueva de P-03.
-- **P-08 restante:** custodia, decisión humana, intento rechazado de modificar
-  el original y discrepancia de integridad sí anexan eventos. La omisión de la
-  recepción de sugerencia basta por sí sola para vetar. El acceso sin evento es
-  deuda ya declarada fuera del contrato mínimo (RF-RC-010), no una regresión
-  introducida por este commit.
-- **Referencias y umbrales:** el diff no introduce referencia normativa ni
-  valor umbral inventado. La mención de RFC 7807 ya figura en la spec como
-  decisión pendiente y el commit no la adopta.
-
-## Verificación ejecutable
-
-`./test.sh` terminó correctamente (exit code 0) con un `GRADLE_USER_HOME`
-temporal dentro del entorno de revisión. La suite verde no cubre el motivo
-P-08: no existe una prueba que reciba una sugerencia y exija el evento de
-auditoría atribuible con estados anterior y posterior.
+No se ejecutó la suite porque el único cambio es la eliminación de un archivo de
+coordinación sin consumo por el código de producto; la verificación relevante es
+la inspección del diff y de la lógica de `orquestador.sh`.

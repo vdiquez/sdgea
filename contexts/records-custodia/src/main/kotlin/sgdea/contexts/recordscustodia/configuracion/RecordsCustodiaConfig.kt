@@ -40,7 +40,8 @@ class RecordsCustodiaConfig {
     fun capaAnticorrupcionSugerencias(
         custodia: CustodiaOriginales,
         almacen: AlmacenDeSugerenciasJpa,
-    ): CapaAnticorrupcionSugerencias = CapaAnticorrupcionSugerencias(custodia, almacen)
+        bitacora: BitacoraAuditoria,
+    ): CapaAnticorrupcionSugerencias = CapaAnticorrupcionSugerencias(custodia, almacen, bitacora)
 
     @Bean
     fun registroTrd(almacen: AlmacenDeTrdJpa): RegistroTrd = RegistroTrd(almacen)

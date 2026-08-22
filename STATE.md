@@ -494,6 +494,41 @@ Hecho:
   desbloquearla; hasta entonces no hay más trabajo autónomo de F2/F3 que
   tomar de TODO.md.
 
+- F3: T-19 (corrige el VETO de Codex sobre T-16/T-17/T-18) y T-20 (P-08:
+  recepción de sugerencia sin evento de auditoría) cerradas. T-19 corrigió los
+  tres primeros motivos del VETO (RF-RC-006 vía `entityManager.persist` +
+  rechazo a nivel de dominio en `RegistroTrd.publicar`, FKs reales en
+  `DocumentoEntity`/`SugerenciaEntity`, formato de error unificado
+  `{"error": mensaje}` en ambos servicios); una segunda revisión de Codex
+  confirmó esos tres corregidos pero sostuvo el VETO por un cuarto motivo:
+  `CapaAnticorrupcionSugerencias.recibir` guardaba la `Sugerencia` sin anexar
+  ningún evento a `BitacoraAuditoria`, violando P-08 ("toda transición...
+  genera un evento de auditoría"; la recepción de sugerencia está nombrada
+  expresamente). T-20 lo corrigió: `CapaAnticorrupcionSugerencias` ahora
+  recibe una `BitacoraAuditoria` (mismo patrón de inyección que
+  `CustodiaOriginales` desde T-10) y anexa un `EventoAuditoria`
+  (`tipo = "SUGERENCIA_RECIBIDA"`, `estadoAnterior = null`,
+  `estadoPosterior = "SUGERENCIA_RECIBIDA"`, `actor = entrada.modeloId`) al
+  recibir. `modeloId` ya era dato del contrato de entrada desde T-08 — se usó
+  como actor de sistema atribuible en vez de inventar un campo nuevo no
+  especificado por P-08 (que permite actor "humano o de sistema").
+  `RecordsCustodiaConfig` ahora expone un único bean `BitacoraAuditoria`
+  compartido entre `custodiaOriginales` y `capaAnticorrupcionSugerencias`, así
+  que el servicio HTTP anexa ambos flujos al mismo log de auditoría. TDD: 1
+  test nuevo (`RecepcionDeSugerenciasTest`, "se anexa un evento de auditoria
+  atribuible con actor y fecha") escrito contra el hallazgo del VETO antes de
+  tocar `CapaAnticorrupcionSugerencias`/`RecordsCustodiaConfig`; `./test.sh`
+  en verde (Gradle BUILD SUCCESSFUL — records-custodia con el test nuevo
+  pasando, `RecordsCustodiaHttpTest` con sus 11 tests existentes también en
+  verde tras el recableado del bean; pytest del arnés: 4 passed). No se tocó
+  ningún `[CLARIFICAR]` de la spec.
+  Siguiente paso: con T-20 cerrada, T-02 (RF-CI-006, bloqueada por
+  `[CLARIFICAR]`, ver QUESTIONS.md 2026-08-20) vuelve a ser la única tarea
+  `- [?]` en TODO.md y no queda ninguna tarea `- [ ]` abierta. Un humano debe
+  responder la taxonomía de condiciones de cuarentena/rechazo para
+  desbloquear T-02; hasta entonces no hay más trabajo autónomo de F2/F3 que
+  tomar de TODO.md.
+
 ## Camino a F2 (checklist, 2026-08-20)
 
 - [ ] 1. Enviar el one-pager a 3–5 entidades calificadas (F4, hilo comercial —

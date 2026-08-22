@@ -345,6 +345,7 @@ class AlmacenDeSugerenciasEnMemoria : AlmacenDeSugerencias {
 class CapaAnticorrupcionSugerencias(
     private val custodia: CustodiaOriginales,
     private val almacen: AlmacenDeSugerencias = AlmacenDeSugerenciasEnMemoria(),
+    private val bitacora: BitacoraAuditoria = BitacoraAuditoria(),
 ) {
 
     fun recibir(entrada: SugerenciaEntrante, fecha: Instant): Sugerencia {
@@ -359,6 +360,19 @@ class CapaAnticorrupcionSugerencias(
             fecha = fecha,
         )
         almacen.guardar(sugerencia)
+        // P-08: la recepción de una sugerencia es una transición que exige evento de
+        // auditoría inmutable, atribuible, fechado y con estado anterior/posterior — no
+        // solo la materialización (RF-RC-004). Actor de sistema: modeloId ya es dato del
+        // contrato de entrada (T-08), no un campo nuevo inventado.
+        bitacora.anexar(
+            EventoAuditoria(
+                actor = entrada.modeloId,
+                fecha = fecha,
+                tipo = "SUGERENCIA_RECIBIDA",
+                estadoAnterior = null,
+                estadoPosterior = "SUGERENCIA_RECIBIDA",
+            ),
+        )
         return sugerencia
     }
 

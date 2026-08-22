@@ -31,18 +31,19 @@
       SugerenciaEntity, formato de error unificado entre los dos servicios.
       Verificado por una segunda revisión de Codex — los tres puntos quedan
       confirmados como corregidos.
-- [ ] T-20 P-08: recepción de sugerencia sin evento de auditoría (VETO de
-      Codex sobre T-19, ver REVIEW.md — se mantiene tras revisar T-19,
-      confirmado independientemente por segunda vez, no es un falso positivo).
-      CapaAnticorrupcionSugerencias.recibir(entrada, fecha) guarda la
-      Sugerencia pero nunca anexa un EventoAuditoria a BitacoraAuditoria — P-08
-      exige evento inmutable, atribuible, fechado, con estado anterior y
-      posterior para "recepción de sugerencia" expresamente. Inyectar
-      BitacoraAuditoria en CapaAnticorrupcionSugerencias (mismo patrón que ya
-      usa CustodiaOriginales) y anexar el evento al recibir. Actor atribuible:
-      P-08 permite actor "humano o de sistema"; SugerenciaEntrante.modeloId ya
-      es dato existente en el contrato (T-08) — úsalo como actor de sistema en
-      vez de pedir un campo nuevo no especificado. Test: recibir una sugerencia
-      y verificar que BitacoraAuditoria.todos() incluye el evento nuevo con
-      ese actor y la fecha. Actualizar RecordsCustodiaConfig para que
-      capaAnticorrupcionSugerencias reciba la BitacoraAuditoria ya cableada.
+- [x] T-20 P-08: recepción de sugerencia sin evento de auditoría (VETO de
+      Codex sobre T-19, ver REVIEW.md — se mantenía tras revisar T-19,
+      confirmado independientemente por segunda vez, no era un falso
+      positivo). Corregido: `CapaAnticorrupcionSugerencias` recibe una
+      `BitacoraAuditoria` (mismo patrón que `CustodiaOriginales`) y `recibir`
+      anexa un `EventoAuditoria` (`tipo = "SUGERENCIA_RECIBIDA"`,
+      `estadoAnterior = null`, `estadoPosterior = "SUGERENCIA_RECIBIDA"`) con
+      `entrada.modeloId` como actor de sistema atribuible — dato ya existente
+      en el contrato desde T-08, sin inventar un campo nuevo.
+      `RecordsCustodiaConfig` comparte un único bean `BitacoraAuditoria` entre
+      `custodiaOriginales` y `capaAnticorrupcionSugerencias`, así que el
+      servicio HTTP anexa al mismo log de auditoría. TDD: 1 test nuevo
+      (`RecepcionDeSugerenciasTest`, "se anexa un evento de auditoria
+      atribuible con actor y fecha") escrito contra el hallazgo de Codex antes
+      de tocar el código de producción; `./test.sh` en verde (Gradle BUILD
+      SUCCESSFUL; pytest del arnés: 4 passed).

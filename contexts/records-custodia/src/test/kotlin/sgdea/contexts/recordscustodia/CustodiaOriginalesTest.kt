@@ -146,6 +146,31 @@ class RecepcionDeSugerenciasTest {
         assertEquals(listOf("pagina-1"), sugerencias[0].evidencia)
         assertEquals(0.42, sugerencias[0].confianza)
     }
+
+    // P-08: toda transición de estado, incluida la recepción de una sugerencia, genera
+    // un evento de auditoría inmutable, atribuible, fechado y con estado anterior/posterior.
+    @Test
+    fun `dada una sugerencia recibida, cuando se procesa, se anexa un evento de auditoria atribuible con actor y fecha`() {
+        val custodia = CustodiaOriginales()
+        custodia.custodiar(
+            id = "doc-1",
+            bytes = "contenido".toByteArray(),
+            actor = "sistema-ingesta",
+            fecha = Instant.parse("2026-08-21T00:00:00Z"),
+            procedencia = procedenciaDePrueba,
+        )
+        val bitacora = BitacoraAuditoria()
+        val capa = CapaAnticorrupcionSugerencias(custodia, bitacora = bitacora)
+        val fechaRecepcion = Instant.parse("2026-08-21T01:00:00Z")
+
+        capa.recibir(sugerenciaFicticiaEntrante, fecha = fechaRecepcion)
+
+        val evento = bitacora.todos.single { it.tipo == "SUGERENCIA_RECIBIDA" }
+        assertEquals("emisor-ficticio-v0", evento.actor)
+        assertEquals(fechaRecepcion, evento.fecha)
+        assertEquals(null, evento.estadoAnterior)
+        assertEquals("SUGERENCIA_RECIBIDA", evento.estadoPosterior)
+    }
 }
 
 // RF-RC-004 · Materialización por decisión humana
