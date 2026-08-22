@@ -1,6 +1,7 @@
 # STATE
-Fase: F2/F3 — T-13/T-14 resueltas y desglosadas en T-15..T-18, las cuatro
-hechas. T-02 sigue bloqueada; es la única tarea `- [?]` que queda en TODO.md.
+Fase: F2/F3 — T-13..T-21 hechas (T-14 desglosada en T-15..T-18; T-19/T-20/T-21
+corrigen VETOs sucesivos de Codex sobre T-16/T-17/T-18). T-02 sigue bloqueada;
+es la única tarea `- [?]` que queda en TODO.md.
 Ver plan-ejecucion-agentica.md.
 
 Hecho:
@@ -528,6 +529,44 @@ Hecho:
   responder la taxonomía de condiciones de cuarentena/rechazo para
   desbloquear T-02; hasta entonces no hay más trabajo autónomo de F2/F3 que
   tomar de TODO.md.
+
+- F3: T-21 (P-08 / RF-RC-005: hacer atómica la persistencia de la sugerencia y
+  su evento de auditoría) cerrada — quedó abierta como sub-VETO no cubierto
+  por T-20 (ver REVIEW.md sobre `e0287a4`): Codex verificó que el test de T-20
+  probaba actor/fecha/estados del evento nominal, pero que
+  `AlmacenDeSugerenciasJpa` y `AlmacenDeEventosJpa` (Almacenes.kt) son beans
+  `@Transactional` independientes, así que por la semántica proxy de Spring
+  cada uno confirma su propia transacción — un fallo al anexar el evento
+  podía dejar la sugerencia ya persistida sin su evento. Corregido con un
+  wrapper nuevo, `configuracion/RecepcionDeSugerenciasTransaccional`
+  (`@Service`, método `recibir` anotado `@Transactional`), que
+  `SugerenciasController` invoca en vez de `CapaAnticorrupcionSugerencias`
+  directo; `CapaAnticorrupcionSugerencias` sigue siendo una clase de dominio
+  plana (sin anotaciones Spring, mismo criterio que T-14/T-17). Al abrir la
+  transacción en el wrapper, `almacen.guardar` y `bitacora.anexar` la heredan
+  por la propagación REQUIRED de Spring (la que aplica por defecto), así que
+  un fallo en `anexar` revierte también el `guardar` anterior. TDD:
+  `RecepcionDeSugerenciasTransaccionalTest` — `@SpringBootTest` con
+  `@MockitoBean` sobre `AlmacenDeEventosJpa` que fuerza el fallo solo en el
+  evento `SUGERENCIA_RECIBIDA` (no en el de `custodiar`, que debe seguir
+  funcionando), verificado contra la persistencia real (H2 en test, mismo
+  mecanismo transaccional que Postgres en producción) en vez de los
+  almacenes en memoria — exactamente lo que el VETO de Codex señaló como
+  insuficiente en la prueba de T-20. Confirmado en rojo quitando
+  `@Transactional` del wrapper (la aserción de que la sugerencia no queda
+  persistida falla) antes de restaurarlo en verde. `./test.sh` en verde
+  (Gradle BUILD SUCCESSFUL, 29 tests en records-custodia; pytest del arnés:
+  4 passed). Nota (no scope-creep de esta tarea, dejar para una tarea nueva
+  si un VETO lo señala): `CustodiaOriginales.custodiar` tiene el mismo patrón
+  de escrituras a través de tres beans `@Transactional` independientes
+  (original, documento, evento) sin un límite que las englobe — mismo riesgo
+  latente que T-21 corrigió para `recibir`, pero fuera del alcance que pidió
+  esta tarea.
+  Siguiente paso: T-02 (RF-CI-006, bloqueada por `[CLARIFICAR]`, ver
+  QUESTIONS.md 2026-08-20) es la única tarea `- [?]` en TODO.md y no queda
+  ninguna tarea `- [ ]` abierta. Un humano debe responder la taxonomía de
+  condiciones de cuarentena/rechazo para desbloquear T-02; hasta entonces no
+  hay más trabajo autónomo de F2/F3 que tomar de TODO.md.
 
 ## Camino a F2 (checklist, 2026-08-20)
 

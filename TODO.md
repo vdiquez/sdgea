@@ -47,3 +47,31 @@
       atribuible con actor y fecha") escrito contra el hallazgo de Codex antes
       de tocar el código de producción; `./test.sh` en verde (Gradle BUILD
       SUCCESSFUL; pytest del arnés: 4 passed).
+- [x] T-21 P-08 / RF-RC-005: hacer atómica la persistencia de la sugerencia y
+      su `EventoAuditoria` en `CapaAnticorrupcionSugerencias.recibir`. Añadir
+      una prueba de integración que provoque un fallo al anexar el evento y
+      verifique que la sugerencia tampoco queda persistida; no puede existir
+      una recepción confirmada sin su evento de auditoría.
+      Corregido: `AlmacenDeSugerenciasJpa` y `AlmacenDeEventosJpa` son beans
+      `@Transactional` independientes (Almacenes.kt), así que sin un límite
+      que englobe ambas llamadas cada una confirma su propia transacción por
+      la semántica proxy de Spring. `CapaAnticorrupcionSugerencias` sigue
+      siendo una clase de dominio plana (sin anotaciones Spring, para que
+      T-03..T-11 la sigan construyendo sin contexto Spring); el límite
+      transaccional se abre en un wrapper nuevo,
+      `configuracion/RecepcionDeSugerenciasTransaccional` (`@Service`,
+      `recibir` anotado `@Transactional`), que es lo que ahora inyecta
+      `SugerenciasController` en vez de `CapaAnticorrupcionSugerencias`
+      directo. Al abrir la transacción ahí, ambas escrituras la heredan por
+      la propagación REQUIRED de Spring (la que aplica por defecto): si
+      `anexar` falla, el `guardar` de la sugerencia se revierte con ella.
+      TDD: `RecepcionDeSugerenciasTransaccionalTest` — `@SpringBootTest` con
+      `@MockitoBean` sobre `AlmacenDeEventosJpa` que fuerza el fallo solo en
+      el evento `SUGERENCIA_RECIBIDA` (no en el de `custodiar`), contra la
+      persistencia real (H2 en test, mismo mecanismo transaccional que
+      Postgres) — no los almacenes en memoria, que es lo que Codex señaló
+      como insuficiente en su VETO sobre T-20. Confirmado en rojo primero
+      (quitando `@Transactional` del wrapper falla la aserción de que la
+      sugerencia no quedó persistida) y en verde después. `./test.sh` en
+      verde (Gradle BUILD SUCCESSFUL, 29 tests en records-custodia; pytest
+      del arnés: 4 passed).
