@@ -38,6 +38,7 @@ class LoteIngestaRepositorio(
                 procedenciaFecha = item.procedencia.fecha,
                 procedenciaDisparador = item.procedencia.disparador,
                 procedenciaLoteOFlujoId = item.procedencia.loteOFlujoId,
+                razonValidacion = item.razonValidacion,
             )
         }.toMutableList()
         jpaRepository.save(entity)
@@ -58,6 +59,7 @@ class LoteIngestaRepositorio(
                     disparador = itemEntity.procedenciaDisparador,
                     loteOFlujoId = itemEntity.procedenciaLoteOFlujoId,
                 ),
+                razonValidacion = itemEntity.razonValidacion,
             )
         }
         return LoteIngesta(id = entity.id, inventario = InventarioOrigen(registros), items = items)

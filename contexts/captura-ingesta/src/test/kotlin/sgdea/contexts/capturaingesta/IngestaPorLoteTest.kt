@@ -3,6 +3,7 @@ package sgdea.contexts.capturaingesta
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 // RF-CI-001 · Ingesta por lote para fondos acumulados
 // Dado un lote con artefactos e inventario, Cuando se carga,
@@ -97,11 +98,10 @@ class RegistroDeProcedenciaTest {
 // recibidos.
 //
 // Las transiciones reales Recibido -> ... -> estado terminal las produce la
-// lógica de validación/entrega de RF-CI-006/RF-CI-010 (fuera de alcance de
-// esta tarea, T-02 sigue bloqueada por [CLARIFICAR]). Aquí se construyen
-// ítems ya en sus estados terminales/no terminales para probar únicamente el
-// invariante de conteo del §3 de la spec, sin inventar esa lógica de
-// transición.
+// lógica de validación (RF-CI-006, ver ValidacionYCuarentenaTest) y de
+// entrega (RF-CI-010, aún sin implementar). Aquí se construyen ítems ya en
+// sus estados terminales/no terminales para probar únicamente el invariante
+// de conteo del §3 de la spec, sin acoplar esta prueba a `validar`.
 class CeroPerdidaSilenciosaTest {
 
     private val fecha = Instant.parse("2026-08-20T10:00:00Z")
@@ -222,5 +222,64 @@ class ConciliacionContraInventarioTest {
         assertEquals(emptyList(), reporte.faltantes)
         val sobrante = reporte.sobrantes.single()
         assertEquals("a2", sobrante.artefacto.id)
+    }
+}
+
+// RF-CI-006 · Validación y cuarentena
+// Dado un artefacto corrupto/ilegible/de formato no soportado, Cuando se
+// valida, Entonces el ítem queda `En cuarentena` o `Rechazado` con razón
+// registrada. Taxonomía de condición -> rama terminal resuelta por Victor en
+// QUESTIONS.md (2026-08-23), antes bloqueada por [CLARIFICAR]: recuperable
+// dentro del sistema actual -> En cuarentena; solo recuperable con un
+// artefacto distinto o un cambio de sistema -> Rechazado.
+class ValidacionYCuarentenaTest {
+
+    private val fecha = Instant.parse("2026-08-23T10:00:00Z")
+
+    private fun itemRecibido(): ItemIngesta {
+        val lote = cargarLote(
+            loteId = "lote-001",
+            artefactos = listOf(ArtefactoOrigen(id = "a1", nombre = "expediente-001.pdf")),
+            inventario = InventarioOrigen(registros = listOf("a1")),
+            fuente = "escaner-sala-3",
+            fecha = fecha,
+        )
+        return lote.items.single()
+    }
+
+    @Test
+    fun `un artefacto corrupto queda En cuarentena con razon registrada`() {
+        val itemValidado = validar(itemRecibido(), CondicionValidacion.CORRUPTO)
+
+        assertEquals(EstadoItemIngesta.EN_CUARENTENA, itemValidado.estado)
+        assertTrue(itemValidado.razonValidacion?.isNotBlank() == true)
+    }
+
+    @Test
+    fun `un artefacto ilegible queda En cuarentena con razon registrada`() {
+        val itemValidado = validar(itemRecibido(), CondicionValidacion.ILEGIBLE)
+
+        assertEquals(EstadoItemIngesta.EN_CUARENTENA, itemValidado.estado)
+        assertTrue(itemValidado.razonValidacion?.isNotBlank() == true)
+    }
+
+    @Test
+    fun `un artefacto de formato no soportado queda Rechazado con razon registrada`() {
+        val itemValidado = validar(itemRecibido(), CondicionValidacion.FORMATO_NO_SOPORTADO)
+
+        assertEquals(EstadoItemIngesta.RECHAZADO, itemValidado.estado)
+        assertTrue(itemValidado.razonValidacion?.isNotBlank() == true)
+    }
+
+    @Test
+    fun `validar conserva la identidad y procedencia del item, solo cambia estado y razon`() {
+        val original = itemRecibido()
+
+        val itemValidado = validar(original, CondicionValidacion.CORRUPTO)
+
+        assertEquals(original.id, itemValidado.id)
+        assertEquals(original.loteId, itemValidado.loteId)
+        assertEquals(original.artefacto, itemValidado.artefacto)
+        assertEquals(original.procedencia, itemValidado.procedencia)
     }
 }

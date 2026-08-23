@@ -1,6 +1,10 @@
 # TODO — F2/F3: corte vertical determinístico + arnés (clasificador ficticio)
 - [x] T-01 RF-CI-001 Ingesta por lote: artefactos + inventario -> ítems `Recibido`
-- [?] T-02 RF-CI-006 Validación y cuarentena con razón registrada
+- [x] T-02 RF-CI-006 Validación y cuarentena con razón registrada — taxonomía
+      resuelta por Victor en QUESTIONS.md (2026-08-23): corrupto/ilegible ->
+      En cuarentena (recuperable), formato no soportado -> Rechazado (no
+      recuperable). Implementado `validar()` + endpoint HTTP + persistencia +
+      colección Postman actualizada y revalidada con Newman.
 - [x] T-03 RF-RC-001 Custodia del original inmutable (WORM + huella verificable)
 - [x] T-04 RF-RC-002 + RF-CI-007 Procedencia completa de punta a punta
 - [x] T-05 RF-CI-008 Cero pérdida silenciosa: suma de estados terminales cuadra

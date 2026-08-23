@@ -259,3 +259,26 @@ Respuesta de Victor:
 
 Siguiente paso: escribir `specs/spec-infra-servicios.md` (P-06, spec antes de
 código) y luego reabrir la implementación como tareas nuevas en TODO.md.
+
+## 2026-08-23 · T-02 Resuelto (taxonomía cuarentena/rechazo para RF-CI-006)
+
+Respuesta de Victor — mapeo de condición a rama terminal:
+
+```
+condición            → resultado        → intervención humana posible
+─────────────────────────────────────────────────────────────────────
+corrupto              → En cuarentena    → sí (reescaneo / confirmación manual)
+ilegible               → En cuarentena    → sí (juicio de calidad)
+formato no soportado   → Rechazado        → no (requiere artefacto nuevo o cambio de sistema)
+```
+
+Criterio: si un humano puede hacer algo con ese mismo artefacto dentro del
+sistema actual para destrabarlo, va a `En cuarentena`; si la única salida es
+un artefacto distinto (reenviado en otro formato) o un cambio de sistema
+(soporte de formato nuevo), va a `Rechazado`. Sin umbral de severidad
+adicional (p. ej. "corrupto leve/grave") — cada una de las tres condiciones
+nombradas en RF-CI-006 mapea completa a una sola rama, sin inventar una
+gradación que la spec no define.
+
+Siguiente paso: escribir los tests Dado/Cuando/Entonces de RF-CI-006 contra
+este mapeo e implementar T-02; marcar T-02 `- [x]` en TODO.md al cerrar.

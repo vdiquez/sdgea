@@ -562,11 +562,36 @@ Hecho:
   (original, documento, evento) sin un límite que las englobe — mismo riesgo
   latente que T-21 corrigió para `recibir`, pero fuera del alcance que pidió
   esta tarea.
-  Siguiente paso: T-02 (RF-CI-006, bloqueada por `[CLARIFICAR]`, ver
-  QUESTIONS.md 2026-08-20) es la única tarea `- [?]` en TODO.md y no queda
-  ninguna tarea `- [ ]` abierta. Un humano debe responder la taxonomía de
-  condiciones de cuarentena/rechazo para desbloquear T-02; hasta entonces no
-  hay más trabajo autónomo de F2/F3 que tomar de TODO.md.
+- [x] T-02 RF-CI-006 Validación y cuarentena (2026-08-23, desbloqueada por la
+      taxonomía de Victor en QUESTIONS.md): dominio `validar(item, condicion)`
+      en `IngestaPorLote.kt` — enum `CondicionValidacion` (CORRUPTO, ILEGIBLE,
+      FORMATO_NO_SOPORTADO), campo nuevo `ItemIngesta.razonValidacion`
+      (nullable, `null` hasta validar). Mapeo: CORRUPTO/ILEGIBLE ->
+      EN_CUARENTENA (recuperable dentro del sistema actual), FORMATO_NO_SOPORTADO
+      -> RECHAZADO (requiere artefacto nuevo o cambio de sistema) — exactamente
+      la regla que dio Victor, sin gradación de severidad añadida. Endpoint
+      `POST /lotes/{loteId}/items/{itemId}/validacion` en `LotesController`
+      (specs/spec-infra-servicios.md §3 actualizada con la fila nueva y sin
+      RF-CI-006 en "fuera de alcance"); persistencia: columna
+      `razon_validacion` en `ItemIngestaEntity`, mapeada en
+      `LoteIngestaRepositorio`. `spec-captura-ingesta.md`: RF-CI-006 ahora
+      trae los tres Dado/Cuando/Entonces concretos por condición, y se quitó
+      el `[CLARIFICAR]` resuelto de §8. TDD: 4 tests de dominio nuevos
+      (`ValidacionYCuarentenaTest`) + 2 tests HTTP nuevos en
+      `LotesControllerTest`; el test HTTP existente de conteo (petición 02 de
+      Postman) se ajustó porque la petición nueva 01b ya deja un ítem
+      terminal antes de contar. `./test.sh` en verde. Colección Postman:
+      petición nueva "01b Validar item — artefacto corrupto -> En cuarentena"
+      insertada tras "01 Cargar lote"; revalidada con el stack real levantado
+      (`docker compose -f docker-compose.saas.yml -f
+      docker-compose.local-ports.yml up -d --build`) y `npx newman run` — 16/16
+      peticiones, 35/35 aserciones, dos corridas seguidas sin fallos; stack
+      bajado al terminar.
+  Siguiente paso: no queda ninguna tarea `- [ ]` ni `- [?]` en TODO.md —
+  T-01 a T-21 completas. El corte vertical F2/F3 está cerrado; lo que sigue
+  no es más trabajo de TODO.md sino decidir la próxima prioridad (F4 hilo
+  comercial, siguiente bounded context, validar security-review con un PR
+  real, u otra opción del checklist de abajo).
 
 ## Camino a F2 (checklist, 2026-08-20)
 
@@ -577,8 +602,10 @@ Hecho:
 - [x] 3. TEST_CMD fijado a `./test.sh`.
 - [x] 4. TODO.md sembrado (14 tareas T-01..T-14).
 - [x] 5. Sandbox Docker construido y verificado (`agent-sandbox/`).
-- [x] 6. F2 corrido en varias corridas — T-01..T-21 hechas salvo T-02
-      (bloqueada, ver abajo). Bugs reales de infraestructura encontrados y
+- [x] 6. F2 corrido en varias corridas — T-01..T-21 completas (T-02 quedó
+      bloqueada por `[CLARIFICAR]` hasta 2026-08-23; cerrada tras la
+      taxonomía de Victor, ver entrada de T-02 arriba). Bugs reales de
+      infraestructura encontrados y
       corregidos en el camino: `.venv`/`.gradle` compartidos con el host se
       corrompían (aislados en carpetas del host fuera del bind mount, no
       volúmenes nombrados — esos también se crean root:root); `codex exec`

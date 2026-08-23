@@ -32,7 +32,8 @@
                   "pm.test(\"dos items en estado RECIBIDO\", () => {",
                   "  pm.expect(body.items).to.have.lengthOf(2);",
                   "  body.items.forEach((it) => pm.expect(it.estado).to.eql(\"RECIBIDO\"));",
-                  "});"
+                  "});",
+                  "pm.environment.set(\"item_id_ci\", body.items[0].id);"
                 ]
               }
             }
@@ -40,23 +41,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"loteId\": \"{{lote_id}}\",\n  \"artefactos\": [\n    { \"id\": \"art-1\", \"nombre\": \"documento-1.pdf\" },\n    { \"id\": \"art-2\", \"nombre\": \"documento-2.pdf\" }\n  ],\n  \"inventario\": [\"art-1\", \"art-2\", \"art-3\"],\n  \"fuente\": \"escaner-postman\",\n  \"fecha\": \"2026-08-22T12:00:00Z\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{captura_ingesta_base_url}}/lotes",
-              "host": ["{{captura_ingesta_base_url}}"],
-              "path": ["lotes"]
+              "host": [
+                "{{captura_ingesta_base_url}}"
+              ],
+              "path": [
+                "lotes"
+              ]
             },
             "description": "RF-CI-001: produce un ItemIngesta en estado Recibido por cada artefacto. inventario incluye 'art-3' a propósito, que no llega como artefacto — lo usa la petición 03 (conciliación) para demostrar 'faltantes'."
           }
         },
         {
-          "name": "02 Conteo por estado (RF-CI-008)",
+          "name": "01b Validar item — artefacto corrupto -> En cuarentena (RF-CI-006)",
           "event": [
             {
               "listen": "test",
@@ -65,9 +77,60 @@
                 "exec": [
                   "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
                   "const body = pm.response.json();",
-                  "pm.test(\"total 2, sin pérdida silenciosa reportable aún (ninguno terminal)\", () => {",
+                  "pm.test(\"queda En cuarentena\", () => pm.expect(body.estado).to.eql(\"EN_CUARENTENA\"));",
+                  "pm.test(\"razon registrada, nunca en silencio\", () => pm.expect(body.razonValidacion).to.be.a(\"string\").and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"condicion\": \"CORRUPTO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{captura_ingesta_base_url}}/lotes/{{lote_id}}/items/{{item_id_ci}}/validacion",
+              "host": [
+                "{{captura_ingesta_base_url}}"
+              ],
+              "path": [
+                "lotes",
+                "{{lote_id}}",
+                "items",
+                "{{item_id_ci}}",
+                "validacion"
+              ]
+            },
+            "description": "RF-CI-006: taxonomía resuelta en QUESTIONS.md (2026-08-23) — corrupto/ilegible van a En cuarentena (recuperable), formato no soportado va a Rechazado (no recuperable). Usa el primer item del lote creado en 01."
+          }
+        },
+        {
+          "name": "02 Conteo por estado tras validar un item (RF-CI-008, RF-CI-006)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"total 2; un item ya En cuarentena por 01b, el otro sigue Recibido\", () => {",
                   "  pm.expect(body.total).to.eql(2);",
-                  "  pm.expect(body.porEstado.RECIBIDO).to.eql(2);",
+                  "  pm.expect(body.porEstado.EN_CUARENTENA).to.eql(1);",
+                  "  pm.expect(body.porEstado.RECIBIDO).to.eql(1);",
+                  "  pm.expect(body.terminales).to.eql(1);",
                   "});"
                 ]
               }
@@ -78,8 +141,14 @@
             "header": [],
             "url": {
               "raw": "{{captura_ingesta_base_url}}/lotes/{{lote_id}}/conteo",
-              "host": ["{{captura_ingesta_base_url}}"],
-              "path": ["lotes", "{{lote_id}}", "conteo"]
+              "host": [
+                "{{captura_ingesta_base_url}}"
+              ],
+              "path": [
+                "lotes",
+                "{{lote_id}}",
+                "conteo"
+              ]
             },
             "description": "RF-CI-008: conteo por estado del lote — base del invariante 'cero pérdida silenciosa' (terminales == total)."
           }
@@ -107,8 +176,14 @@
             "header": [],
             "url": {
               "raw": "{{captura_ingesta_base_url}}/lotes/{{lote_id}}/conciliacion",
-              "host": ["{{captura_ingesta_base_url}}"],
-              "path": ["lotes", "{{lote_id}}", "conciliacion"]
+              "host": [
+                "{{captura_ingesta_base_url}}"
+              ],
+              "path": [
+                "lotes",
+                "{{lote_id}}",
+                "conciliacion"
+              ]
             },
             "description": "RF-CI-002: compara el inventario declarado contra los items recibidos."
           }
@@ -148,17 +223,28 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"id\": \"{{documento_id}}\",\n  \"bytesBase64\": \"SG9sYSBTR0RFQQ==\",\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-22T12:00:00Z\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-22T12:00:00Z\",\n    \"loteOFlujoId\": \"{{lote_id}}\"\n  }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{records_custodia_base_url}}/documentos",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["documentos"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos"
+              ]
             },
             "description": "RF-RC-001/002: custodia el original (escritura de una sola vez, huella SHA-256) y su procedencia. bytesBase64 = base64(\"Hola SGDEA\")."
           }
@@ -183,8 +269,14 @@
             "header": [],
             "url": {
               "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}/original",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["documentos", "{{documento_id}}", "original"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id}}",
+                "original"
+              ]
             }
           }
         },
@@ -208,8 +300,13 @@
             "header": [],
             "url": {
               "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["documentos", "{{documento_id}}"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id}}"
+              ]
             }
           }
         },
@@ -233,8 +330,14 @@
             "header": [],
             "url": {
               "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}/procedencia",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["documentos", "{{documento_id}}", "procedencia"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id}}",
+                "procedencia"
+              ]
             }
           }
         },
@@ -265,17 +368,28 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"version\": {{trd_version}},\n  \"vigenteDesde\": \"2026-01-01T00:00:00Z\",\n  \"series\": [\n    {\n      \"id\": \"serie-1\",\n      \"nombre\": \"Serie de prueba\",\n      \"reglaRetencion\": { \"tiempoRetencionAnios\": 5, \"disposicionFinal\": \"Conservacion total\" },\n      \"subseries\": []\n    }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{records_custodia_base_url}}/trd",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["trd"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "trd"
+              ]
             },
             "description": "Primera publicación de esta versión — debe crear (201)."
           }
@@ -298,17 +412,28 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"version\": {{trd_version}},\n  \"vigenteDesde\": \"2099-01-01T00:00:00Z\",\n  \"series\": []\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{records_custodia_base_url}}/trd",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["trd"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "trd"
+              ]
             },
             "description": "Misma versión, cuerpo distinto (otra vigenteDesde) — antes de T-19 esto sobrescribía en silencio (HTTP 201); ahora debe rechazarse con 409 sin tocar la versión ya publicada."
           }
@@ -333,8 +458,13 @@
             "header": [],
             "url": {
               "raw": "{{records_custodia_base_url}}/trd/{{trd_version}}",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["trd", "{{trd_version}}"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "trd",
+                "{{trd_version}}"
+              ]
             }
           }
         },
@@ -356,17 +486,28 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"documentoId\": \"{{documento_id}}\",\n  \"tipo\": \"clasificacion\",\n  \"contenidoPropuesto\": \"serie-1\",\n  \"modeloId\": \"clasificador-ficticio-v1\",\n  \"evidencia\": [\"heuristica-postman\"],\n  \"confianza\": 0.42,\n  \"fecha\": \"2026-08-22T12:05:00Z\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{records_custodia_base_url}}/sugerencias",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["sugerencias"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "sugerencias"
+              ]
             },
             "description": "modeloId es el EMISOR FICTICIO que exige la constitución (nunca un clasificador real). No modifica el documento (P-01) — solo la petición 13 (decisión humana) lo hace."
           }
@@ -391,8 +532,14 @@
             "header": [],
             "url": {
               "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}/sugerencias",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["documentos", "{{documento_id}}", "sugerencias"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id}}",
+                "sugerencias"
+              ]
             }
           }
         },
@@ -414,17 +561,30 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-22T12:10:00Z\",\n  \"sugerenciasReferenciadas\": [],\n  \"clasificacionResultante\": {\n    \"documentoId\": \"{{documento_id}}\",\n    \"trdVersion\": {{trd_version}},\n    \"serieId\": \"serie-1\",\n    \"subserieId\": null\n  }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}/decisiones",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["documentos", "{{documento_id}}", "decisiones"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id}}",
+                "decisiones"
+              ]
             },
             "description": "Única operación que puede cambiar la clasificación del documento (P-01). sugerenciasReferenciadas vacía = decisión manual, sin referenciar la sugerencia de la petición 11 (ambos caminos son válidos según el dominio)."
           }
@@ -447,17 +607,30 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-22T12:15:00Z\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{records_custodia_base_url}}/documentos/{{documento_id}}/verificacion-integridad",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["documentos", "{{documento_id}}", "verificacion-integridad"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id}}",
+                "verificacion-integridad"
+              ]
             }
           }
         },
@@ -483,17 +656,28 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-22T12:15:00Z\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{records_custodia_base_url}}/verificacion-integridad",
-              "host": ["{{records_custodia_base_url}}"],
-              "path": ["verificacion-integridad"]
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "verificacion-integridad"
+              ]
             },
             "description": "Recorre TODOS los originales custodiados en la base — si corriste la colección varias veces, el reporte crece; el test solo exige que el documento de ESTA corrida aparezca sin discrepancia."
           }

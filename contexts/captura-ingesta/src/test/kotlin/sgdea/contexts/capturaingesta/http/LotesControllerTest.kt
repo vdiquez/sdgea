@@ -97,4 +97,61 @@ class LotesControllerTest {
         assertEquals(HttpStatus.NOT_FOUND, response.statusCode)
         assertTrue((response.body!!["error"] as String).contains("no-existe"))
     }
+
+    @Test
+    fun `POST validacion mueve un item corrupto a En cuarentena y lo persiste - RF-CI-006`() {
+        val loteId = "lote-http-004"
+        val creacion = restTemplate.postForEntity(
+            url("/lotes"),
+            mapOf(
+                "loteId" to loteId,
+                "artefactos" to listOf(mapOf("id" to "a1", "nombre" to "x.pdf")),
+                "inventario" to listOf("a1"),
+                "fuente" to "escaner-sala-3",
+                "fecha" to fecha,
+            ),
+            Map::class.java,
+        )
+        val itemId = ((creacion.body!!["items"] as List<*>).single() as Map<*, *>)["id"] as String
+
+        val response = restTemplate.postForEntity(
+            url("/lotes/$loteId/items/$itemId/validacion"),
+            mapOf("condicion" to "CORRUPTO"),
+            Map::class.java,
+        )
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        assertEquals("EN_CUARENTENA", response.body!!["estado"])
+        assertTrue((response.body!!["razonValidacion"] as String).isNotBlank())
+
+        val conteoPosterior = restTemplate.getForEntity(url("/lotes/$loteId/conteo"), Map::class.java)
+        assertEquals(1, conteoPosterior.body!!["terminales"])
+    }
+
+    @Test
+    fun `POST validacion mueve un item de formato no soportado a Rechazado - RF-CI-006`() {
+        val loteId = "lote-http-005"
+        val creacion = restTemplate.postForEntity(
+            url("/lotes"),
+            mapOf(
+                "loteId" to loteId,
+                "artefactos" to listOf(mapOf("id" to "a1", "nombre" to "x.raw")),
+                "inventario" to listOf("a1"),
+                "fuente" to "escaner-sala-3",
+                "fecha" to fecha,
+            ),
+            Map::class.java,
+        )
+        val itemId = ((creacion.body!!["items"] as List<*>).single() as Map<*, *>)["id"] as String
+
+        val response = restTemplate.postForEntity(
+            url("/lotes/$loteId/items/$itemId/validacion"),
+            mapOf("condicion" to "FORMATO_NO_SOPORTADO"),
+            Map::class.java,
+        )
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        assertEquals("RECHAZADO", response.body!!["estado"])
+        assertTrue((response.body!!["razonValidacion"] as String).isNotBlank())
+    }
 }

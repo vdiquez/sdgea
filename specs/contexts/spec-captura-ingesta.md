@@ -141,9 +141,19 @@ Reingestar un artefacto de contenido idéntico no genera un ítem duplicado.
 
 **RF-CI-006 · Validación y cuarentena**
 Los artefactos corruptos, ilegibles o de formato no soportado se ponen en cuarentena
-o se rechazan con una razón explícita; nunca se descartan en silencio.
+o se rechazan con una razón explícita; nunca se descartan en silencio. La rama
+terminal depende de si el mismo artefacto es recuperable dentro del sistema
+actual (`En cuarentena`, requiere intervención humana) o si la única salida es
+un artefacto distinto o un cambio de sistema (`Rechazado`, terminal):
 - Dado un artefacto corrupto, Cuando se valida, Entonces el ítem queda `En
-  cuarentena` o `Rechazado` con razón registrada.
+  cuarentena` con razón registrada (recuperable mediante reescaneo o
+  confirmación manual).
+- Dado un artefacto ilegible, Cuando se valida, Entonces el ítem queda `En
+  cuarentena` con razón registrada (recuperable mediante juicio de calidad
+  humano).
+- Dado un artefacto de formato no soportado, Cuando se valida, Entonces el
+  ítem queda `Rechazado` con razón registrada (no recuperable sin un
+  artefacto nuevo o soporte de formato añadido al sistema).
 
 **RF-CI-007 · Registro de procedencia**
 Cada ítem registra fuente, fecha, disparador e identificador de lote o flujo, y los
@@ -218,5 +228,3 @@ SaaS y en appliance on-premise, incluyendo entornos sin conectividad saliente.
   huella de bytes exactos frente a equivalencia tras conversión de formato.
 - **[CLARIFICAR]** Política de credenciales de las Fuentes en modo on-premise
   (almacenamiento y rotación sin servicios externos).
-- **[CLARIFICAR]** Criterios de cuarentena automática frente a rechazo: qué
-  condiciones llevan a cada rama terminal.

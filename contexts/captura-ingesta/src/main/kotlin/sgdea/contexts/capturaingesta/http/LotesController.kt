@@ -10,14 +10,17 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import sgdea.contexts.capturaingesta.ArtefactoOrigen
+import sgdea.contexts.capturaingesta.CondicionValidacion
 import sgdea.contexts.capturaingesta.ConteoPorEstado
 import sgdea.contexts.capturaingesta.InventarioOrigen
+import sgdea.contexts.capturaingesta.ItemIngesta
 import sgdea.contexts.capturaingesta.LoteIngesta
 import sgdea.contexts.capturaingesta.ReporteConciliacion
 import sgdea.contexts.capturaingesta.cargarLote
 import sgdea.contexts.capturaingesta.conciliar
 import sgdea.contexts.capturaingesta.contarPorEstado
 import sgdea.contexts.capturaingesta.persistencia.LoteIngestaRepositorio
+import sgdea.contexts.capturaingesta.validar
 
 // specs/spec-infra-servicios.md §3 · Contrato mínimo — captura-ingesta.
 // Cada endpoint traduce uno a uno una función de dominio ya implementada y
@@ -33,6 +36,8 @@ data class CargarLoteRequest(
     val fuente: String,
     val fecha: Instant,
 )
+
+data class ValidarItemRequest(val condicion: CondicionValidacion)
 
 @RestController
 @RequestMapping("/lotes")
@@ -64,6 +69,25 @@ class LotesController(
     fun conciliacion(@PathVariable loteId: String): ReporteConciliacion {
         val lote = buscarOFallar(loteId)
         return conciliar(lote)
+    }
+
+    // RF-CI-006 (specs/spec-infra-servicios.md §3): traduce `validar` sobre
+    // el ítem indicado y persiste el lote con ese ítem actualizado.
+    @PostMapping("/{loteId}/items/{itemId}/validacion")
+    fun validarItem(
+        @PathVariable loteId: String,
+        @PathVariable itemId: String,
+        @RequestBody request: ValidarItemRequest,
+    ): ItemIngesta {
+        val lote = buscarOFallar(loteId)
+        val item = lote.items.find { it.id == itemId }
+            ?: throw NoSuchElementException("Ítem no encontrado: $itemId")
+        val itemValidado = validar(item, request.condicion)
+        val loteActualizado = lote.copy(
+            items = lote.items.map { if (it.id == itemId) itemValidado else it },
+        )
+        repositorio.guardar(loteActualizado)
+        return itemValidado
     }
 
     // specs/spec-infra-servicios.md §5 (T-19, corrige VETO de Codex): antes

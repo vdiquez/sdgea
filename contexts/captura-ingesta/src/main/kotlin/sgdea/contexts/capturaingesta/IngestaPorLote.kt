@@ -17,10 +17,10 @@ data class InventarioOrigen(
 )
 
 // Estados del ítem de ingesta (spec §3). RECIBIDO es el único estado que
-// produce `cargarLote` (RF-CI-001); los demás se declaran aquí porque
-// RF-CI-008 exige poder contarlos, aunque las transiciones que los alcanzan
-// (validación/cuarentena de RF-CI-006, entrega de RF-CI-010) todavía no están
-// implementadas — RF-CI-006 sigue bloqueada por [CLARIFICAR] en la spec.
+// produce `cargarLote` (RF-CI-001). RECHAZADO/EN_CUARENTENA los produce
+// `validar` (RF-CI-006); ENTREGADO queda declarado para que RF-CI-008 pueda
+// contarlo, aunque la transición que lo alcanza (entrega de RF-CI-010)
+// todavía no está implementada.
 enum class EstadoItemIngesta {
     RECIBIDO,
     ENTREGADO,
@@ -38,12 +38,16 @@ data class Procedencia(
 )
 
 // Ítem de ingesta: artefacto de origen + procedencia + estado (spec §3).
+// `razonValidacion` queda `null` mientras el ítem no ha pasado por `validar`
+// (RF-CI-006); una vez `Rechazado` o `En cuarentena`, registra la razón —
+// RF-CI-006 exige que nunca se descarte en silencio.
 data class ItemIngesta(
     val id: String,
     val loteId: String,
     val artefacto: ArtefactoOrigen,
     val estado: EstadoItemIngesta,
     val procedencia: Procedencia,
+    val razonValidacion: String? = null,
 )
 
 data class LoteIngesta(
@@ -119,4 +123,31 @@ fun conciliar(lote: LoteIngesta): ReporteConciliacion {
         faltantes = lote.inventario.registros.filter { it !in idsRecibidos },
         sobrantes = lote.items.filter { it.artefacto.id !in idsInventario },
     )
+}
+
+// RF-CI-006: condiciones de validación que llevan a una rama terminal.
+// Taxonomía resuelta por Victor en QUESTIONS.md (2026-08-23), antes bloqueada
+// por [CLARIFICAR] en spec-captura-ingesta.md §8: si un humano puede
+// destrabar el mismo artefacto dentro del sistema actual, la condición va a
+// EN_CUARENTENA; si la única salida es un artefacto distinto o un cambio de
+// sistema, va a RECHAZADO. Sin gradación de severidad adicional que la spec
+// no define.
+enum class CondicionValidacion {
+    CORRUPTO,
+    ILEGIBLE,
+    FORMATO_NO_SOPORTADO,
+}
+
+// RF-CI-006: valida un ítem `Recibido` y lo mueve a su rama terminal con
+// razón registrada — nunca se descarta en silencio.
+fun validar(item: ItemIngesta, condicion: CondicionValidacion): ItemIngesta {
+    val (estado, razon) = when (condicion) {
+        CondicionValidacion.CORRUPTO ->
+            EstadoItemIngesta.EN_CUARENTENA to "Artefacto corrupto: requiere reescaneo o confirmación manual."
+        CondicionValidacion.ILEGIBLE ->
+            EstadoItemIngesta.EN_CUARENTENA to "Artefacto ilegible: requiere juicio de calidad humano."
+        CondicionValidacion.FORMATO_NO_SOPORTADO ->
+            EstadoItemIngesta.RECHAZADO to "Formato no soportado: requiere un artefacto nuevo o soporte de formato añadido al sistema."
+    }
+    return item.copy(estado = estado, razonValidacion = razon)
 }

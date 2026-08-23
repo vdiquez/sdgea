@@ -62,6 +62,9 @@ class ItemIngestaEntity(
 
     @Column(name = "procedencia_lote_o_flujo_id", nullable = false)
     var procedenciaLoteOFlujoId: String = "",
+
+    @Column(name = "razon_validacion")
+    var razonValidacion: String? = null,
 )
 
 interface LoteJpaRepository : JpaRepository<LoteEntity, String>

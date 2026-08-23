@@ -49,17 +49,19 @@ implementación (repositorio + mapeo a tabla), no una regla de negocio nueva.
 | `POST /lotes` | `cargarLote(loteId, artefactos, inventario, fuente, fecha)` | RF-CI-001, RF-CI-007 |
 | `GET /lotes/{loteId}/conteo` | `contarPorEstado(lote)` | RF-CI-008 |
 | `GET /lotes/{loteId}/conciliacion` | `conciliar(lote)` | RF-CI-002 |
+| `POST /lotes/{loteId}/items/{itemId}/validacion` | `validar(item, condicion)` | RF-CI-006 |
 
 Mapeo de persistencia (estructura, no DDL — el DDL exacto es decisión de
 implementación de la tarea que ejecute esta spec):
 - `LoteIngesta` (id, inventario) → tabla `lotes_ingesta`.
-- `ItemIngesta` (id, loteId, artefacto, estado, procedencia) → tabla
-  `items_ingesta`, con `lote_id` como llave foránea a `lotes_ingesta`.
+- `ItemIngesta` (id, loteId, artefacto, estado, procedencia, razonValidacion)
+  → tabla `items_ingesta`, con `lote_id` como llave foránea a
+  `lotes_ingesta`.
 
 Fuera de alcance de esta spec (no implementado en el dominio todavía, por
 tanto tampoco aquí): RF-CI-003 (flujo de eventos), RF-CI-004 (alta de
-Fuente), RF-CI-005 (idempotencia), RF-CI-006 (bloqueada, ver QUESTIONS.md
-T-02), RF-CI-009 (reanudabilidad), RF-CI-010 (entrega a Normalización).
+Fuente), RF-CI-005 (idempotencia), RF-CI-009 (reanudabilidad), RF-CI-010
+(entrega a Normalización).
 
 ## 4. Contrato mínimo — `records-custodia`
 
