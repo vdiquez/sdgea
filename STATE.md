@@ -782,3 +782,26 @@ Siguiente paso: Seguridad y Acceso (autenticación, autorización, permisos que
 este contexto y todos los anteriores ya consumen como dependencia) o Validación
 Humana (las colas de revisión que Clasificación, Enriquecimiento y Normalización
 ya nombran como destino) — quedan como las últimas dos.
+
+**Ejecutado (2026-08-24), sexto uso de `/speckit-specify`: Seguridad y Acceso.**
+`specs/006-seguridad-acceso/spec.md` (código de contexto `SA`); `.specify/feature.json`
+actualizado a `{"feature_directory": "specs/006-seguridad-acceso"}`. Único
+contexto puramente determinístico de los que quedaban (la constitución lista
+"seguridad" explícitamente en P-06). RF-SA-001..010: autenticación, gestión de
+roles/permisos, autorización denegar-por-defecto, clasificación de la
+información (pública/clasificada/reservada, Ley 1712 de 2014 — primera vez que
+se cita esa ley y Ley 1581 de 2012 en el proyecto, ambas reales y con
+`Referencia específica: PENDIENTE`, mismo patrón que Ley 594/Decreto 1080 en la
+spec original), revocación inmediata, protección de credenciales, exposición de
+permisos a otros contextos, operación sin conectividad saliente (P-10).
+**Brecha real documentada (no resuelta unilateralmente):** todo contexto ya
+especificado (Captura/Ingesta, Normalización, Extracción) declara "Seguridad y
+Acceso" como destino de sus eventos de auditoría, pero ninguno implementa hoy
+el envío real — cada uno solo tiene su propia bitácora local (records-custodia,
+ya implementada; captura-ingesta, sin bitácora todavía pese a que su spec la
+menciona desde el origen). Se deja explícito en la sección 8 que esta spec
+asume "recepción para monitoreo" sin sustituir la bitácora de cada contexto,
+pero eso nunca quedó dicho antes por escrito.
+Siguiente paso: Validación Humana — el séptimo y último bounded context
+pendiente. Con ese cerrado, los nueve bounded contexts nombrados desde
+`CLAUDE-CODE-KICKOFF.md` tendrían spec de nivel 1 completa.

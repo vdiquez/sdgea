@@ -23,8 +23,10 @@ specs/
 │   └── spec.md                     ← bounded context probabilístico (EDD), ver eval/eval-clasificacion.md
 ├── 004-enriquecimiento/
 │   └── spec.md                     ← bounded context probabilístico (EDD): metadatos obligatorios
-└── 005-indexacion-busqueda/
-    └── spec.md                     ← bounded context híbrido: índice determinístico + recuperación/Q&A bajo EDD
+├── 005-indexacion-busqueda/
+│   └── spec.md                     ← bounded context híbrido: índice determinístico + recuperación/Q&A bajo EDD
+└── 006-seguridad-acceso/
+    └── spec.md                     ← bounded context determinístico: autenticación, autorización, permisos
 ```
 
 Records/Custodia y Captura/Ingesta se escribieron a mano antes de instalar Spec Kit y
@@ -37,8 +39,8 @@ continuar la implementación de ese contexto; no pueden apuntar directo a
 carpeta: código de contexto, RF-<CTX>-NNN con Dado/Cuando/Entonces, trazabilidad
 regulatoria y `[CLARIFICAR]` explícitos — ver la sección siguiente.
 
-A medida que el roadmap avance se agregarán las specs de los demás bounded contexts
-(Seguridad y Acceso, Validación Humana), cada una en su propia `specs/NNN-<nombre>/`.
+A medida que el roadmap avance se agregará la spec del último bounded context
+pendiente (Validación Humana), en su propia `specs/NNN-<nombre>/`.
 
 `spec-infra-servicios.md` vive en la raíz de `specs/`, no en `contexts/`: define
 *cómo se empaqueta y expone* el dominio ya especificado (servicios HTTP,
@@ -62,7 +64,8 @@ cada contexto (típicamente ya dentro de Claude Code).
 `RF-<CTX>-NNN` (requisito funcional) y `RNF-<CTX>-NNN` (no funcional), donde `<CTX>`
 es el código del contexto: `RC` = Records/Custodia, `CI` = Captura/Ingesta, `NO` =
 Normalización, `EX` = Extracción, `CL` = Clasificación, `EN` = Enriquecimiento,
-`IB` = Indexación y Búsqueda. Cada requisito es **verificable**: lleva criterios de aceptación en formato
+`IB` = Indexación y Búsqueda, `SA` = Seguridad y Acceso. Cada requisito es
+**verificable**: lleva criterios de aceptación en formato
 *Dado / Cuando / Entonces*, que son la base de las pruebas (SDD) o de los sets de
 evaluación (EDD).
 
