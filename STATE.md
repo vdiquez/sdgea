@@ -738,3 +738,24 @@ Queda anotado en la sección 8 de esta spec nueva como una brecha entre specs
 a cerrar, no inventado unilateralmente aquí.
 Siguiente paso: Enriquecimiento (extracción de metadatos estructurados,
 también probabilístico bajo EDD).
+
+**Ejecutado (2026-08-24), cuarto uso de `/speckit-specify`: Enriquecimiento.**
+`specs/004-enriquecimiento/spec.md` (código de contexto `EN`); `.specify/feature.json`
+actualizado a `{"feature_directory": "specs/004-enriquecimiento"}`. RF-EN-001..010:
+recepción de texto extraído, extracción probabilística de valores por campo con
+forma normalizada + forma original (coincidencia normalizada, ya anticipada en
+`edd-harness.md` §4), confianza y evidencia por valor, marca explícita de "campo
+no encontrado", envío de la sugerencia de metadatos a Records/Custodia vía la
+capa anticorrupción ya implementada.
+**Dos hallazgos reales documentados en la spec, no resueltos unilateralmente:**
+(1) tensión sin resolver entre "Clasificación y Enriquecimiento son consumidores
+paralelos del mismo texto extraído" (`spec-records-custodia.md` §4) y "los
+metadatos obligatorios dependen de la TRD/serie" (`spec-records-custodia.md` §8)
+— si Enriquecimiento necesita la serie para saber qué campos importan, no puede
+ser puramente paralelo a Clasificación; (2) brecha de implementación: `DecisionHumana`
+y `DocumentoDeArchivo` (ya construidos en T-08/T-09) solo modelan
+`clasificacionResultante`, no metadatos — no hay todavía dónde materializar una
+sugerencia de metadatos aceptada.
+Siguiente paso: Indexación y Búsqueda (contexto híbrido — indexación
+determinística per P-06, pero "recuperación" y "Q&A conversacional" son
+probabilísticos per P-05 y ya están en `edd-harness.md` §2/§4).
