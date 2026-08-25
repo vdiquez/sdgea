@@ -692,3 +692,25 @@ Quedan 6 bounded contexts sin spec (Extracción, Clasificación, Enriquecimiento
 Indexación y Búsqueda, Seguridad y Acceso, Validación Humana); cada uno se crea
 con su propia invocación de `/speckit-specify` (una feature por invocación),
 siguiendo el orden del pipeline.
+
+**Ejecutado (2026-08-24), segundo uso de `/speckit-specify`: Extracción.**
+`specs/002-extraccion/spec.md` (código de contexto `EX`); `.specify/feature.json`
+actualizado a `{"feature_directory": "specs/002-extraccion"}` (la feature activa
+es siempre la última especificada — Normalización queda intacta en
+`specs/001-normalizacion/`, solo deja de ser la apuntada por feature.json).
+Mismo rigor que Normalización: RF-EX-001..010, RNF, trazabilidad, 4
+`[CLARIFICAR]`. Contexto híbrido: `specs/eval/edd-harness.md` §2/§4 ya clasifica
+"OCR / extracción de texto" como probabilístico (CER como métrica), mientras que
+extraer texto ya embebido en un artefacto born-digital es determinístico.
+Decisión de diseño razonada pero no escrita en ninguna spec previa (marcada
+explícita en spec §1 y §8): el texto extraído NO cruza la misma capa
+anticorrupción por instancia que una Sugerencia de clasificación —no es estado
+archivístico, es insumo de otros componentes probabilísticos posteriores—, así
+que se gobierna con el gate de EDD a nivel de componente (P-05) en vez de
+confirmación humana por instancia; las extracciones de baja confianza sí
+alimentan la cola de revisión humana (P-09) pero sin bloquear la entrega aguas
+abajo. Reutiliza la taxonomía cuarentena/rechazo de RF-CI-006 por tercera vez
+en el pipeline (Captura/Ingesta, Normalización, Extracción).
+Siguiente paso: Clasificación (contexto ya referenciado en
+`spec-records-custodia.md` y `eval-clasificacion.md`, con su propia spec de
+evaluación ya escrita — la spec de dominio de Clasificación sigue pendiente).

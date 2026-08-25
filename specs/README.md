@@ -15,8 +15,10 @@ specs/
 ├── contexts/
 │   ├── spec-records-custodia.md    ← bounded context determinístico (núcleo de records)
 │   └── spec-captura-ingesta.md     ← bounded context de entrada al pipeline
-└── 001-normalizacion/
-    └── spec.md                     ← bounded context híbrido (SDD + un componente EDD)
+├── 001-normalizacion/
+│   └── spec.md                     ← bounded context híbrido (SDD + un componente EDD)
+└── 002-extraccion/
+    └── spec.md                     ← bounded context híbrido (SDD + OCR bajo EDD)
 ```
 
 Records/Custodia y Captura/Ingesta se escribieron a mano antes de instalar Spec Kit y
@@ -30,8 +32,8 @@ carpeta: código de contexto, RF-<CTX>-NNN con Dado/Cuando/Entonces, trazabilida
 regulatoria y `[CLARIFICAR]` explícitos — ver la sección siguiente.
 
 A medida que el roadmap avance se agregarán las specs de los demás bounded contexts
-(Extracción, Clasificación, Enriquecimiento, Indexación y Búsqueda, Seguridad y
-Acceso, Validación Humana), cada una en su propia `specs/NNN-<nombre>/`.
+(Clasificación, Enriquecimiento, Indexación y Búsqueda, Seguridad y Acceso,
+Validación Humana), cada una en su propia `specs/NNN-<nombre>/`.
 
 `spec-infra-servicios.md` vive en la raíz de `specs/`, no en `contexts/`: define
 *cómo se empaqueta y expone* el dominio ya especificado (servicios HTTP,
@@ -54,7 +56,7 @@ cada contexto (típicamente ya dentro de Claude Code).
 
 `RF-<CTX>-NNN` (requisito funcional) y `RNF-<CTX>-NNN` (no funcional), donde `<CTX>`
 es el código del contexto: `RC` = Records/Custodia, `CI` = Captura/Ingesta, `NO` =
-Normalización. Cada requisito es **verificable**: lleva criterios de aceptación en formato
+Normalización, `EX` = Extracción. Cada requisito es **verificable**: lleva criterios de aceptación en formato
 *Dado / Cuando / Entonces*, que son la base de las pruebas (SDD) o de los sets de
 evaluación (EDD).
 
