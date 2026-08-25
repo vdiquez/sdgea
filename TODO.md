@@ -79,3 +79,19 @@
       sugerencia no quedó persistida) y en verde después. `./test.sh` en
       verde (Gradle BUILD SUCCESSFUL, 29 tests en records-custodia; pytest
       del arnés: 4 passed).
+- [x] T-22 Mismo riesgo de atomicidad que T-21, extendido a
+      `CustodiaOriginales.custodiar` (tres almacenes JPA independientes:
+      original, documento, evento) y `materializar` (dos: documento, evento)
+      — anotado como riesgo latente en la nota de T-21, ahora cerrado por
+      decisión de Victor (2026-08-24: corregir ambos de una vez, mismo root
+      cause). Nuevo wrapper `CustodiaTransaccional` (`@Service`, métodos
+      `custodiar`/`materializar` anotados `@Transactional`), inyectado en
+      `DocumentosController` en lugar de `CustodiaOriginales` directo para
+      esos dos endpoints; `CustodiaOriginales` se mantiene sin anotaciones
+      Spring. TDD: `CustodiaTransaccionalTest` (`@SpringBootTest`,
+      `@MockitoBean` sobre `AlmacenDeEventosJpa`) con dos casos — fallo al
+      anexar el evento de `custodiar` (ni original ni documento quedan
+      persistidos) y fallo al anexar el evento de `materializar` (la
+      clasificación no queda persistida) — confirmados en rojo quitando
+      `@Transactional` del wrapper y en verde restaurándolo. `./test.sh` en
+      verde (31 tests en records-custodia; pytest del arnés: 4 passed).

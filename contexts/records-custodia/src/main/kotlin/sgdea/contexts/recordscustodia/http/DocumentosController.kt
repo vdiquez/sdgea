@@ -17,22 +17,27 @@ import sgdea.contexts.recordscustodia.OriginalInmutable
 import sgdea.contexts.recordscustodia.Procedencia
 import sgdea.contexts.recordscustodia.ResultadoVerificacionIntegridad
 import sgdea.contexts.recordscustodia.Sugerencia
+import sgdea.contexts.recordscustodia.configuracion.CustodiaTransaccional
 
 // specs/spec-infra-servicios.md §4 · Contrato mínimo — records-custodia.
 // Cada endpoint traduce uno a uno un método de dominio ya implementado y
 // probado por TDD (T-03, T-08, T-09, T-11); esta clase no añade regla de
-// negocio alguna, solo entrada/salida HTTP.
+// negocio alguna, solo entrada/salida HTTP. `custodiar` y `materializar` pasan
+// por `CustodiaTransaccional` (no por `custodia` directo) porque cada uno hace
+// más de una escritura a través de almacenes JPA independientes — ver
+// CustodiaTransaccional para el riesgo de atomicidad que evita.
 @RestController
 @RequestMapping("/documentos")
 class DocumentosController(
     private val custodia: CustodiaOriginales,
+    private val custodiaTransaccional: CustodiaTransaccional,
     private val capa: CapaAnticorrupcionSugerencias,
 ) {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     fun custodiar(@RequestBody request: CustodiarRequest): OriginalInmutable =
-        custodia.custodiar(
+        custodiaTransaccional.custodiar(
             id = request.id,
             bytes = Base64.getDecoder().decode(request.bytesBase64),
             actor = request.actor,
@@ -51,7 +56,7 @@ class DocumentosController(
 
     @PostMapping("/{id}/decisiones")
     fun materializar(@PathVariable id: String, @RequestBody request: DecisionRequest): DocumentoDeArchivo =
-        custodia.materializar(
+        custodiaTransaccional.materializar(
             DecisionHumana(
                 documentoId = id,
                 actor = request.actor,

@@ -1,7 +1,8 @@
 # STATE
-Fase: F2/F3 — T-13..T-21 hechas (T-14 desglosada en T-15..T-18; T-19/T-20/T-21
-corrigen VETOs sucesivos de Codex sobre T-16/T-17/T-18). T-02 sigue bloqueada;
-es la única tarea `- [?]` que queda en TODO.md.
+Fase: F2/F3 — T-01..T-22 completas (T-14 desglosada en T-15..T-18; T-19/T-20/T-21
+corrigen VETOs sucesivos de Codex sobre T-16/T-17/T-18; T-02 desbloqueada
+2026-08-23 por la taxonomía de Victor; T-22 cierra el riesgo de atomicidad
+anotado junto con T-21). No queda ninguna tarea `- [ ]` ni `- [?]` en TODO.md.
 Ver plan-ejecucion-agentica.md.
 
 Hecho:
@@ -561,7 +562,7 @@ Hecho:
   de escrituras a través de tres beans `@Transactional` independientes
   (original, documento, evento) sin un límite que las englobe — mismo riesgo
   latente que T-21 corrigió para `recibir`, pero fuera del alcance que pidió
-  esta tarea.
+  esta tarea. Cerrado en T-22 (ver abajo).
 - [x] T-02 RF-CI-006 Validación y cuarentena (2026-08-23, desbloqueada por la
       taxonomía de Victor en QUESTIONS.md): dominio `validar(item, condicion)`
       en `IngestaPorLote.kt` — enum `CondicionValidacion` (CORRUPTO, ILEGIBLE,
@@ -587,8 +588,35 @@ Hecho:
       docker-compose.local-ports.yml up -d --build`) y `npx newman run` — 16/16
       peticiones, 35/35 aserciones, dos corridas seguidas sin fallos; stack
       bajado al terminar.
+- [x] T-22 Riesgo de atomicidad en `CustodiaOriginales.custodiar`/`materializar`
+      (2026-08-24, decisión de Victor: corregir junto con `materializar`
+      porque comparte el mismo root cause, no solo el `custodiar` original
+      del punto 3 del menú de prioridades). Mismo patrón que T-21: cada
+      almacén JPA (`AlmacenDeOriginalesJpa`, `AlmacenDeDocumentosJpa`,
+      `AlmacenDeEventosJpa`) es un bean `@Transactional` independiente, así
+      que `custodiar` (tres escrituras) y `materializar` (dos escrituras) sin
+      un límite común dejaban abierta la posibilidad de un original custodiado
+      o una clasificación cambiada sin su evento de auditoría si el último
+      `anexar` fallaba — misma violación de P-08 que el VETO de Codex sobre
+      T-20. Corregido: wrapper nuevo `configuracion/CustodiaTransaccional`
+      (`@Service`, `custodiar` y `materializar` anotados `@Transactional`),
+      inyectado en `DocumentosController` en vez de `CustodiaOriginales`
+      directo para esos dos endpoints (los demás — `consultar`,
+      `consultarDocumento`, `consultarProcedencia`, `verificarIntegridad` —
+      siguen usando `CustodiaOriginales` directo porque son de una sola
+      escritura o solo lectura, sin el riesgo). `CustodiaOriginales` se
+      mantiene sin anotaciones Spring (T-01..T-11 la siguen construyendo sin
+      contexto Spring). TDD: `CustodiaTransaccionalTest` — `@SpringBootTest`
+      con `@MockitoBean` sobre `AlmacenDeEventosJpa`, dos casos: fallo al
+      anexar `ORIGINAL_CUSTODIADO` (ni original ni documento quedan
+      persistidos) y fallo al anexar `DECISION_HUMANA_MATERIALIZADA` (la
+      clasificación no queda persistida). Confirmado en rojo quitando
+      `@Transactional` del wrapper (ambas aserciones fallan) y en verde
+      restaurándolo. `./test.sh` en verde (31 tests en records-custodia,
+      incluyendo los 11 del controlador HTTP sin romper por el cambio de
+      wiring; pytest del arnés: 4 passed).
   Siguiente paso: no queda ninguna tarea `- [ ]` ni `- [?]` en TODO.md —
-  T-01 a T-21 completas. El corte vertical F2/F3 está cerrado; lo que sigue
+  T-01 a T-22 completas. El corte vertical F2/F3 sigue cerrado; lo que sigue
   no es más trabajo de TODO.md sino decidir la próxima prioridad (F4 hilo
   comercial, siguiente bounded context, validar security-review con un PR
   real, u otra opción del checklist de abajo).
@@ -602,10 +630,11 @@ Hecho:
 - [x] 3. TEST_CMD fijado a `./test.sh`.
 - [x] 4. TODO.md sembrado (14 tareas T-01..T-14).
 - [x] 5. Sandbox Docker construido y verificado (`agent-sandbox/`).
-- [x] 6. F2 corrido en varias corridas — T-01..T-21 completas (T-02 quedó
+- [x] 6. F2 corrido en varias corridas — T-01..T-22 completas (T-02 quedó
       bloqueada por `[CLARIFICAR]` hasta 2026-08-23; cerrada tras la
-      taxonomía de Victor, ver entrada de T-02 arriba). Bugs reales de
-      infraestructura encontrados y
+      taxonomía de Victor, ver entrada de T-02 arriba; T-22 cierra el riesgo
+      de atomicidad anotado junto con T-21, ver entrada de T-22 arriba).
+      Bugs reales de infraestructura encontrados y
       corregidos en el camino: `.venv`/`.gradle` compartidos con el host se
       corrompían (aislados en carpetas del host fuera del bind mount, no
       volúmenes nombrados — esos también se crean root:root); `codex exec`
