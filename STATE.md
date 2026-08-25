@@ -805,3 +805,39 @@ pero eso nunca quedó dicho antes por escrito.
 Siguiente paso: Validación Humana — el séptimo y último bounded context
 pendiente. Con ese cerrado, los nueve bounded contexts nombrados desde
 `CLAUDE-CODE-KICKOFF.md` tendrían spec de nivel 1 completa.
+
+**Ejecutado (2026-08-24), séptimo y último uso de `/speckit-specify`: Validación
+Humana.** `specs/007-validacion-humana/spec.md` (código de contexto `VH`);
+`.specify/feature.json` actualizado a
+`{"feature_directory": "specs/007-validacion-humana"}`. Contexto determinístico
+(P-06 lo lista explícitamente, junto a Seguridad y Acceso) que orquesta
+alrededor de las sugerencias probabilísticas de los demás sin serlo él mismo.
+RF-VH-001..010: agregación de sugerencias en colas por confianza ascendente
+(P-09), revisión y decisión individual, aprobación masiva de candidatos de alta
+confianza (referenciando cada sugerencia incluida, nunca un bloque opaco),
+confirmación/corrección de límites de documento (cierra el ciclo que
+Normalización dejó abierto en RF-NO-004), registro atribuible de toda decisión,
+control de acceso por recurso (consume RF-SA-004), distinción explícita entre
+aceptación y corrección, y captura de correcciones para el flywheel de datos
+(edd-harness.md §6, paso 5) sin incorporarlas en crudo al set patrón.
+Con esta spec, **los nueve bounded contexts nombrados en
+`CLAUDE-CODE-KICKOFF.md` tienen spec de nivel 1 completa**: dos escritos a mano
+antes de instalar Spec Kit (Captura/Ingesta, Records/Custodia, ya implementados
+end-to-end) y siete creados con `/speckit-specify` en esta sesión
+(Normalización, Extracción, Clasificación, Enriquecimiento, Indexación y
+Búsqueda, Seguridad y Acceso, Validación Humana — ninguno implementado
+todavía). `specs/README.md` documenta ambos patrones de ubicación y por qué
+coexisten.
+Hallazgos reales acumulados durante las siete specs, ninguno resuelto
+unilateralmente, todos documentados en la sección 8 de su spec correspondiente:
+brecha entre Clasificación y `spec-records-custodia.md` sobre la sugerencia de
+agrupamiento; tensión entre Enriquecimiento paralelo a Clasificación y la
+dependencia de metadatos con la serie/TRD; falta de campo de metadatos en
+`DocumentoDeArchivo`; brecha entre las siete specs que declaran "Seguridad y
+Acceso" como destino de auditoría y la ausencia total de esa integración en el
+código ya construido.
+Siguiente paso: no queda ningún bounded context sin spec de nivel 1. Lo que
+sigue es una decisión de Victor, no una continuación mecánica: elegir qué
+contexto pasa a plan/tasks primero (vía `/speckit-plan`), retomar F4 (hilo
+comercial), o cerrar alguno de los hallazgos/brechas listados arriba antes de
+seguir construyendo sobre ellos.
