@@ -30,8 +30,11 @@ jobs:
         run: uv run --directory eval-harness pytest
 
   # security-review: gate real, T-13. anthropics/claude-code-security-review
-  # revisa el diff del PR contra vulnerabilidades; secreto ANTHROPIC_API_KEY
-  # ya configurado en el repo de GitHub.
+  # revisa el diff del PR contra vulnerabilidades. PENDIENTE: el secreto
+  # ANTHROPIC_API_KEY todavía NO está configurado en el repo de GitHub
+  # (verificado 2026-08-24 vía `gh api repos/.../actions/secrets`: 0 secretos).
+  # Sin él, este job falla por falta de credencial en cuanto se abra un PR
+  # real; no llama a la API ni genera costo hasta que Victor lo agregue.
   security-review:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
