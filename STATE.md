@@ -759,3 +759,26 @@ sugerencia de metadatos aceptada.
 Siguiente paso: Indexación y Búsqueda (contexto híbrido — indexación
 determinística per P-06, pero "recuperación" y "Q&A conversacional" son
 probabilísticos per P-05 y ya están en `edd-harness.md` §2/§4).
+
+**Ejecutado (2026-08-24), quinto uso de `/speckit-specify`: Indexación y
+Búsqueda.** `specs/005-indexacion-busqueda/spec.md` (código de contexto `IB`);
+`.specify/feature.json` actualizado a
+`{"feature_directory": "specs/005-indexacion-busqueda"}`. RF-IB-001..010:
+indexación léxica y vectorial de documentos materializados (nunca de sugerencias
+pendientes — P-01 aplicado a resultados de búsqueda), recuperación por
+relevancia semántica y Q&A conversacional con citas (ambos probabilísticos,
+EDD), tolerancia cero a exposición sin permiso (gate duro ya establecido en
+`edd-harness.md` §5.3), auditoría de acceso por consulta (mismo patrón que
+RF-RC-010), negativa apropiada en vez de alucinar.
+De las seis capacidades externas que P-03 obliga a abstraer, **tres** viven en
+este contexto (embeddings, índice vectorial, índice léxico) más una cuarta que
+trae el Q&A (inferencia LLM) — es el contexto donde P-03 pesa más de todos los
+especificados hasta ahora.
+**Dependencia real hacia Seguridad y Acceso** (todavía sin spec): el filtrado de
+permisos es un gate duro, no un detalle de implementación — se modela como
+entrada explícita aunque ese contexto no exista aún, mismo patrón que ya usan
+otras specs para referenciar contextos futuros como origen/destino.
+Siguiente paso: Seguridad y Acceso (autenticación, autorización, permisos que
+este contexto y todos los anteriores ya consumen como dependencia) o Validación
+Humana (las colas de revisión que Clasificación, Enriquecimiento y Normalización
+ya nombran como destino) — quedan como las últimas dos.
