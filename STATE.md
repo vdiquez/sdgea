@@ -714,3 +714,27 @@ en el pipeline (Captura/Ingesta, Normalización, Extracción).
 Siguiente paso: Clasificación (contexto ya referenciado en
 `spec-records-custodia.md` y `eval-clasificacion.md`, con su propia spec de
 evaluación ya escrita — la spec de dominio de Clasificación sigue pendiente).
+
+**Ejecutado (2026-08-24), tercer uso de `/speckit-specify`: Clasificación.**
+`specs/003-clasificacion/spec.md` (código de contexto `CL`); `.specify/feature.json`
+actualizado a `{"feature_directory": "specs/003-clasificacion"}`. Contexto
+enteramente probabilístico (sin contraparte determinística, a diferencia de
+Normalización/Extracción); su spec de evaluación ya existía
+(`eval-clasificacion.md`) — esta spec cubre el contrato de dominio, no las
+métricas. RF-CL-001..010: recepción de texto extraído, clasificación contra
+la TRD vigente, ranking por confianza, envío de sugerencias de clasificación
+Y de agrupamiento en expedientes a Records/Custodia vía la capa anticorrupción
+**ya implementada** (`CapaAnticorrupcionSugerencias`, T-08/T-20/T-21) — la
+spec lo señala explícitamente para dejar claro que no hay implementación nueva
+pendiente en ese punto, solo el contrato de Clasificación como emisor.
+`edd-harness.md` §2 lista dos componentes probabilísticos bajo este mismo
+contexto (clasificación serie/subserie y agrupamiento en expedientes); ambos
+quedan cubiertos.
+**Inconsistencia real detectada y documentada (no corregida por su cuenta):**
+`spec-records-custodia.md` §4 solo nombra "Sugerencia de serie/subserie" como
+entrada desde Clasificación; no nombra una "Sugerencia de agrupamiento en
+expediente" ni detalla cómo RF-RC-008 (conformación de expediente) se dispara.
+Queda anotado en la sección 8 de esta spec nueva como una brecha entre specs
+a cerrar, no inventado unilateralmente aquí.
+Siguiente paso: Enriquecimiento (extracción de metadatos estructurados,
+también probabilístico bajo EDD).
