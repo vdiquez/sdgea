@@ -673,3 +673,22 @@ describe el plan tal cual está escrito. El punto natural para usar
 TODAVÍA no tiene spec escrita a mano (Normalización, Extracción,
 Enriquecimiento, Indexación y Búsqueda, Seguridad y Acceso, Validación
 Humana) — no antes.
+
+**Ejecutado (2026-08-24):** primer uso real de `/speckit-specify`, para
+Normalización. `specs/001-normalizacion/spec.md` + `.specify/feature.json`
+(`{"feature_directory": "specs/001-normalizacion"}`) ya existen. El contenido
+sigue el mismo rigor que `contexts/spec-captura-ingesta.md` y
+`contexts/spec-records-custodia.md` (código de contexto `NO`, RF-NO-001..010
+con Dado/Cuando/Entonces, trazabilidad regulatoria, `[CLARIFICAR]`) — no la
+plantilla genérica de negocio de Spec Kit. Decisión de Victor cuando se le
+presentó la disyuntiva: usar el mecanismo real de carpeta numerada (deja
+`/speckit-plan` y `/speckit-tasks` disponibles después) en vez de repetir la
+ubicación `contexts/spec-*.md` de los dos contextos escritos a mano.
+`specs/README.md` documenta ambos patrones y por qué coexisten. Sin hook
+`before_specify` configurado (no crea rama; se trabajó sobre `main`, igual que
+el resto de la sesión). Hook `after_specify` (`speckit.agent-context.update`,
+extensión `agent-context`) es opcional y no se ejecutó — no se pidió.
+Quedan 6 bounded contexts sin spec (Extracción, Clasificación, Enriquecimiento,
+Indexación y Búsqueda, Seguridad y Acceso, Validación Humana); cada uno se crea
+con su propia invocación de `/speckit-specify` (una feature por invocación),
+siguiendo el orden del pipeline.
