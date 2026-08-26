@@ -841,3 +841,23 @@ sigue es una decisión de Victor, no una continuación mecánica: elegir qué
 contexto pasa a plan/tasks primero (vía `/speckit-plan`), retomar F4 (hilo
 comercial), o cerrar alguno de los hallazgos/brechas listados arriba antes de
 seguir construyendo sobre ellos.
+
+## Implementación de Seguridad y Acceso (2026-08-25, modo agéntico)
+
+Decisión de Victor (2026-08-25): implementar `specs/006-seguridad-acceso/spec.md`
+en modo agéntico antes de pasar a diseño de UI/UX, porque es la dependencia que
+todos los demás contextos ya asumen (spec-infra-servicios.md §7, RF-IB-008).
+Mismo patrón TDD que F2/F3: dominio primero, luego HTTP + persistencia, luego
+Docker/Postman.
+
+- [x] T-23 (ver TODO.md para el detalle completo): dominio de Seguridad y
+  Acceso — `GestionDeAccesos`, `GestionDeRoles`, `NivelClasificacion`,
+  `EventoSeguridad`/`BitacoraSeguridad`. 14 tests nuevos, verdes en el primer
+  intento. Ningún `[CLARIFICAR]` de la spec bloqueó el dominio: RBAC simple
+  (rol → lista de permisos) es un valor por defecto razonable dado que la
+  spec ya definía Identidad/Rol/Permiso en su lenguaje ubicuo; el hash
+  SHA-256 de credenciales es el mismo algoritmo ya usado en
+  `CustodiaOriginales.ALGORITMO_HUELLA`, reemplazable después sin romper el
+  contrato; el almacén de identidades es autoalojado (Postgres propio, sin
+  proveedor externo) para no comprometer RF-SA-009 antes de que exista una
+  decisión explícita de integrar SSO/LDAP.

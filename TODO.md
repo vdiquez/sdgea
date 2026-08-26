@@ -95,3 +95,31 @@
       clasificación no queda persistida) — confirmados en rojo quitando
       `@Transactional` del wrapper y en verde restaurándolo. `./test.sh` en
       verde (31 tests en records-custodia; pytest del arnés: 4 passed).
+
+# Implementación de specs/006-seguridad-acceso/spec.md (2026-08-25, modo agéntico)
+- [x] T-23 Dominio de Seguridad y Acceso (`contexts/seguridad-acceso`, módulo
+      Kotlin/Spring convertido de esqueleto vacío al mismo patrón que
+      captura-ingesta/records-custodia): `GestionDeAccesos` (autenticar,
+      crearIdentidad, asignarRol/revocarRol, autorizar) y `GestionDeRoles`,
+      clases de dominio planas sin anotaciones Spring. Cubre RF-SA-001 (auten-
+      ticación), RF-SA-002 (gestión de roles/permisos sin cambios de código),
+      RF-SA-003 (autorización denegar-por-defecto), RF-SA-004 (clasificación
+      de la información con `NivelClasificacion` PUBLICA/CLASIFICADA/
+      RESERVADA), RF-SA-005 (registro de eventos de seguridad), RF-SA-006
+      (revocación inmediata — `autorizar` siempre lee el estado vigente, sin
+      caché), RF-SA-007 (protección de credenciales — solo se guarda un hash
+      SHA-256, `EventoSeguridad` no tiene campo de credencial) y RF-SA-010
+      (cero pérdida silenciosa — todo intento de autenticación/autorización
+      anexa un evento). RF-SA-008 se prueba en la capa HTTP (endpoint
+      expuesto a otros contextos); RF-SA-009 se cumple por construcción (sin
+      ninguna llamada de red externa en el dominio).
+      Diseño deliberado para evitar desde el inicio el riesgo de atomicidad
+      de T-21/T-22: cada operación pública de `GestionDeAccesos` escribe en
+      un solo almacén (identidades O bitácora, nunca ambos a la vez) —
+      asignar/revocar rol no genera evento de seguridad porque RF-SA-005 no
+      lo exige, así que no hay una segunda escritura que pueda quedar
+      huérfana; no hace falta un wrapper `@Transactional` porque no hay
+      operación de dos escrituras que envolver.
+      TDD: 14 tests nuevos (`SeguridadAccesoTest.kt`) contra los Dado/Cuando/
+      Entonces de la spec, verdes en el primer intento. `./gradlew
+      :contexts:seguridad-acceso:test` en verde.
