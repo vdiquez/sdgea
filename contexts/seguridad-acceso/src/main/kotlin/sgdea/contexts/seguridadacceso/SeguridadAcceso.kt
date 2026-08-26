@@ -177,17 +177,21 @@ class GestionDeAccesos(
         return identidad
     }
 
-    fun asignarRol(identidadId: String, rol: Rol) {
+    fun asignarRol(identidadId: String, rol: Rol): Identidad {
         val identidad = almacenDeIdentidades.buscar(identidadId).oFaltante(identidadId)
-        almacenDeIdentidades.guardar(identidad.copy(roles = identidad.roles + rol))
+        val actualizada = identidad.copy(roles = identidad.roles + rol)
+        almacenDeIdentidades.guardar(actualizada)
+        return actualizada
     }
 
     // RF-SA-006: revocar surte efecto de inmediato porque `autorizar` siempre lee
     // el estado vigente de la identidad — no hay ninguna caché de la decisión que
     // pueda quedar desactualizada.
-    fun revocarRol(identidadId: String, nombreRol: String) {
+    fun revocarRol(identidadId: String, nombreRol: String): Identidad {
         val identidad = almacenDeIdentidades.buscar(identidadId).oFaltante(identidadId)
-        almacenDeIdentidades.guardar(identidad.copy(roles = identidad.roles.filterNot { it.nombre == nombreRol }))
+        val actualizada = identidad.copy(roles = identidad.roles.filterNot { it.nombre == nombreRol })
+        almacenDeIdentidades.guardar(actualizada)
+        return actualizada
     }
 
     // RF-SA-003/004/008: deniega por defecto; solo permite si algún rol vigente de

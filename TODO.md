@@ -123,3 +123,30 @@
       TDD: 14 tests nuevos (`SeguridadAccesoTest.kt`) contra los Dado/Cuando/
       Entonces de la spec, verdes en el primer intento. `./gradlew
       :contexts:seguridad-acceso:test` en verde.
+- [x] T-24 `specs/spec-infra-servicios.md` §5 (nueva) — contrato HTTP mínimo
+      de seguridad-acceso: 7 endpoints (`POST /identidades`, `POST
+      /identidades/autenticacion`, `POST /identidades/{id}/roles`, `DELETE
+      /identidades/{id}/roles/{rol}`, `POST /roles`, `POST /autorizacion`,
+      `GET /eventos-seguridad`) más el mapeo de persistencia (tablas
+      `identidades`, `roles`, `eventos_seguridad`). Renumeradas §5→§6 (formato
+      de error), §6→§7 (trazabilidad), §7→§8 (decisiones pendientes). §8
+      actualizada: el `[CLARIFICAR]` de autenticación/autorización ya no dice
+      "el contexto no existe" — ahora dice explícitamente que existe (T-23)
+      pero que captura-ingesta/records-custodia todavía no lo invocan; esa
+      integración real queda fuera de alcance de esta tarea, anotada como
+      brecha explícita.
+- [x] T-25 Servicio HTTP (Spring Boot) + persistencia Postgres para
+      seguridad-acceso, contra `specs/spec-infra-servicios.md` §5:
+      `IdentidadesController`, `RolesController`, `AutorizacionController`,
+      `EventosSeguridadController`, `ManejoDeErrores` (401 credenciales
+      inválidas, 403 identidad suspendida, 404 no encontrado — mismo patrón
+      canónico de T-19). Persistencia: `RolEntity`/`IdentidadEntity`/
+      `EventoSeguridadEntity` + `AlmacenDeRolesJpa`/`AlmacenDeIdentidadesJpa`/
+      `AlmacenDeEventosDeSeguridadJpa`, igual convención que records-custodia
+      (JSON en columna de texto para `permisos`/`roles`, `EntityManager.persist`
+      sin merge/update para `eventos_seguridad`). `SeguridadAccesoConfig`
+      conecta las clases de dominio planas a los almacenes JPA. Puerto 8083
+      (siguiente disponible tras 8081/8082).
+      TDD: 8 tests HTTP nuevos (`SeguridadAccesoHttpTest.kt`), verdes en el
+      primer intento junto con los 14 de dominio (22 tests totales en el
+      módulo). `./test.sh` en verde (repo completo).

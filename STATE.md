@@ -861,3 +861,17 @@ Docker/Postman.
   contrato; el almacén de identidades es autoalojado (Postgres propio, sin
   proveedor externo) para no comprometer RF-SA-009 antes de que exista una
   decisión explícita de integrar SSO/LDAP.
+- [x] T-24/T-25 (ver TODO.md para el detalle completo): contrato HTTP
+  (`spec-infra-servicios.md` §5, 7 endpoints) + implementación Spring Boot +
+  persistencia Postgres, puerto 8083. 8 tests HTTP nuevos, verdes junto con
+  los 14 de dominio (22 en el módulo). `./test.sh` en verde para todo el
+  repo. `spec-infra-servicios.md` §8 actualizada: el `[CLARIFICAR]` de
+  autenticación/autorización ya no es "el contexto no existe" — ahora es
+  "existe pero captura-ingesta/records-custodia todavía no lo llaman",
+  brecha explícita para una tarea futura, no resuelta aquí (alcance
+  deliberadamente acotado a construir Seguridad y Acceso, no a retrofitear
+  los otros dos servicios con una llamada cruzada nueva).
+Siguiente paso: falta Docker (Dockerfile + wiring en
+docker-compose.{saas,onprem}.yml + local-ports) y la colección Postman
+extendida con los endpoints nuevos, revalidada con Newman contra el stack
+real — mismo cierre que recibieron captura-ingesta/records-custodia (T-18).

@@ -23,9 +23,9 @@ cualquier otro código.
 ## 2. Decisión de arquitectura
 
 - **Cada bounded context es su propio proceso/servicio HTTP** (Victor,
-  2026-08-21) — no un monolito modular. Arranca con `captura-ingesta` y
-  `records-custodia`; el resto de los contextos adoptan el mismo patrón cuando
-  les toque turno.
+  2026-08-21) — no un monolito modular. Arrancó con `captura-ingesta` y
+  `records-custodia`; `seguridad-acceso` es el tercero (2026-08-25); el resto
+  de los contextos adoptan el mismo patrón cuando les toque turno.
 - **Framework de bootstrap: Spring Boot** — decisión activa (F1.D1,
   confirmada como no-aspiracional el 2026-08-21), no una spec nueva.
 - **Persistencia: Postgres por contexto, sin esquema compartido** — cada
@@ -112,30 +112,67 @@ implementado en el dominio todavía), RF-RC-008 (expediente electrónico — no
 implementado), RF-RC-010 (recuperación con evento de acceso — `consultar`
 existe pero sin el evento de auditoría de acceso que pide el RF).
 
-## 5. Formato de error y serialización
+## 5. Contrato mínimo — `seguridad-acceso`
+
+Traduce las funciones de
+`contexts/seguridad-acceso/.../SeguridadAcceso.kt` (T-23):
+`GestionDeAccesos` (identidades, autenticación, autorización) y
+`GestionDeRoles`.
+
+| Método y ruta | Dominio que invoca | RF |
+|---|---|---|
+| `POST /identidades` | `GestionDeAccesos.crearIdentidad(id, actor, credencial, roles)` | RF-SA-001, RF-SA-002 |
+| `POST /identidades/autenticacion` | `GestionDeAccesos.autenticar(actor, credencial, fecha)` | RF-SA-001 |
+| `POST /identidades/{id}/roles` | `GestionDeAccesos.asignarRol(id, rol)` | RF-SA-002 |
+| `DELETE /identidades/{id}/roles/{rol}` | `GestionDeAccesos.revocarRol(id, rol)` | RF-SA-002, RF-SA-006 |
+| `POST /roles` | `GestionDeRoles.crear(nombre, permisos)` | RF-SA-002 |
+| `POST /autorizacion` | `GestionDeAccesos.autorizar(identidadId, accion, tipoRecurso, nivelClasificacion, recurso, fecha)` | RF-SA-003, RF-SA-004, RF-SA-008 |
+| `GET /eventos-seguridad` | `GestionDeAccesos.eventosDeSeguridad` | RF-SA-005, RF-SA-010 |
+
+Mapeo de persistencia (estructura, no DDL):
+- `Identidad` (id, actor, credencialHash, estado, roles) → tabla `identidades`,
+  con `roles` como lista de nombres de rol (columna de texto/JSON, mismo
+  tratamiento que `inventario` en captura-ingesta) — cada nombre se resuelve
+  contra `roles` al reconstruir el dominio.
+- `Rol` (nombre, permisos) → tabla `roles`, con `permisos` serializado a JSON
+  (mismo tratamiento que `evidencia`/`series` en records-custodia).
+- `EventoSeguridad` (actor, fecha, tipo, recurso) → tabla `eventos_seguridad`,
+  de solo inserción (RF-SA-005/RNF-SA-003) — mismo tratamiento que
+  `eventos_auditoria` en records-custodia: `EntityManager.persist`, nunca
+  `merge`/`update`.
+
+Fuera de alcance de esta spec: la integración real de `captura-ingesta` y
+`records-custodia` con este servicio (que sus endpoints efectivamente llamen
+a `POST /autorizacion` antes de responder) — sigue sin implementarse; ver §8
+[CLARIFICAR] actualizado.
+
+## 6. Formato de error y serialización
 
 `[CLARIFICAR]` — esta spec no fija un formato de error HTTP (RFC 7807 u otro)
 ni convenciones de serialización (fechas ISO-8601, `snake_case` vs
 `camelCase` en JSON, etc.). Es una decisión de implementación transversal a
-ambos contextos; la tarea que ejecute esta spec debe fijarla y aplicarla
-consistente en los dos servicios, documentándola en el código — no queda
+los tres contextos; la tarea que ejecute esta spec debe fijarla y aplicarla
+consistente en todos los servicios, documentándola en el código — no queda
 bloqueada por esto porque no depende de una decisión de negocio, es
 convención técnica interna.
 
-## 6. Trazabilidad
+## 7. Trazabilidad
 
 | Elemento | Traza a |
 |---|---|
 | Un servicio HTTP por contexto | Decisión de Victor, 2026-08-21; P-07 (cortes verticales) |
 | Spring Boot | F1.D1; confirmado activo 2026-08-21 |
 | Postgres por contexto, sin esquema compartido | Decisión de Victor, 2026-08-21; P-02 (mismo código base, ambos modos de despliegue) |
-| Cada endpoint traduce un método de dominio ya probado | P-06 (spec antes de código); TDD ya aplicado en T-01..T-11 |
+| Cada endpoint traduce un método de dominio ya probado | P-06 (spec antes de código); TDD ya aplicado en T-01..T-11, T-23 |
 
-## 7. Decisiones pendientes / preguntas abiertas
+## 8. Decisiones pendientes / preguntas abiertas
 
 - **[CLARIFICAR]** Formato de error HTTP y convenciones de serialización
-  (§5) — decisión técnica, no bloqueante.
-- **[CLARIFICAR]** Autenticación/autorización de estos endpoints — el
-  contexto Seguridad y Acceso todavía no existe; hasta que exista, estos
-  servicios no deben exponerse fuera de una red de confianza (docker-compose
-  interno). No es alcance de T-16/T-17.
+  (§6) — decisión técnica, no bloqueante.
+- **[CLARIFICAR]** Integración real de autenticación/autorización: el
+  contexto Seguridad y Acceso ya existe como servicio (T-23, 2026-08-25,
+  §5), pero `captura-ingesta` y `records-custodia` todavía no lo llaman —
+  sus endpoints siguen sin exigir una decisión de `POST /autorizacion` antes
+  de responder. Hasta que esa integración se implemente, ambos servicios no
+  deben exponerse fuera de una red de confianza (docker-compose interno),
+  igual que antes de que Seguridad y Acceso existiera.

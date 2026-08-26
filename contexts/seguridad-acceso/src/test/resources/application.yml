@@ -1,0 +1,18 @@
+# Mismo tratamiento que captura-ingesta (T-16): sin Docker disponible en el
+# entorno de ejecución del agente, H2 en modo de compatibilidad Postgres
+# sustituye a Postgres real solo para poder correr `./test.sh` aquí. Este
+# contexto no tiene columnas binarias (a diferencia de records-custodia, que
+# por eso evita MODE=PostgreSQL), así que el modo de compatibilidad es seguro
+# aquí. El invariante de solo-anexado de `eventos_seguridad` (RF-SA-005) lo
+# garantiza AlmacenDeEventosDeSeguridadJpa (solo usa EntityManager.persist,
+# nunca merge/update) — es independiente del motor de base de datos.
+spring:
+  datasource:
+    url: jdbc:h2:mem:seguridad-acceso;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
