@@ -150,3 +150,12 @@
       TDD: 8 tests HTTP nuevos (`SeguridadAccesoHttpTest.kt`), verdes en el
       primer intento junto con los 14 de dominio (22 tests totales en el
       módulo). `./test.sh` en verde (repo completo).
+- [x] T-26 Dockerfile real de seguridad-acceso (mismo patrón que
+      `contexts/records-custodia/Dockerfile`: build multi-módulo, tests
+      omitidos porque `./test.sh` ya los corre en CI) + wiring en
+      `deploy/docker-compose.{saas,onprem}.yml` (servicio `seguridad-acceso`,
+      sin `ports:` — mismo criterio de red interna que los otros dos hasta
+      que exista la integración real) y en
+      `deploy/docker-compose.local-ports.yml` (puerto 8083, solo para
+      Postman/curl desde el host).
+

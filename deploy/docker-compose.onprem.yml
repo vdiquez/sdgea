@@ -3,14 +3,15 @@
 # Mismo código base que docker-compose.saas.yml. En este modo TODA capacidad
 # externa debe ser autoalojada — el appliance debe operar sin conectividad
 # saliente, incluso en entornos aislados (P-10). Dockerfiles reales ya
-# wireados para captura-ingesta y records-custodia (T-18,
-# specs/spec-infra-servicios.md) — son los mismos que en modo SaaS (P-02: un
-# solo código base), sin ninguna capacidad externa de P-03 todavía.
+# wireados para captura-ingesta, records-custodia (T-18) y seguridad-acceso
+# (T-26, specs/spec-infra-servicios.md) — son los mismos que en modo SaaS
+# (P-02: un solo código base); seguridad-acceso en particular no tiene ninguna
+# capacidad externa de P-03 que abstraer (es autoalojado por diseño desde T-23,
+# no depende de un proveedor de identidad externo).
 #
-# TODO por contexto, cuando exista su Dockerfile: los mismos siete restantes
-# de docker-compose.saas.yml (seguridad-acceso, validacion-humana,
-# normalizacion, extraccion, clasificacion, enriquecimiento,
-# indexacion-busqueda).
+# TODO por contexto, cuando exista su Dockerfile: los seis restantes de
+# docker-compose.saas.yml (validacion-humana, normalizacion, extraccion,
+# clasificacion, enriquecimiento, indexacion-busqueda).
 #
 # TODO — implementaciones self-hosted de las seis capacidades de P-03, cada una
 # como contenedor local (candidatas a evaluar, no decididas todavía):
@@ -65,8 +66,23 @@ services:
       DB_PASSWORD: sgdea
     depends_on:
       - postgres
-    # Mismo tratamiento que captura-ingesta: sin `ports:` hasta que exista
-    # Seguridad y Acceso (specs/spec-infra-servicios.md §7).
+    # Mismo tratamiento que captura-ingesta: sin `ports:` hasta que
+    # captura-ingesta/records-custodia llamen de verdad a seguridad-acceso
+    # (specs/spec-infra-servicios.md §8 — el contexto ya existe, T-23/T-25,
+    # pero esa integración todavía no).
+
+  seguridad-acceso:
+    build:
+      context: ..
+      dockerfile: contexts/seguridad-acceso/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+    depends_on:
+      - postgres
 
 volumes:
   postgres-data:

@@ -3,12 +3,11 @@
 # Mismo código base que docker-compose.onprem.yml; lo que cambia por modo es la
 # IMPLEMENTACIÓN detrás de cada interfaz de P-03 (almacenamiento de objetos, OCR,
 # embeddings, inferencia LLM, índice vectorial, índice léxico), nunca el código de
-# orquestación. Dockerfiles reales ya wireados para captura-ingesta y
-# records-custodia (T-18, specs/spec-infra-servicios.md); el resto de contextos
-# los suma cuando tengan código.
+# orquestación. Dockerfiles reales ya wireados para captura-ingesta,
+# records-custodia (T-18) y seguridad-acceso (T-26, specs/spec-infra-servicios.md);
+# el resto de contextos los suma cuando tengan código.
 #
 # TODO por contexto, cuando exista su Dockerfile:
-#   - contexts/seguridad-acceso    (Kotlin/Spring)
 #   - contexts/validacion-humana   (Kotlin/Spring)
 #   - contexts/normalizacion       (Python/FastAPI)
 #   - contexts/extraccion          (Python/FastAPI)
@@ -64,8 +63,27 @@ services:
       DB_PASSWORD: sgdea
     depends_on:
       - postgres
-    # Mismo tratamiento que captura-ingesta: sin `ports:` hasta que exista
-    # Seguridad y Acceso (specs/spec-infra-servicios.md §7).
+    # Mismo tratamiento que captura-ingesta: sin `ports:` hasta que
+    # captura-ingesta/records-custodia llamen de verdad a seguridad-acceso
+    # (specs/spec-infra-servicios.md §8 — el contexto ya existe, T-23/T-25,
+    # pero esa integración todavía no).
+
+  # T-23/T-25: primer contexto Kotlin/Spring además de los dos originales.
+  # Sin `ports:` a propósito, mismo criterio que los otros dos — expone
+  # /autorizacion para que cualquier servicio de esta red lo consulte
+  # (`seguridad-acceso:8083`), pero no hace falta llegar a él desde el host.
+  seguridad-acceso:
+    build:
+      context: ..
+      dockerfile: contexts/seguridad-acceso/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+    depends_on:
+      - postgres
 
 volumes:
   postgres-data:
