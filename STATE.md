@@ -875,3 +875,30 @@ Siguiente paso: falta Docker (Dockerfile + wiring en
 docker-compose.{saas,onprem}.yml + local-ports) y la colección Postman
 extendida con los endpoints nuevos, revalidada con Newman contra el stack
 real — mismo cierre que recibieron captura-ingesta/records-custodia (T-18).
+
+- [x] T-26 (ver TODO.md): Dockerfile + wiring en
+  docker-compose.{saas,onprem,local-ports}.yml. Verificado en vivo — stack
+  de tres servicios construido y levantado con
+  `docker compose -f docker-compose.saas.yml -f docker-compose.local-ports.yml
+  up -d --build`; smoke test manual contra Postgres real (crear rol, crear
+  identidad, autenticar 200/401, autorizar PERMITIDO, eventos-seguridad).
+- [x] T-27 (ver TODO.md): colección Postman extendida (carpeta "3.
+  Seguridad-Acceso", 9 peticiones cubriendo los 7 endpoints reales) +
+  revalidación con Newman contra el mismo stack — 25/25 peticiones, 54/54
+  aserciones, dos corridas seguidas sin fallos. Stack bajado al terminar.
+
+**Seguridad y Acceso queda completo de punta a punta** (dominio → HTTP →
+persistencia → Docker → Postman/Newman), el mismo ciclo que captura-ingesta y
+records-custodia recibieron en F2/F3, ejecutado en modo agéntico en una sola
+jornada (2026-08-25) tal como Victor pidió. Ningún `[CLARIFICAR]` de la spec
+bloqueó el trabajo: los tres que quedaron abiertos en
+`specs/006-seguridad-acceso/spec.md` §8 (dónde se captura el nivel de
+clasificación, modelo RBAC/ABAC exacto, proveedor de identidad externo) son
+refinamientos de una decisión ya tomada con un valor por defecto razonable, no
+bloqueos — igual que los `[CLARIFICAR]` de captura-ingesta/records-custodia no
+bloquearon T-01..T-11 en su momento.
+Siguiente paso: decisión de Victor — otro bounded context (Validación Humana
+sería el complemento natural, ya que su interfaz consume permisos de
+Seguridad y Acceso), la integración real de captura-ingesta/records-custodia
+con `/autorizacion` (brecha anotada en spec-infra-servicios.md §8), diseño de
+UI/UX, o F4 (hilo comercial).

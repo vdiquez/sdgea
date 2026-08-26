@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "a1e2c3d4-5f60-4a7b-8c9d-sgdea0000001",
-    "name": "SGDEA - Corte vertical (captura-ingesta + records-custodia)",
-    "description": "Cubre los 14 endpoints reales de specs/spec-infra-servicios.md (T-16/T-17), en el mismo orden en que se probaron manualmente con curl. Corre la carpeta completa de arriba a abajo con el Collection Runner: cada request encadena su ID con la siguiente vía variables de entorno (lote_id, documento_id, trd_version). Requiere el stack levantado con el overlay de puertos locales:\n\ndocker compose -f deploy/docker-compose.saas.yml -f deploy/docker-compose.local-ports.yml up -d --build",
+    "name": "SGDEA - Corte vertical (captura-ingesta + records-custodia + seguridad-acceso)",
+    "description": "Cubre los 21 endpoints reales de specs/spec-infra-servicios.md (T-16/T-17/T-25), en el mismo orden en que se probaron manualmente con curl. Corre la carpeta completa de arriba a abajo con el Collection Runner: cada request encadena su ID con la siguiente vía variables de entorno (lote_id, documento_id, trd_version, identidad_id_sa, rol_sa, actor_sa). Requiere el stack levantado con el overlay de puertos locales:\n\ndocker compose -f deploy/docker-compose.saas.yml -f deploy/docker-compose.local-ports.yml up -d --build",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -681,6 +681,411 @@
             },
             "description": "Recorre TODOS los originales custodiados en la base — si corriste la colección varias veces, el reporte crece; el test solo exige que el documento de ESTA corrida aparezca sin discrepancia."
           }
+        }
+      ]
+    },
+    {
+      "name": "3. Seguridad-Acceso",
+      "item": [
+        {
+          "name": "16 Crear rol (RF-SA-002)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/roles",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "roles"
+              ]
+            },
+            "description": "RF-SA-002: alta de un rol con un permiso, sin cambios de código.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"{{rol_sa}}\",\n  \"permisos\": [\n    { \"accion\": \"leer\", \"tipoRecurso\": \"documento\", \"nivelClasificacionMaximo\": \"RESERVADA\" }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"rol_sa\", \"rol-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"rol creado con el permiso enviado\", () => {",
+                  "  pm.expect(body.nombre).to.eql(pm.environment.get(\"rol_sa\"));",
+                  "  pm.expect(body.permisos).to.have.lengthOf(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17 Crear identidad sin roles todavia (RF-SA-001, RF-SA-007)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/identidades",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "identidades"
+              ]
+            },
+            "description": "RF-SA-001/007: alta de identidad, todavía sin ningún rol asignado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{identidad_id_sa}}\",\n  \"actor\": \"{{actor_sa}}\",\n  \"credencial\": \"clave-postman\",\n  \"roles\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"actor_sa\", \"actor-postman-\" + Date.now());",
+                  "pm.environment.set(\"identidad_id_sa\", \"id-sa-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"la credencial nunca viaja en texto plano (RF-SA-007)\", () => {",
+                  "  pm.expect(body.credencialHash).to.be.a(\"string\").and.not.eql(\"clave-postman\");",
+                  "});",
+                  "pm.test(\"sin roles todavia\", () => pm.expect(body.roles).to.have.lengthOf(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "18 Asignar el rol a la identidad (RF-SA-002)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/identidades/{{identidad_id_sa}}/roles",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "identidades",
+                "{{identidad_id_sa}}",
+                "roles"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rol\": \"{{rol_sa}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"la identidad ya tiene el rol\", () => {",
+                  "  pm.expect(body.roles).to.have.lengthOf(1);",
+                  "  pm.expect(body.roles[0].nombre).to.eql(pm.environment.get(\"rol_sa\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19 Autenticar con credenciales correctas (RF-SA-001)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/identidades/autenticacion",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "identidades",
+                "autenticacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"{{actor_sa}}\",\n  \"credencial\": \"clave-postman\",\n  \"fecha\": \"2026-08-25T12:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"autentica la identidad correcta\", () => pm.expect(body.actor).to.eql(pm.environment.get(\"actor_sa\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "20 Autenticar con credenciales incorrectas -> 401 (RF-SA-001, specs-infra-servicios §6)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/identidades/autenticacion",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "identidades",
+                "autenticacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"{{actor_sa}}\",\n  \"credencial\": \"clave-equivocada\",\n  \"fecha\": \"2026-08-25T12:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"401 Unauthorized\", () => pm.response.to.have.status(401));",
+                  "const body = pm.response.json();",
+                  "pm.test(\"formato de error unificado\", () => pm.expect(body.error).to.be.a(\"string\").and.not.be.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "21 Autorizar cuando el rol cubre la accion -> PERMITIDO (RF-SA-003, RF-SA-004)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/autorizacion",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "autorizacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identidadId\": \"{{identidad_id_sa}}\",\n  \"accion\": \"leer\",\n  \"tipoRecurso\": \"documento\",\n  \"nivelClasificacion\": \"RESERVADA\",\n  \"fecha\": \"2026-08-25T12:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"PERMITIDO\", () => pm.expect(pm.response.json().resultado).to.eql(\"PERMITIDO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "22 Revocar el rol (RF-SA-002, RF-SA-006)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/identidades/{{identidad_id_sa}}/roles/{{rol_sa}}",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "identidades",
+                "{{identidad_id_sa}}",
+                "roles",
+                "{{rol_sa}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"la identidad ya no tiene el rol\", () => pm.expect(pm.response.json().roles).to.have.lengthOf(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "23 Autorizar tras revocar -> DENEGADO de inmediato (RF-SA-006)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/autorizacion",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "autorizacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identidadId\": \"{{identidad_id_sa}}\",\n  \"accion\": \"leer\",\n  \"tipoRecurso\": \"documento\",\n  \"nivelClasificacion\": \"RESERVADA\",\n  \"fecha\": \"2026-08-25T12:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"DENEGADO\", () => pm.expect(pm.response.json().resultado).to.eql(\"DENEGADO\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "24 Consultar eventos de seguridad (RF-SA-005, RF-SA-010)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/eventos-seguridad",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "eventos-seguridad"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const eventos = pm.response.json();",
+                  "pm.test(\"incluye la autenticacion exitosa, la fallida y ambas decisiones de autorizacion de este actor\", () => {",
+                  "  const deEsteActor = eventos.filter((e) => e.actor === pm.environment.get(\"actor_sa\"));",
+                  "  const tipos = deEsteActor.map((e) => e.tipo);",
+                  "  pm.expect(tipos).to.include(\"AUTENTICACION_EXITOSA\");",
+                  "  pm.expect(tipos).to.include(\"AUTENTICACION_FALLIDA\");",
+                  "  pm.expect(tipos).to.include(\"AUTORIZACION_PERMITIDA\");",
+                  "  pm.expect(tipos).to.include(\"AUTORIZACION_DENEGADA\");",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

@@ -1,11 +1,14 @@
 # Colección Postman — corte vertical
 
-Cubre los 15 endpoints reales de `specs/spec-infra-servicios.md` (captura-ingesta
-+ records-custodia), en el orden en que se probaron manualmente con `curl`
-durante F2/F3. 16 peticiones (dos de más, ambas deliberadas): publicar la misma
-versión de TRD dos veces para demostrar el fix del VETO de Codex (T-19), y
-validar un ítem como corrupto (RF-CI-006, T-02) antes de leer el conteo por
-estado — por eso la petición 02 espera un ítem ya `EN_CUARENTENA`.
+Cubre los 21 endpoints reales de `specs/spec-infra-servicios.md`
+(captura-ingesta + records-custodia + seguridad-acceso), en el orden en que se
+probaron manualmente con `curl`. 25 peticiones (cuatro de más sobre el total de
+endpoints, todas deliberadas): publicar la misma versión de TRD dos veces para
+demostrar el fix del VETO de Codex (T-19); validar un ítem como corrupto
+(RF-CI-006, T-02) antes de leer el conteo por estado — por eso la petición 02
+espera un ítem ya `EN_CUARENTENA`; y en Seguridad y Acceso (T-27), autenticar
+dos veces (correcta e incorrecta) y autorizar dos veces (antes y después de
+revocar el rol) para probar RF-SA-001 y RF-SA-006 de punta a punta.
 
 ## Levantar el stack (con puertos locales para Postman)
 
@@ -34,7 +37,9 @@ npx newman run SGDEA-coleccion.postman_collection.json -e SGDEA-local.postman_en
 
 Verificado (2026-08-22): 15/15 peticiones, 32/32 aserciones, dos corridas
 seguidas sin fallos. Reverificado (2026-08-23, tras T-02/RF-CI-006): 16/16
-peticiones, 35/35 aserciones, dos corridas seguidas sin fallos.
+peticiones, 35/35 aserciones, dos corridas seguidas sin fallos. Reverificado
+(2026-08-25, tras T-27/Seguridad y Acceso): 25/25 peticiones, 54/54
+aserciones, dos corridas seguidas sin fallos.
 
 ## Bajar el stack
 

@@ -158,4 +158,23 @@
       que exista la integración real) y en
       `deploy/docker-compose.local-ports.yml` (puerto 8083, solo para
       Postman/curl desde el host).
+- [x] T-27 Colección Postman extendida: carpeta nueva "3. Seguridad-Acceso"
+      (9 peticiones, 16→24 renumeradas dentro de la carpeta, cubriendo los 7
+      endpoints reales de §5: crear rol, crear identidad sin roles, asignar
+      rol, autenticar OK, autenticar mal -> 401, autorizar -> PERMITIDO,
+      revocar rol, autorizar tras revocar -> DENEGADO, consultar
+      eventos-seguridad). Variables de entorno nuevas:
+      `seguridad_acceso_base_url` (puerto 8083), `actor_sa`,
+      `identidad_id_sa`, `rol_sa` (generadas con timestamp, mismo patrón que
+      `documento_id`/`lote_id`, para que correr la colección varias veces no
+      colisione contra la restricción `unique` de `identidades.actor`).
+      Revalidada con el stack real levantado (`docker compose -f
+      docker-compose.saas.yml -f docker-compose.local-ports.yml up -d
+      --build`) y `npx newman run` — 25/25 peticiones, 54/54 aserciones, dos
+      corridas seguidas sin fallos; stack bajado al terminar.
+      **Con esto, Seguridad y Acceso (specs/006-seguridad-acceso/spec.md)
+      queda completo de punta a punta: dominio (T-23) → contrato HTTP (T-24)
+      → servicio + persistencia (T-25) → Docker (T-26) → Postman/Newman
+      (T-27) — mismo ciclo completo que recibieron captura-ingesta y
+      records-custodia.**
 
