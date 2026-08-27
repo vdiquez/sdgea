@@ -87,7 +87,8 @@ tablas, sin cambiar el contrato de los métodos.
 | `GET /documentos/{id}/original` | `consultar(id)` | RF-RC-001 |
 | `GET /documentos/{id}` | `consultarDocumento(id)` | RF-RC-001 |
 | `GET /documentos/{id}/procedencia` | `consultarProcedencia(id)` | RF-RC-002 |
-| `POST /documentos/{id}/decisiones` | `materializar(decision)` | RF-RC-004 |
+| `POST /documentos/{id}/decisiones` | `materializar(decision)` | RF-RC-004, RF-VH-009 (T-39) |
+| `GET /documentos/correcciones` | `correccionesPendientesDeRerevision()` | RF-VH-009 (T-39) |
 | `POST /documentos/{id}/verificacion-integridad` | `verificarIntegridad(id, actor, fecha)` | RF-RC-009 |
 | `POST /verificacion-integridad` | `verificarTodos(actor, fecha)` | RF-RC-009 |
 | `POST /sugerencias` | `CapaAnticorrupcionSugerencias.recibir(entrada, fecha)` | RF-RC-003 |
@@ -121,6 +122,30 @@ Fuera de alcance de esta spec: RF-RC-007 (cálculo de retención — no
 implementado en el dominio todavía), RF-RC-008 (expediente electrónico — no
 implementado), RF-RC-010 (recuperación con evento de acceso — `consultar`
 existe pero sin el evento de auditoría de acceso que pide el RF).
+
+**RF-VH-009 (T-39)**: `DecisionHumana`/`EventoAuditoria` ganan un campo
+`esCorreccion: Boolean` (default `false`, así que ningún otro sitio que
+construye `EventoAuditoria` en este contexto necesitó cambiar). Lo asigna el
+llamador (Validación Humana ya sabe si la decisión coincidió con la
+sugerencia que la originó o la corrigió, `GestionDeDecisiones.
+construirDecision`) — records-custodia no recalcula esa comparación, solo la
+persiste y la expone en `GET /documentos/correcciones`, cada entrada marcada
+con `estadoDeRevision: "PENDIENTE_DE_REREVISION"`. El mecanismo real de
+re-revisión sigue `[CLARIFICAR]` (`specs/eval/edd-harness.md` §9); este
+endpoint solo declara honestamente que la corrección todavía no se promovió
+a verdad de referencia, no implementa el flujo de revisión en sí ni decide
+cuándo se promueve.
+
+**Bug real encontrado y corregido en T-39, en la verificación contra Docker
+real (no en los tests de Gradle, que usan H2 con `ddl-auto: create-drop` y
+por eso nunca lo habrían expuesto)**: agregar `es_correccion` como columna
+`NOT NULL` sin `columnDefinition` generó `ALTER TABLE ... ADD COLUMN
+es_correccion boolean not null` — Postgres lo rechaza sobre una tabla
+`eventos_auditoria` que ya tiene filas ("contains null values"), porque
+`ddl-auto: update` no es una herramienta de migración real (ya advertido en
+`application.yml`). Corregido con `@Column(columnDefinition = "boolean not
+null default false")`, que le da a la columna un valor por defecto real en
+la base de datos, no solo en el objeto Kotlin.
 
 ## 5. Contrato mínimo — `seguridad-acceso`
 
@@ -160,16 +185,16 @@ a `POST /autorizacion` antes de responder) — sigue sin implementarse; ver §9
 
 Traduce las funciones de
 `contexts/validacion-humana/.../ValidacionHumana.kt` (T-29, ampliado en
-T-38): `ColaDeRevision`, `GestionDeDecisiones` y `GestionDeLimites`. A
-diferencia de los otros tres contextos, este **no tiene persistencia
-propia** (`specs/007-validacion-humana/spec.md` §3): sus cuatro puertos de
-dominio (`FuenteDeSugerencias`, `RegistradorDeDecisiones`,
-`VerificadorDePermisos`, `ConfirmadorDeLimites`) los implementan adaptadores
-HTTP reales (`integracion/IntegracionHttp.kt`, T-30/T-38) contra
-`records-custodia`, `seguridad-acceso` y `normalizacion` — la **primera
-integración HTTP real entre servicios** de este proyecto; hasta T-29/T-30
-cada contexto solo se había probado de forma aislada (Postman contra uno a
-la vez).
+T-38/T-39): `ColaDeRevision`, `GestionDeDecisiones`, `GestionDeLimites` y
+`ColaDeLimites`. A diferencia de los otros tres contextos, este **no tiene
+persistencia propia** (`specs/007-validacion-humana/spec.md` §3): sus cinco
+puertos de dominio (`FuenteDeSugerencias`, `RegistradorDeDecisiones`,
+`VerificadorDePermisos`, `ConfirmadorDeLimites`,
+`FuenteDeSugerenciasDeLimites`) los implementan adaptadores HTTP reales
+(`integracion/IntegracionHttp.kt`, T-30/T-38/T-39) contra `records-custodia`,
+`seguridad-acceso` y `normalizacion` — la **primera integración HTTP real
+entre servicios** de este proyecto; hasta T-29/T-30 cada contexto solo se
+había probado de forma aislada (Postman contra uno a la vez).
 
 | Método y ruta | Dominio que invoca | RF |
 |---|---|---|
@@ -179,6 +204,8 @@ la vez).
 | `POST /decisiones` | `GestionDeDecisiones.decidir(...)` | RF-VH-003, RF-VH-006, RF-VH-007, RF-VH-008 |
 | `POST /decisiones/masivo` | `GestionDeDecisiones.aprobarEnBloque(...)` | RF-VH-004, RF-VH-006, RF-VH-007 |
 | `POST /unidades/{unidadId}/confirmacion-limites` | `GestionDeLimites.confirmar(...)` | RF-VH-005, RF-VH-007 |
+| `GET /colas/limites?identidadId=` | `ColaDeLimites.ordenadasPorConfianza()` (tras verificar permiso) | RF-VH-001, RF-VH-002, RF-VH-007 (T-39) |
+| `GET /colas/limites/estado` | `ColaDeLimites.volumenYAntiguedadDeLaCola()` | RF-VH-010 (T-39) |
 
 Variables de entorno: `RECORDS_CUSTODIA_BASE_URL`, `SEGURIDAD_ACCESO_BASE_URL`,
 `NORMALIZACION_BASE_URL` (T-38; mismo patrón que `DB_HOST`/`DB_PORT` en los
@@ -229,6 +256,45 @@ para cualquier futuro cliente HTTP Kotlin→Python de este proyecto (los
 cuatro contextos probabilísticos restantes seguirán el mismo patrón
 Python/FastAPI/uvicorn que Normalización).
 
+**RF-VH-001/002/010 (T-39)**: la spec (`specs/007-validacion-humana/spec.md`
+§5, RF-VH-001) exige agregar sugerencias de los cuatro contextos
+probabilísticos (Clasificación, Enriquecimiento, Normalización, Extracción)
+"organizadas por tipo". `ColaDeLimites` + `FuenteDeSugerenciasDeLimitesHttp`
+cierran la segunda cola real: agrega las unidades con sugerencia de límites
+pendiente de Normalización (`GET /unidades/pendientes-de-limites`, §7),
+ordenadas por confianza — una cola separada de `/colas/clasificacion`, no
+una variante: revisar una sugerencia de límites no produce una
+`DecisionDeClasificacion`, produce una confirmación (T-38). Sin ruta
+`/masivo`: el `[CLARIFICAR]` de la spec (§8) sobre aprobación masiva para
+sugerencias distintas de clasificación sigue abierto, no se inventa aquí.
+**Extracción y Enriquecimiento quedan fuera de esta tarea, no por decisión
+de diseño sino porque ninguno de los dos existe todavía como servicio real**
+(`contexts/extraccion` y `contexts/enriquecimiento` son solo un
+`main.py`/`pyproject.toml` de andamiaje, sin dominio ni HTTP) — mismo
+criterio que RF-VH-005 esperó a que Normalización existiera (T-33) antes de
+cerrarse en T-38; RF-VH-001 quedará completo cuando esos dos contextos
+existan y expongan su propio `GET .../pendientes` análogo.
+
+Consumidor de `GET /unidades/pendientes-de-limites` (Normalización, Python):
+Jackson necesitó mapeo explícito de campos snake_case
+(`integracion/Dtos.kt`, `@JsonProperty`) por primera vez en este contexto —
+hasta T-38, las respuestas de Normalización que Validación Humana consumía
+se descartaban sin parsear (`ConfirmadorDeLimitesHttp` usa `Map::class.java`
+y no lee el cuerpo). `@JsonIgnoreProperties(ignoreUnknown = true)` porque
+`UnidadPendienteDeLimites` solo necesita un subconjunto de lo que
+Normalización expone (id, lote_id y la sugerencia de límites), no el
+objeto completo.
+
+**RF-VH-009 (T-39)**: ver §4 (records-custodia) para el contrato completo de
+`GET /documentos/correcciones` y el bug real de DDL encontrado y corregido
+en la verificación contra Docker. Del lado de Validación Humana, el único
+cambio es que `RegistradorDeDecisionesHttp.materializar` ahora envía
+`esCorreccion = decision.tipo == TipoDeDecision.CORRECCION` — un dato que
+`GestionDeDecisiones.construirDecision` ya calculaba y descartaba antes de
+T-39 (la respuesta HTTP inmediata al llamador sí incluía `tipo`, pero
+records-custodia nunca lo recibía, así que no había ningún registro
+durable de qué decisiones habían sido correcciones).
+
 ## 7. Contrato mínimo — `normalizacion`
 
 Traduce las funciones de `contexts/normalizacion/dominio.py` (T-33):
@@ -246,6 +312,7 @@ sin dependencias de framework, `pytest`, dataclasses `frozen=True`.
 |---|---|---|
 | `POST /unidades` | `recibir_item(...)` | RF-NO-001, RF-NO-003 |
 | `GET /unidades/{id}` | consulta directa del almacén | — |
+| `GET /unidades/pendientes-de-limites` | `pendientes_de_limites(...)` | RF-VH-001 (T-39) |
 | `POST /unidades/{id}/sugerencia-limites` | `recibir_sugerencia_de_limites(...)` | RF-NO-002 |
 | `POST /unidades/{id}/confirmacion-limites` | `confirmar_limites(...)` | RF-NO-004 |
 | `POST /unidades/{id}/normalizacion` | `normalizar(...)` | RF-NO-005 |
@@ -258,6 +325,16 @@ sin dependencias de framework, `pytest`, dataclasses `frozen=True`.
 /unidades/{id}/normalizacion`, `POST /unidades/{id}/validacion`, `POST
 /unidades/{id}/entrega` (actor y fecha obligatorios en el cuerpo) — añadidos
 en el hallazgo V-01 (ver más abajo) para que cada transición sea atribuible.
+
+**RF-VH-001 (T-39)**: `GET /unidades/pendientes-de-limites` filtra
+`estado == PENDIENTE_DE_LIMITES and sugerencia_de_limites is not None` —
+mismo criterio que `documentosSinClasificar`/`sugerenciasPendientes` en
+records-custodia (T-28): una unidad sin sugerencia todavía no tiene nada que
+un humano pueda revisar. Declarado ANTES de `GET /unidades/{id}` en
+`api.py`: a diferencia de Spring MVC (que resuelve por especificidad de
+patrón, ver §4 y §6), FastAPI/Starlette resuelve rutas por orden de
+declaración — si `GET /unidades/{id}` fuera primero, "pendientes-de-limites"
+se interpretaría como un `{id}` literal y esta ruta nunca se alcanzaría.
 
 Mapeo de persistencia (estructura, no DDL): `UnidadDocumentalCandidata` →
 tabla `unidades_documentales`, con procedencia/sugerencia/confirmación
@@ -314,6 +391,7 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
 | Cada endpoint traduce un método de dominio ya probado | P-06 (spec antes de código); TDD ya aplicado en T-01..T-11, T-23, T-29, T-33 |
 | validacion-humana como orquestador HTTP real, sin persistencia propia | Decisión de Victor, 2026-08-26; specs/007-validacion-humana/spec.md §3 |
 | RF-VH-005 cerrado (Validación Humana confirma límites vía Normalización) | Decisión de Victor, 2026-08-27 ("Cierra el ciclo RF-VH-005"), TODO.md T-38 |
+| RF-VH-001/002/010/009 ampliados (cola de límites; correcciones pendientes de re-revisión) | Decisión de Victor, 2026-08-27 ("Si, sigamos con T-39"), TODO.md T-39 |
 
 ## 10. Decisiones pendientes / preguntas abiertas
 
@@ -337,3 +415,16 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
   una forma de marcarlos `Entregado` (RF-CI-010 sigue sin implementar, ver
   §3). `POST /unidades` de Normalización funciona hoy con los datos que le
   pase el llamador directamente.
+- RF-VH-001 (T-39, parcial): las colas de clasificación (records-custodia) y
+  de límites (Normalización) ya agregan sugerencias reales; Extracción y
+  Enriquecimiento quedan pendientes **porque ninguno de los dos existe
+  todavía como servicio** (`contexts/extraccion`/`contexts/enriquecimiento`
+  son solo andamiaje) — no es una decisión de negocio ni un `[CLARIFICAR]`,
+  es una dependencia real que no existe. Se completará cuando esos contextos
+  tengan dominio y HTTP.
+- **[CLARIFICAR]** Mecanismo de re-revisión de correcciones (RF-VH-009):
+  `GET /documentos/correcciones` en records-custodia (T-39) expone las
+  correcciones marcadas `PENDIENTE_DE_REREVISION`, pero cómo se re-revisan y
+  se promueven a verdad de referencia del set patrón sigue
+  `[CLARIFICAR]` — ya lo estaba en `specs/eval/edd-harness.md` §9 antes de
+  esta tarea; T-39 no lo resuelve, solo expone las candidatas.

@@ -63,8 +63,25 @@ class DocumentosController(
                 fecha = request.fecha,
                 sugerenciasReferenciadas = request.sugerenciasReferenciadas,
                 clasificacionResultante = request.clasificacionResultante,
+                esCorreccion = request.esCorreccion,
             ),
         )
+
+    // RF-VH-009 (T-39). A diferencia de FastAPI/Starlette (normalizacion,
+    // GET /unidades/pendientes-de-limites), Spring MVC no resuelve rutas por
+    // orden de declaración: elige el patrón más específico para cada
+    // petición, así que "/correcciones" nunca choca con "/{id}" sin importar
+    // el orden en que aparezcan aquí.
+    @GetMapping("/correcciones")
+    fun correcciones(): List<CorreccionPendienteDeRerevisionResponse> =
+        custodia.correccionesPendientesDeRerevision().map {
+            CorreccionPendienteDeRerevisionResponse(
+                actor = it.actor,
+                fecha = it.fecha,
+                estadoAnterior = it.estadoAnterior,
+                estadoPosterior = it.estadoPosterior,
+            )
+        }
 
     @PostMapping("/{id}/verificacion-integridad")
     fun verificarIntegridad(@PathVariable id: String, @RequestBody request: VerificacionRequest): ResultadoVerificacionIntegridad =

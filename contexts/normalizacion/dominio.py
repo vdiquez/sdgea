@@ -270,3 +270,17 @@ def contar_por_estado(unidades: list[UnidadDocumentalCandidata]) -> ConteoPorEst
     for unidad in unidades:
         por_estado[unidad.estado] = por_estado.get(unidad.estado, 0) + 1
     return ConteoPorEstado(por_estado=por_estado, total=len(unidades))
+
+
+# RF-VH-001 (specs/007-validacion-humana/spec.md, T-39): Validación Humana
+# necesita agregar sugerencias de límites que todavía no tienen confirmación
+# humana, a través de todas las unidades, no de una a la vez (mismo criterio
+# que `documentosSinClasificar`/`sugerenciasPendientes` en records-custodia,
+# T-28). Una unidad sin `sugerencia_de_limites` todavía no tiene nada que un
+# humano pueda revisar, así que no cuenta como pendiente de revisión.
+def pendientes_de_limites(unidades: list[UnidadDocumentalCandidata]) -> list[UnidadDocumentalCandidata]:
+    return [
+        unidad
+        for unidad in unidades
+        if unidad.estado == EstadoUnidadDocumental.PENDIENTE_DE_LIMITES and unidad.sugerencia_de_limites is not None
+    ]

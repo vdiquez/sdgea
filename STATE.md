@@ -1258,19 +1258,113 @@ plano (sin `src/`), `pytest`, dataclasses `frozen=True` para value objects,
   `specs/spec-infra-servicios.md` §6 actualizada (contrato + diagnóstico
   completo del bug) y §9/§10 (RF-VH-005 ya no aparece como brecha abierta).
 
-Siguiente paso: con V-01, V-02 y ahora RF-VH-005/T-38 cerrados, la revisión
-acumulada de Codex solo deja pendiente T-39 (no priorizado por Victor
-todavía). Cinco de los nueve bounded contexts están implementados; ahora con
-**dos** integraciones cruzadas reales (Records/Custodia↔Seguridad y
-Acceso↔Validación Humana desde T-32, y Validación Humana↔Normalización desde
-T-38) — Normalización sigue siendo el único sin una fuente real de
-Captura/Ingesta (RF-NO-001 asume que `lote_id`/`item_ingesta_id`/`procedencia`
-ya llegan en la petición). Quedan 4 contextos probabilísticos sin
-implementar (Extracción, Clasificación, Enriquecimiento, Indexación y
-Búsqueda) — todos seguirían el mismo patrón Python/FastAPI/uvicorn que
-Normalización estableció, y ahora con la lección de T-38 ya documentada
-(fijar HTTP/1.1 explícito en cualquier cliente RestTemplate hacia ellos).
-Opciones abiertas para Victor: T-39 (completar las colas de Validación
-Humana para Normalización/Extracción/Enriquecimiento), otro contexto
-probabilístico, la brecha de autorización en captura-ingesta/records-custodia,
-diseño de UI/UX, o F4.
+- [x] T-39 (decisión de Victor, 2026-08-27: "Si, sigamos con T-39") — cola de
+  límites en Validación Humana (parcial) y correcciones expuestas como
+  candidatas a re-revisión.
+  **RF-VH-001/002/010**: nuevo `pendientes_de_limites(unidades)` en
+  Normalización — filtra `PENDIENTE_DE_LIMITES` con `sugerencia_de_limites`
+  ya recibida (mismo criterio que `sugerenciasPendientes` en records-custodia,
+  T-28) — expuesto en `GET /unidades/pendientes-de-limites`. En Validación
+  Humana: `UnidadPendienteDeLimites` (dominio local, independiente del tipo
+  de Normalización), puerto `FuenteDeSugerenciasDeLimites`, clase
+  `ColaDeLimites` (ordenar por confianza + volumen/antigüedad, sin
+  aprobación masiva — ese `[CLARIFICAR]` de la spec sigue abierto) y
+  adaptador HTTP real `FuenteDeSugerenciasDeLimitesHttp` — primer consumidor
+  de ese endpoint, y primera vez que Jackson en este contexto necesita mapeo
+  explícito de JSON snake_case (`@JsonProperty`, `@JsonIgnoreProperties
+  (ignoreUnknown = true)`), porque hasta ahora las respuestas de Normalización
+  que Validación Humana consumía se descartaban sin parsear. Nuevos endpoints
+  `GET /colas/limites` y `GET /colas/limites/estado`, mismo path que
+  Normalización expone (`/unidades/pendientes-de-limites`) por simetría.
+  **Extracción y Enriquecimiento quedan fuera de RF-VH-001, documentado
+  explícitamente (no es un `[CLARIFICAR]`, es una dependencia real que
+  falta)**: `contexts/extraccion` y `contexts/enriquecimiento` son solo
+  `main.py`/`pyproject.toml` de andamiaje, sin dominio ni HTTP — se
+  completará cuando esos dos contextos existan, mismo criterio que
+  RF-VH-005 esperó a que Normalización existiera antes de cerrarse (T-38).
+  **RF-VH-009**: `EventoAuditoria`/`DecisionHumana` en records-custodia
+  ganan `esCorreccion: Boolean` (default `false`, ningún otro sitio que
+  construye `EventoAuditoria` necesitó cambiar); `materializar` lo persiste
+  tal cual lo recibe — no lo recalcula, porque Validación Humana ya sabía si
+  la decisión coincidió con la sugerencia o la corrigió
+  (`GestionDeDecisiones.construirDecision`/`TipoDeDecision`) y antes de T-39
+  ese dato se calculaba, se devolvía al llamador inmediato de VH y se
+  descartaba — records-custodia nunca lo recibía, así que no existía ningún
+  registro durable de qué decisiones habían sido correcciones. Nuevo
+  `correccionesPendientesDeRerevision()` + `GET /documentos/correcciones`,
+  cada entrada devuelta con `estadoDeRevision: "PENDIENTE_DE_REREVISION"`
+  explícito. El mecanismo real de re-revisión sigue `[CLARIFICAR]`
+  (`specs/eval/edd-harness.md` §9, ya lo estaba antes de esta tarea) — este
+  endpoint solo declara honestamente que la corrección no se ha promovido a
+  verdad de referencia, no decide cómo ni cuándo se promueve.
+  TDD: 3 tests nuevos en `normalizacion` (`TestPendientesDeLimites` en
+  dominio y API, 40/40 en el módulo); 8 tests nuevos en `validacion-humana`
+  (`ColaDeLimitesTest` en dominio, dos tests de integración con
+  `MockRestServiceServer` — uno de ellos contra el JSON snake_case real que
+  Normalización produce, verificando que los campos no mapeados no rompen la
+  deserialización — y tests HTTP para `/colas/limites` y para `esCorreccion`
+  en `materializar`, 31/31 en el módulo); 3 tests nuevos en `records-custodia`
+  (`CorreccionesPendientesDeRerevisionTest` en dominio y un test HTTP,
+  37/37 en el módulo). `./test.sh` completo del repo en verde.
+  **Dos bugs reales encontrados y corregidos en la verificación contra
+  Docker real, ninguno detectado por los tests de Gradle/pytest** (que usan
+  dobles en memoria o H2/`ddl-auto: create-drop`, nunca Postgres real con
+  filas ya existentes):
+  1. Ruteo: `GET /unidades/pendientes-de-limites` debía declararse ANTES de
+     `GET /unidades/{id}` en `api.py`. A diferencia de Spring MVC (resuelve
+     por especificidad de patrón, sin importar el orden), FastAPI/Starlette
+     resuelve por orden de declaración — si `{id}` fuera primero,
+     "pendientes-de-limites" se interpretaría como un id literal y la ruta
+     nueva nunca se alcanzaría. Detectado antes de llegar a Docker (test de
+     `test_api.py` escrito a propósito para esto), corregido reordenando.
+  2. DDL: agregar `es_correccion boolean not null` sin `DEFAULT` generó
+     `ALTER TABLE eventos_auditoria ADD COLUMN es_correccion boolean not
+     null` — Postgres lo rechaza sobre una tabla que ya tiene filas
+     ("contains null values"), porque `ddl-auto: update` no es una
+     herramienta de migración real (ya advertido en el propio
+     `application.yml` de records-custodia). Diagnosticado leyendo los logs
+     de arranque de records-custodia contra el stack Docker real
+     (`GenerationTarget encountered exception accepting command`), corregido
+     con `@Column(columnDefinition = "boolean not null default false")` y
+     confirmado reiniciando el volumen de Postgres (`down -v`) para partir
+     de un esquema limpio.
+  Colección Postman: rol de la carpeta 4 (T-32) ampliado con el permiso
+  `confirmar`/`documento` (ya lo tenía desde T-38); carpeta "6. Cierre
+  RF-VH-005..." renombrada a "6. Cierre RF-VH-005, colas de límites y
+  correcciones (T-38/T-39)" y ampliada de 3 a 11 peticiones (43-53): 46-49
+  demuestran la cola de límites (segunda unidad en Normalización → sugerencia
+  → `GET /colas/limites` la incluye, ordenada por confianza → `GET
+  /colas/limites/estado` expone volumen); 50-53 demuestran una corrección
+  real de punta a punta (documento → sugerencia → decisión con serie distinta
+  a la sugerida → `GET /documentos/correcciones` la incluye marcada
+  `PENDIENTE_DE_REREVISION`, con el actor correcto). Revalidada con los
+  cinco servicios corriendo a la vez — la primera corrida encontró el bug de
+  DDL de arriba; corregido y confirmado con dos corridas seguidas limpias
+  después: 54/54 peticiones, 97/97 aserciones.
+  `specs/spec-infra-servicios.md` §4 (records-custodia: nuevo endpoint +
+  campo `esCorreccion` + diagnóstico del bug de DDL), §6 (validacion-humana:
+  nuevos endpoints de cola de límites + nota sobre Extracción/Enriquecimiento
+  + nota sobre el mapeo snake_case), §7 (normalizacion: nuevo endpoint +
+  nota sobre el orden de rutas en FastAPI), §9/§10 (trazabilidad y brechas
+  actualizadas) — todas actualizadas.
+
+Siguiente paso: con V-01, V-02, RF-VH-005/T-38 y ahora RF-VH-001(parcial)/
+RF-VH-009/T-39 cerrados, la revisión acumulada de Codex no deja ningún
+hallazgo pendiente sin abordar (el resto de RF-VH-001, para Extracción y
+Enriquecimiento, está documentado como dependencia real faltante, no como
+tarea abierta de esta revisión). Cinco de los nueve bounded contexts están
+implementados; ahora con **dos** integraciones cruzadas reales
+(Records/Custodia↔Seguridad y Acceso↔Validación Humana desde T-32, y
+Validación Humana↔Normalización desde T-38/T-39) — Normalización sigue
+siendo el único sin una fuente real de Captura/Ingesta (RF-NO-001 asume que
+`lote_id`/`item_ingesta_id`/`procedencia` ya llegan en la petición). Quedan
+4 contextos probabilísticos sin implementar (Extracción, Clasificación,
+Enriquecimiento, Indexación y Búsqueda) — todos seguirían el mismo patrón
+Python/FastAPI/uvicorn que Normalización estableció, y ahora con dos
+lecciones ya documentadas para cuando existan: fijar HTTP/1.1 explícito en
+cualquier cliente RestTemplate hacia ellos (T-38), y declarar en FastAPI las
+rutas literales antes que las rutas con `{id}` que las puedan capturar
+(T-39). Opciones abiertas para Victor: implementar Extracción o
+Enriquecimiento (cerraría RF-VH-001 del todo y añadiría un contexto
+probabilístico más), la brecha de autorización en
+captura-ingesta/records-custodia, diseño de UI/UX, o F4.

@@ -14,6 +14,7 @@ from dominio import (
     entregar,
     marcar_cuarentena_o_rechazo,
     normalizar,
+    pendientes_de_limites,
     recibir_item,
     recibir_sugerencia_de_limites,
 )
@@ -243,3 +244,26 @@ class TestAuditoriaDeTransiciones:
 
         assert evento.estado_anterior == "PENDIENTE_DE_LIMITES"
         assert evento.tipo == "VALIDACION_APLICADA"
+
+
+# RF-VH-001 (T-39) · Agregación de unidades con sugerencia de límites pendiente de confirmación
+class TestPendientesDeLimites:
+    def test_una_unidad_con_sugerencia_y_sin_confirmar_aparece_como_pendiente(self):
+        unidad = _unidad_pendiente()
+        sugerencia = SugerenciaDeLimites(modelo_id="m", evidencia=[], confianza=0.4, fecha=PROCEDENCIA.fecha)
+        con_sugerencia, _ = recibir_sugerencia_de_limites(unidad, sugerencia)
+
+        pendientes = pendientes_de_limites([con_sugerencia])
+
+        assert pendientes == [con_sugerencia]
+
+    def test_una_unidad_sin_sugerencia_todavia_no_es_pendiente_de_revision(self):
+        assert pendientes_de_limites([_unidad_pendiente()]) == []
+
+    def test_una_unidad_ya_confirmada_deja_de_ser_pendiente_aunque_tenga_sugerencia(self):
+        unidad = _unidad_pendiente()
+        sugerencia = SugerenciaDeLimites(modelo_id="m", evidencia=[], confianza=0.4, fecha=PROCEDENCIA.fecha)
+        con_sugerencia, _ = recibir_sugerencia_de_limites(unidad, sugerencia)
+        confirmada, _ = confirmar_limites(con_sugerencia, actor="archivista-1", fecha=PROCEDENCIA.fecha)
+
+        assert pendientes_de_limites([confirmada]) == []

@@ -24,6 +24,21 @@ data class DecisionRequest(
     val fecha: Instant,
     val sugerenciasReferenciadas: List<Sugerencia> = emptyList(),
     val clasificacionResultante: Clasificacion,
+    val esCorreccion: Boolean = false,
+)
+
+// RF-VH-009 (T-39): respuesta de GET /documentos/correcciones — envuelve el
+// evento de auditoría de una decisión-corrección con un campo explícito que
+// marca su estado frente al set patrón del arnés. El mecanismo real de
+// re-revisión sigue [CLARIFICAR] (specs/eval/edd-harness.md §9); este campo
+// solo declara honestamente que todavía no se promovió a verdad de
+// referencia, no implementa el flujo de revisión en sí.
+data class CorreccionPendienteDeRerevisionResponse(
+    val actor: String,
+    val fecha: Instant,
+    val estadoAnterior: String?,
+    val estadoPosterior: String?,
+    val estadoDeRevision: String = "PENDIENTE_DE_REREVISION",
 )
 
 data class VerificacionRequest(

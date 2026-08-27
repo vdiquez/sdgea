@@ -200,6 +200,32 @@ class TestConteoPorEstado:
         assert response.json()["sin_perdida_silenciosa"] is False
 
 
+# RF-VH-001 (T-39) · Agregación de sugerencias de límites pendientes
+class TestPendientesDeLimites:
+    def test_get_unidades_pendientes_de_limites_incluye_solo_las_que_tienen_sugerencia_sin_confirmar(self, client):
+        _crear_unidad(client, "unidad-14", "lote-009", "item-014", es_caso_trivial=False)
+        client.post(
+            "/unidades/unidad-14/sugerencia-limites",
+            json={"modelo_id": "emisor-ficticio-v0", "evidencia": ["pagina-1"], "confianza": 0.4, "fecha": FECHA},
+        )
+        _crear_unidad(client, "unidad-15", "lote-009", "item-015", es_caso_trivial=False)  # sin sugerencia todavía
+
+        response = client.get("/unidades/pendientes-de-limites")
+
+        assert response.status_code == 200
+        ids = [u["id"] for u in response.json()]
+        assert "unidad-14" in ids
+        assert "unidad-15" not in ids
+
+    def test_get_unidades_pendientes_de_limites_no_rompe_el_ruteo_de_get_unidades_id(self, client):
+        _crear_unidad(client, "unidad-16", "lote-009", "item-016", es_caso_trivial=False)
+
+        response = client.get("/unidades/unidad-16")
+
+        assert response.status_code == 200
+        assert response.json()["id"] == "unidad-16"
+
+
 # P-08 (hallazgo V-01 de la revisión acumulada de Codex, ver REVIEW.md) · toda
 # transición queda en una bitácora consultable, con actor, fecha y estado
 # anterior/posterior.

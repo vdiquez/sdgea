@@ -124,6 +124,7 @@ class AlmacenDeEventosJpa : AlmacenDeEventos {
                 tipo = evento.tipo,
                 estadoAnterior = evento.estadoAnterior,
                 estadoPosterior = evento.estadoPosterior,
+                esCorreccion = evento.esCorreccion,
             ),
         )
     }
@@ -131,7 +132,16 @@ class AlmacenDeEventosJpa : AlmacenDeEventos {
     override fun todos(): List<EventoAuditoria> =
         entityManager.createQuery("select e from EventoAuditoriaEntity e order by e.id", EventoAuditoriaEntity::class.java)
             .resultList
-            .map { EventoAuditoria(actor = it.actor, fecha = it.fecha, tipo = it.tipo, estadoAnterior = it.estadoAnterior, estadoPosterior = it.estadoPosterior) }
+            .map {
+                EventoAuditoria(
+                    actor = it.actor,
+                    fecha = it.fecha,
+                    tipo = it.tipo,
+                    estadoAnterior = it.estadoAnterior,
+                    estadoPosterior = it.estadoPosterior,
+                    esCorreccion = it.esCorreccion,
+                )
+            }
 
     override fun en(indice: Int): EventoAuditoria = todos()[indice]
 }

@@ -43,6 +43,24 @@ private class ConfirmadorDeLimitesEnMemoria : ConfirmadorDeLimites {
     }
 }
 
+private fun unidadPendienteDeLimites(
+    unidadId: String = "unidad-1",
+    confianza: Double = 0.5,
+    fecha: Instant = Instant.parse("2026-08-27T00:00:00Z"),
+) = UnidadPendienteDeLimites(
+    unidadId = unidadId,
+    loteId = "lote-1",
+    modeloId = "emisor-ficticio-v0",
+    evidencia = listOf("pagina-1"),
+    confianza = confianza,
+    fecha = fecha,
+)
+
+private class FuenteDeSugerenciasDeLimitesEnMemoria(private val unidades: List<UnidadPendienteDeLimites>) :
+    FuenteDeSugerenciasDeLimites {
+    override fun pendientes(): List<UnidadPendienteDeLimites> = unidades
+}
+
 // RF-VH-001/002 · Agregación de sugerencias en colas de revisión, orden por confianza
 class ColaDeRevisionTest {
 
@@ -219,5 +237,42 @@ class GestionDeLimitesTest {
             gestion.confirmar(identidadId = "id-sin-permiso", unidadId = "unidad-1", actor = "archivista-1", fecha = fecha)
         }
         assertTrue(confirmador.confirmaciones.isEmpty())
+    }
+}
+
+// RF-VH-001/002 (T-39) · Agregación de la cola de límites en su propia cola, orden por confianza
+class ColaDeLimitesTest {
+
+    @Test
+    fun `dadas unidades pendientes de limites de varios lotes, cuando se consultan, aparecen ordenadas de menor a mayor confianza`() {
+        val cola = ColaDeLimites(
+            FuenteDeSugerenciasDeLimitesEnMemoria(
+                listOf(
+                    unidadPendienteDeLimites(unidadId = "unidad-alta", confianza = 0.9),
+                    unidadPendienteDeLimites(unidadId = "unidad-baja", confianza = 0.1),
+                ),
+            ),
+        )
+
+        val ordenadas = cola.ordenadasPorConfianza()
+
+        assertEquals(listOf("unidad-baja", "unidad-alta"), ordenadas.map { it.unidadId })
+    }
+
+    @Test
+    fun `dada una cola de limites, cuando se consulta su volumen y antiguedad, expone ambos`() {
+        val cola = ColaDeLimites(
+            FuenteDeSugerenciasDeLimitesEnMemoria(
+                listOf(
+                    unidadPendienteDeLimites(unidadId = "unidad-1", fecha = Instant.parse("2026-08-20T00:00:00Z")),
+                    unidadPendienteDeLimites(unidadId = "unidad-2", fecha = Instant.parse("2026-08-25T00:00:00Z")),
+                ),
+            ),
+        )
+
+        val (volumen, masAntigua) = cola.volumenYAntiguedadDeLaCola()
+
+        assertEquals(2, volumen)
+        assertEquals(Instant.parse("2026-08-20T00:00:00Z"), masAntigua)
     }
 }

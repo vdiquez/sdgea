@@ -1866,7 +1866,7 @@
       ]
     },
     {
-      "name": "6. Cierre RF-VH-005 (Validacion Humana confirma limites en Normalizacion)",
+      "name": "6. Cierre RF-VH-005, colas de limites y correcciones (T-38/T-39)",
       "item": [
         {
           "name": "43 [RF-VH-005] Recibir un item no trivial en Normalizacion para el flujo de Validacion Humana",
@@ -1998,6 +1998,342 @@
                   "  pm.expect(body.estado).to.eql(\"LIMITES_CONFIRMADOS\");",
                   "  pm.expect(body.confirmacion_limites.actor).to.eql(pm.environment.get(\"actor_vh\"));",
                   "  pm.expect(body.confirmacion_limites.fecha).to.be.a(\"string\").and.not.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "46 [T-39] Crear una segunda unidad en Normalizacion para la cola de limites",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{unidad_id_vh_limites}}\",\n  \"lote_id\": \"{{lote_id_vh_limites}}\",\n  \"item_ingesta_id\": \"item-vh-limites-postman\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-27T13:00:00Z\",\n    \"disparador\": \"carga_por_lote\",\n    \"lote_o_flujo_id\": \"{{lote_id_vh_limites}}\"\n  },\n  \"es_caso_trivial\": false,\n  \"actor\": \"sistema-normalizacion\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"unidad_id_vh_limites\", \"unidad-vh-limites-postman-\" + Date.now());",
+                  "pm.environment.set(\"lote_id_vh_limites\", \"lote-vh-limites-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "47 [T-39] Recibir sugerencia de limites para esa unidad -- ahora es revisable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades/{{unidad_id_vh_limites}}/sugerencia-limites",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades",
+                "{{unidad_id_vh_limites}}",
+                "sugerencia-limites"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modelo_id\": \"emisor-ficticio-v0\",\n  \"evidencia\": [\n    \"pagina-1\"\n  ],\n  \"confianza\": 0.33,\n  \"fecha\": \"2026-08-27T13:05:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "48 [T-39] GET colas/limites en Validacion Humana incluye la unidad (RF-VH-001, RF-VH-002)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{validacion_humana_base_url}}/colas/limites?identidadId={{identidad_id_vh}}",
+              "host": [
+                "{{validacion_humana_base_url}}"
+              ],
+              "path": [
+                "colas",
+                "limites"
+              ],
+              "query": [
+                {
+                  "key": "identidadId",
+                  "value": "{{identidad_id_vh}}"
+                }
+              ]
+            },
+            "description": "Reutiliza la identidad/rol de la carpeta 4, ya con el permiso leer/documento. Cola separada de /colas/clasificacion: agrega unidades de Normalizacion, no documentos de records-custodia."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"la unidad con sugerencia de limites aparece en la cola\", () => {",
+                  "  const cola = pm.response.json();",
+                  "  pm.expect(cola.map((u) => u.unidadId)).to.include(pm.environment.get(\"unidad_id_vh_limites\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "49 [T-39] GET colas/limites/estado expone volumen y antiguedad (RF-VH-010)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{validacion_humana_base_url}}/colas/limites/estado",
+              "host": [
+                "{{validacion_humana_base_url}}"
+              ],
+              "path": [
+                "colas",
+                "limites",
+                "estado"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, volumen es al menos 1\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().volumen).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "50 [T-39] Custodiar un documento para demostrar una correccion (RF-VH-009)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos"
+              ]
+            },
+            "description": "Reutiliza la identidad/rol/actor de la carpeta 4 (ya con permiso decidir/documento).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{documento_id_vh_correccion}}\",\n  \"bytesBase64\": \"Y29udGVuaWRvLWNvcnJlY2Npb24tcG9zdG1hbg==\",\n  \"actor\": \"sistema-ingesta\",\n  \"fecha\": \"2026-08-27T14:00:00Z\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-27T14:00:00Z\",\n    \"loteOFlujoId\": \"lote-vh-correccion\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"documento_id_vh_correccion\", \"doc-vh-correccion-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "51 [T-39] Recibir una sugerencia de clasificacion para ese documento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/sugerencias",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "sugerencias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentoId\": \"{{documento_id_vh_correccion}}\",\n  \"tipo\": \"clasificacion\",\n  \"contenidoPropuesto\": \"serie-1\",\n  \"modeloId\": \"emisor-ficticio-v0\",\n  \"evidencia\": [\n    \"pagina-1\"\n  ],\n  \"confianza\": 0.3,\n  \"fecha\": \"2026-08-27T14:05:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "52 [T-39] Decidir con una serie distinta a la sugerida -> correccion (RF-VH-008, RF-VH-009)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{validacion_humana_base_url}}/decisiones",
+              "host": [
+                "{{validacion_humana_base_url}}"
+              ],
+              "path": [
+                "decisiones"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identidadId\": \"{{identidad_id_vh}}\",\n  \"sugerencia\": {\n    \"documentoId\": \"{{documento_id_vh_correccion}}\",\n    \"tipo\": \"clasificacion\",\n    \"contenidoPropuesto\": \"serie-1\",\n    \"modeloId\": \"emisor-ficticio-v0\",\n    \"evidencia\": [\n      \"pagina-1\"\n    ],\n    \"confianza\": 0.3,\n    \"fecha\": \"2026-08-27T14:05:00Z\"\n  },\n  \"clasificacionResultante\": {\n    \"trdVersion\": 1,\n    \"serieId\": \"serie-corregida-postman\"\n  },\n  \"actor\": \"archivista-postman\",\n  \"fecha\": \"2026-08-27T14:10:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, CORRECCION\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().tipo).to.eql(\"CORRECCION\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "53 [T-39] GET documentos/correcciones incluye la correccion, pendiente de re-revision (RF-VH-009)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/correcciones",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "correcciones"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"la correccion de este flujo aparece marcada PENDIENTE_DE_REREVISION\", () => {",
+                  "  const correcciones = pm.response.json();",
+                  "  const entrada = correcciones.find((c) => c.estadoPosterior === \"serie-corregida-postman\");",
+                  "  pm.expect(entrada, \"no se encontro la correccion esperada\").to.not.be.undefined;",
+                  "  pm.expect(entrada.estadoDeRevision).to.eql(\"PENDIENTE_DE_REREVISION\");",
+                  "  pm.expect(entrada.actor).to.eql(\"archivista-postman\");",
                   "});"
                 ]
               }

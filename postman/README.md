@@ -1,31 +1,39 @@
 # Colección Postman — corte vertical
 
-Cubre 33 de los 36 endpoints reales de `specs/spec-infra-servicios.md`
+Cubre 37 de los 42 endpoints reales de `specs/spec-infra-servicios.md`
 (captura-ingesta + records-custodia + seguridad-acceso + validacion-humana +
-normalizacion), en el orden en que se probaron manualmente con `curl` — los 3
-endpoints de validacion-humana que faltan (candidatas a aprobación masiva,
-aprobación en bloque, estado de la cola) ya tienen su propia cobertura en los
-tests de Gradle del módulo (T-30), no aquí. 46 peticiones: publicar la misma
-versión de TRD dos veces para demostrar el fix del VETO de Codex (T-19);
-validar un ítem como corrupto (RF-CI-006, T-02) antes de leer el conteo por
-estado — por eso la petición 02 espera un ítem ya `EN_CUARENTENA`; en
-Seguridad y Acceso (T-27), autenticar dos veces (correcta e incorrecta) y
-autorizar dos veces (antes y después de revocar el rol); la carpeta 4 (T-32,
-ampliada en T-38 con el permiso `confirmar`/`documento`) es un **flujo
-end-to-end real** entre tres servicios: identidad → custodia → sugerencia →
-cola de revisión → decisión → clasificación materializada; la carpeta 5
-(T-36, ampliada en T-37) ejercita el ciclo completo de Normalización —
-**primer contexto Python/FastAPI del proyecto** (T-33..T-35)— hasta entregar
-a Extracción, más un segundo ítem que se rechaza por formato no soportado
-(RF-NO-009) para que el conteo final cuadre con dos unidades terminales, y
-una petición final que consulta la bitácora de auditoría
-(`GET /eventos-auditoria`, P-08, hallazgo V-01 de la revisión acumulada de
-Codex) y verifica que cada evento trae actor y fecha; y la carpeta 6 (T-38,
-cierra RF-VH-005) es el **segundo flujo end-to-end real**, esta vez entre
-Validación Humana y Normalización: recibe una unidad no trivial en
-Normalización, la confirma desde Validación Humana (reutilizando la
-identidad/rol de la carpeta 4) y verifica en Normalización que quedó con
-`LIMITES_CONFIRMADOS` atribuidos al actor de Validación Humana.
+normalizacion), en el orden en que se probaron manualmente con `curl` — los 5
+que faltan ya tienen su propia cobertura fuera de esta colección: en
+validacion-humana, candidatas a aprobación masiva, aprobación en bloque y
+estado de la cola de clasificación (tests de Gradle, T-30); en
+records-custodia y normalizacion, `GET /sugerencias/pendientes` (T-28) y
+`GET /unidades/pendientes-de-limites` (T-39) — ambos se ejercitan
+indirectamente aquí (Validación Humana los llama al resolver
+`/colas/clasificacion` y `/colas/limites`) y tienen su propia cobertura
+directa en Gradle/pytest, pero ninguna petición de esta colección los llama
+por su ruta original. 54 peticiones: publicar la misma versión de TRD
+dos veces para demostrar el fix del VETO de Codex (T-19); validar un ítem
+como corrupto (RF-CI-006, T-02) antes de leer el conteo por estado — por eso
+la petición 02 espera un ítem ya `EN_CUARENTENA`; en Seguridad y Acceso
+(T-27), autenticar dos veces (correcta e incorrecta) y autorizar dos veces
+(antes y después de revocar el rol); la carpeta 4 (T-32, ampliada en T-38
+con el permiso `confirmar`/`documento`) es un **flujo end-to-end real**
+entre tres servicios: identidad → custodia → sugerencia → cola de revisión →
+decisión → clasificación materializada; la carpeta 5 (T-36, ampliada en
+T-37) ejercita el ciclo completo de Normalización — **primer contexto
+Python/FastAPI del proyecto** (T-33..T-35)— hasta entregar a Extracción, más
+un segundo ítem que se rechaza por formato no soportado (RF-NO-009) para
+que el conteo final cuadre con dos unidades terminales, y una petición
+final que consulta la bitácora de auditoría (`GET /eventos-auditoria`, P-08,
+hallazgo V-01 de la revisión acumulada de Codex) y verifica que cada evento
+trae actor y fecha; y la carpeta 6 (T-38/T-39) cubre tres cosas: el
+**segundo flujo end-to-end real** del proyecto (Validación Humana confirma
+límites en Normalización, T-38); la **cola de límites** de Validación Humana
+(RF-VH-001/002/010, T-39) — una segunda unidad con sugerencia de límites,
+consultada vía `GET /colas/limites` y `/colas/limites/estado`; y una
+**corrección** (serie decidida distinta de la sugerida, RF-VH-008) cuya
+huella queda consultable en `GET /documentos/correcciones` de
+records-custodia, marcada `PENDIENTE_DE_REREVISION` (RF-VH-009, T-39).
 
 ## Levantar el stack (con puertos locales para Postman)
 
@@ -48,8 +56,9 @@ docker compose -f ../deploy/docker-compose.saas.yml -f ../deploy/docker-compose.
    `trd_version`, `identidad_id_sa`/`rol_sa`/`actor_sa`,
    `identidad_id_vh`/`rol_vh`/`actor_vh`/`documento_id_vh`,
    `unidad_id_no`/`unidad_id_no_2`/`lote_id_no`/`huella_no`,
-   `unidad_id_vh_no`/`lote_id_vh_no` (carpeta 6, T-38) — generadas con
-   timestamp en la primera petición de cada flujo, así que correr la
+   `unidad_id_vh_no`/`lote_id_vh_no` (carpeta 6, T-38),
+   `unidad_id_vh_limites`/`lote_id_vh_limites`/`documento_id_vh_correccion`
+   (carpeta 6, T-39) — generadas con timestamp en la primera petición de cada flujo, así que correr la
    colección varias veces no colisiona. La huella de contenido de
    Normalización también necesita timestamp: sin él, la segunda corrida
    detecta un duplicado real contra la primera y falla la aserción de
@@ -82,7 +91,16 @@ límites desde Validación Humana hacia Normalización, ver `spec-infra-
 servicios.md` §6 para el diagnóstico completo: el `HttpClient` por defecto de
 Spring Boot 3.5 intentaba un upgrade h2c que `uvicorn` rechazaba), corregido
 fijando HTTP/1.1 explícito en el cliente HTTP de Validación Humana y
-confirmado con dos corridas seguidas limpias después.
+confirmado con dos corridas seguidas limpias después. Reverificado
+(2026-08-27, tras T-39/colas de límites y correcciones pendientes de
+re-revisión): 54/54 peticiones, 97/97 aserciones — la primera corrida
+encontró un tercer fallo real (`500 Internal Server Error` al leer o escribir
+`eventos_auditoria` en records-custodia: `ALTER TABLE ... ADD COLUMN
+es_correccion boolean not null` sin `DEFAULT` falla contra una tabla con
+filas existentes, ver `spec-infra-servicios.md` §4), corregido con
+`columnDefinition = "boolean not null default false"` y confirmado con dos
+corridas seguidas limpias después (volumen de Postgres reiniciado en limpio
+para partir de un esquema consistente).
 
 ## Bajar el stack
 

@@ -301,6 +301,69 @@ class MaterializacionPorDecisionHumanaTest {
     }
 }
 
+// RF-VH-009 (T-39) · Correcciones disponibles para re-revisión, sin incorporarse en crudo
+class CorreccionesPendientesDeRerevisionTest {
+
+    private val procedenciaDePrueba = Procedencia(
+        fuente = "escaner-sala-3",
+        fecha = Instant.parse("2026-08-21T00:00:00Z"),
+        loteOFlujoId = "lote-001",
+    )
+
+    private fun custodiaConDocumento(id: String): CustodiaOriginales {
+        val custodia = CustodiaOriginales()
+        custodia.custodiar(
+            id = id,
+            bytes = "contenido".toByteArray(),
+            actor = "sistema-ingesta",
+            fecha = Instant.parse("2026-08-21T00:00:00Z"),
+            procedencia = procedenciaDePrueba,
+        )
+        return custodia
+    }
+
+    @Test
+    fun `dada una decision marcada como correccion, cuando se consulta, queda pendiente de re-revision`() {
+        val custodia = custodiaConDocumento("doc-1")
+
+        custodia.materializar(
+            DecisionHumana(
+                documentoId = "doc-1",
+                actor = "archivista-1",
+                fecha = Instant.parse("2026-08-21T02:00:00Z"),
+                sugerenciasReferenciadas = emptyList(),
+                clasificacionResultante = Clasificacion(documentoId = "doc-1", trdVersion = 1, serieId = "serie-2"),
+                esCorreccion = true,
+            ),
+        )
+
+        val correcciones = custodia.correccionesPendientesDeRerevision()
+
+        assertEquals(1, correcciones.size)
+        assertEquals("archivista-1", correcciones[0].actor)
+        assertEquals("serie-2", correcciones[0].estadoPosterior)
+        assertTrue(correcciones[0].esCorreccion)
+    }
+
+    @Test
+    fun `una decision que no es correccion no aparece entre las pendientes de re-revision`() {
+        val custodia = custodiaConDocumento("doc-1")
+
+        custodia.materializar(
+            DecisionHumana(
+                documentoId = "doc-1",
+                actor = "archivista-1",
+                fecha = Instant.parse("2026-08-21T02:00:00Z"),
+                sugerenciasReferenciadas = emptyList(),
+                clasificacionResultante = Clasificacion(documentoId = "doc-1", trdVersion = 1, serieId = "serie-1"),
+                esCorreccion = false,
+            ),
+        )
+
+        assertTrue(custodia.correccionesPendientesDeRerevision().isEmpty())
+    }
+}
+
 // RF-RC-005 · Bitácora de auditoría inmutable
 class BitacoraDeAuditoriaInmutableTest {
 

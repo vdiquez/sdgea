@@ -300,7 +300,58 @@
       46/46 peticiones, 87/87 aserciones.
       `specs/spec-infra-servicios.md` §6 y §9/§10 actualizadas (RF-VH-005 ya
       no aparece como brecha abierta).
-- [ ] T-39 RF-VH-001 / RF-VH-009 — completar las colas de Validación Humana
-      para las fuentes de Normalización, Extracción y Enriquecimiento, y exponer
-      las correcciones como candidatas a re-revisión sin incorporarlas en crudo
-      al set patrón.
+- [x] T-39 RF-VH-001 / RF-VH-009 (decisión de Victor 2026-08-27, "Si, sigamos
+      con T-39") — cola de límites en Validación Humana (parcial: Normalización
+      sí, Extracción/Enriquecimiento no porque no existen como servicios) y
+      correcciones expuestas como candidatas a re-revisión.
+      **RF-VH-001/002/010**: nuevo `GET /unidades/pendientes-de-limites` en
+      Normalización (`dominio.pendientes_de_limites`, filtra `PENDIENTE_DE_
+      LIMITES` con sugerencia ya recibida — mismo criterio que
+      `sugerenciasPendientes` en records-custodia, T-28); nuevos
+      `UnidadPendienteDeLimites`/`FuenteDeSugerenciasDeLimites`/`ColaDeLimites`
+      en el dominio de Validación Humana + adaptador HTTP real
+      `FuenteDeSugerenciasDeLimitesHttp` (primer consumidor de ese endpoint;
+      primera vez que Jackson necesita mapear JSON snake_case explícito,
+      `@JsonProperty`) + endpoints `GET /colas/limites` y
+      `GET /colas/limites/estado`. Sin `/masivo`: el `[CLARIFICAR]` de la spec
+      sobre aprobación masiva para sugerencias no-clasificación sigue abierto.
+      **Extracción y Enriquecimiento quedan fuera, documentado explícitamente
+      en spec-infra-servicios.md §10**: no existen como servicios todavía
+      (solo `main.py`/`pyproject.toml` de andamiaje), no es una decisión de
+      negocio ni un `[CLARIFICAR]`, es una dependencia real que falta.
+      **RF-VH-009**: `EventoAuditoria`/`DecisionHumana` en records-custodia
+      ganan `esCorreccion: Boolean` (default `false`); `materializar` lo
+      persiste; nuevo `correccionesPendientesDeRerevision()` +
+      `GET /documentos/correcciones`, cada entrada marcada
+      `estadoDeRevision: "PENDIENTE_DE_REREVISION"`. Validación Humana ya
+      calculaba esto (`GestionDeDecisiones.construirDecision` → `TipoDe
+      Decision`) y lo descartaba; ahora `RegistradorDeDecisionesHttp.
+      materializar` lo envía. El mecanismo real de re-revisión sigue
+      `[CLARIFICAR]` (`specs/eval/edd-harness.md` §9, ya lo estaba antes de
+      esta tarea) — esto solo expone las candidatas, no decide cómo se
+      promueven a verdad de referencia.
+      TDD: 3 tests nuevos en `normalizacion` (40/40 en el módulo); 8 tests
+      nuevos en `validacion-humana` (31/31 en el módulo: dominio, integración
+      con `MockRestServiceServer` — incluida una prueba real del mapeo
+      snake_case — y HTTP); 3 tests nuevos en `records-custodia` (37/37 en el
+      módulo: dominio y HTTP). `./test.sh` completo del repo en verde.
+      **Dos bugs reales encontrados y corregidos en la verificación contra
+      Docker, ninguno detectado por los tests de Gradle/pytest** (que usan
+      dobles/H2 con `create-drop`, no Postgres real con datos existentes):
+      (1) ruteo — `GET /unidades/pendientes-de-limites` debía declararse
+      ANTES de `GET /unidades/{id}` en FastAPI/Starlette (resuelve por orden
+      de declaración, a diferencia de Spring MVC), o "pendientes-de-limites"
+      se interpretaba como un `{id}` literal; (2) DDL — agregar
+      `es_correccion boolean not null` sin `DEFAULT` generó un `ALTER TABLE`
+      que Postgres rechaza sobre una tabla con filas existentes ("contains
+      null values"), corregido con `columnDefinition = "boolean not null
+      default false"`.
+      Colección Postman: rol de la carpeta 4 ampliado (ya tenía
+      `confirmar`/`documento` desde T-38); carpeta 6 renombrada y ampliada de
+      3 a 11 peticiones (43-53) — cola de límites (46-49) y corrección
+      pendiente de re-revisión (50-53). Revalidada con los cinco servicios
+      corriendo a la vez — la primera corrida encontró el bug de DDL de
+      arriba (reiniciando el volumen de Postgres para partir de un esquema
+      limpio); corregido y confirmado con dos corridas seguidas limpias
+      después: 54/54 peticiones, 97/97 aserciones.
+      `specs/spec-infra-servicios.md` §4/§6/§7/§9/§10 actualizadas.

@@ -6,6 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.hamcrest.Matchers.containsString
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.HttpMethod
@@ -46,6 +47,9 @@ class IntegracionHttpTest {
     @Autowired
     private lateinit var confirmadorDeLimites: ConfirmadorDeLimitesHttp
 
+    @Autowired
+    private lateinit var fuenteDeSugerenciasDeLimites: FuenteDeSugerenciasDeLimitesHttp
+
     private val fecha = Instant.parse("2026-08-26T10:00:00Z")
 
     @Test
@@ -82,6 +86,7 @@ class IntegracionHttpTest {
         servidor.expect(requestTo("http://localhost:8082/documentos/doc-1/decisiones"))
             .andExpect(method(HttpMethod.POST))
             .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andExpect(content().string(containsString("\"esCorreccion\":false")))
             .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON))
 
         registradorDeDecisiones.materializar(
@@ -102,6 +107,39 @@ class IntegracionHttpTest {
                 ),
                 clasificacionResultante = ClasificacionPropuesta(trdVersion = 1, serieId = "serie-1"),
                 tipo = TipoDeDecision.ACEPTACION,
+            ),
+        )
+
+        servidor.verify()
+    }
+
+    // RF-VH-009 (T-39): una corrección se envía a records-custodia marcada
+    // esCorreccion:true, para que quede disponible en GET /documentos/correcciones.
+    @Test
+    fun `materializar marca esCorreccion true cuando la decision corrige la sugerencia`() {
+        val servidor = MockRestServiceServer.createServer(restTemplate)
+        servidor.expect(requestTo("http://localhost:8082/documentos/doc-2/decisiones"))
+            .andExpect(content().string(containsString("\"esCorreccion\":true")))
+            .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON))
+
+        registradorDeDecisiones.materializar(
+            DecisionDeClasificacion(
+                documentoId = "doc-2",
+                actor = "archivista-1",
+                fecha = fecha,
+                sugerenciasReferenciadas = listOf(
+                    SugerenciaPendiente(
+                        documentoId = "doc-2",
+                        tipo = "clasificacion",
+                        contenidoPropuesto = "serie-1",
+                        modeloId = "emisor-ficticio-v0",
+                        evidencia = listOf("pagina-1"),
+                        confianza = 0.9,
+                        fecha = fecha,
+                    ),
+                ),
+                clasificacionResultante = ClasificacionPropuesta(trdVersion = 1, serieId = "serie-2"),
+                tipo = TipoDeDecision.CORRECCION,
             ),
         )
 
@@ -146,5 +184,51 @@ class IntegracionHttpTest {
         servidor.expect(requestTo("http://localhost:8085/unidades/unidad-1/confirmacion-limites")).andRespond(withServerError())
 
         assertFailsWith<ServicioNoDisponibleException> { confirmadorDeLimites.confirmar("unidad-1", "archivista-1", fecha) }
+    }
+
+    // RF-VH-001 (T-39): primer consumidor real de GET /unidades/pendientes-de-limites
+    // en normalizacion. La respuesta simulada aquí es el JSON real que ese
+    // endpoint produce (snake_case, con campos que Validación Humana no
+    // necesita) — verifica tanto el mapeo @JsonProperty como que los campos
+    // no mapeados (procedencia, estado, etc.) no rompen la deserialización.
+    @Test
+    fun `pendientes traduce el JSON snake_case de normalizacion a UnidadPendienteDeLimites`() {
+        val servidor = MockRestServiceServer.createServer(restTemplate)
+        servidor.expect(requestTo("http://localhost:8085/unidades/pendientes-de-limites"))
+            .andExpect(method(HttpMethod.GET))
+            .andRespond(
+                withSuccess(
+                    """[{
+                        "id": "unidad-1",
+                        "lote_id": "lote-1",
+                        "item_ingesta_id": "item-1",
+                        "procedencia": {"fuente": "f", "fecha": "2026-08-26T10:00:00Z", "disparador": "d", "lote_o_flujo_id": "lote-1", "item_ingesta_id": "item-1"},
+                        "estado": "PENDIENTE_DE_LIMITES",
+                        "huella_de_contenido": null,
+                        "sugerencia_de_limites": {"modelo_id": "emisor-ficticio-v0", "evidencia": ["pagina-1"], "confianza": 0.35, "fecha": "2026-08-26T10:00:00Z"},
+                        "confirmacion_limites": null,
+                        "razon": null,
+                        "formato_normalizado": null
+                    }]""",
+                    MediaType.APPLICATION_JSON,
+                ),
+            )
+
+        val pendientes = fuenteDeSugerenciasDeLimites.pendientes()
+
+        assertEquals(1, pendientes.size)
+        assertEquals("unidad-1", pendientes[0].unidadId)
+        assertEquals("lote-1", pendientes[0].loteId)
+        assertEquals("emisor-ficticio-v0", pendientes[0].modeloId)
+        assertEquals(0.35, pendientes[0].confianza)
+        servidor.verify()
+    }
+
+    @Test
+    fun `pendientes de limites lanza ServicioNoDisponibleException si normalizacion falla`() {
+        val servidor = MockRestServiceServer.createServer(restTemplate)
+        servidor.expect(requestTo("http://localhost:8085/unidades/pendientes-de-limites")).andRespond(withServerError())
+
+        assertFailsWith<ServicioNoDisponibleException> { fuenteDeSugerenciasDeLimites.pendientes() }
     }
 }

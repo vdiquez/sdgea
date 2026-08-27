@@ -13,8 +13,11 @@ import org.springframework.web.client.RestTemplate
 import sgdea.contexts.validacionhumana.ConfirmadorDeLimites
 import sgdea.contexts.validacionhumana.DecisionDeClasificacion
 import sgdea.contexts.validacionhumana.FuenteDeSugerencias
+import sgdea.contexts.validacionhumana.FuenteDeSugerenciasDeLimites
 import sgdea.contexts.validacionhumana.RegistradorDeDecisiones
 import sgdea.contexts.validacionhumana.SugerenciaPendiente
+import sgdea.contexts.validacionhumana.TipoDeDecision
+import sgdea.contexts.validacionhumana.UnidadPendienteDeLimites
 import sgdea.contexts.validacionhumana.VerificadorDePermisos
 
 // Primera integración HTTP real entre servicios de este proyecto: hasta ahora
@@ -84,6 +87,7 @@ class RegistradorDeDecisionesHttp(
                 serieId = decision.clasificacionResultante.serieId,
                 subserieId = decision.clasificacionResultante.subserieId,
             ),
+            esCorreccion = decision.tipo == TipoDeDecision.CORRECCION,
         )
         try {
             restTemplate.postForEntity("$baseUrl/documentos/${decision.documentoId}/decisiones", cuerpo, Map::class.java)
@@ -133,4 +137,31 @@ class ConfirmadorDeLimitesHttp(
             throw ServicioNoDisponibleException("normalizacion no respondió al confirmar los límites.", ex)
         }
     }
+}
+
+// RF-VH-001 (T-39): primer consumidor real de GET /unidades/pendientes-de-limites
+// en normalizacion — mismo criterio que FuenteDeSugerenciasHttp, pero contra un
+// backend Python/FastAPI que serializa en snake_case (integracion/Dtos.kt).
+@Component
+class FuenteDeSugerenciasDeLimitesHttp(
+    private val restTemplate: RestTemplate,
+    @Value("\${normalizacion.base-url}") private val baseUrl: String,
+) : FuenteDeSugerenciasDeLimites {
+
+    override fun pendientes(): List<UnidadPendienteDeLimites> =
+        try {
+            restTemplate.getForObject("$baseUrl/unidades/pendientes-de-limites", Array<UnidadPendienteDeLimitesDto>::class.java)
+                ?.map {
+                    UnidadPendienteDeLimites(
+                        unidadId = it.id,
+                        loteId = it.loteId,
+                        modeloId = it.sugerenciaDeLimites.modeloId,
+                        evidencia = it.sugerenciaDeLimites.evidencia,
+                        confianza = it.sugerenciaDeLimites.confianza,
+                        fecha = it.sugerenciaDeLimites.fecha,
+                    )
+                } ?: emptyList()
+        } catch (ex: Exception) {
+            throw ServicioNoDisponibleException("normalizacion no respondió al listar unidades pendientes de límites.", ex)
+        }
 }

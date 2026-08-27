@@ -100,6 +100,16 @@ class EventoAuditoriaEntity(
 
     @Column(name = "estado_posterior")
     var estadoPosterior: String? = null,
+
+    // `columnDefinition` con DEFAULT explícito (T-39, bug real encontrado en
+    // verificación Docker): sin él, Hibernate genera `ALTER TABLE ... ADD
+    // COLUMN es_correccion boolean not null` sin valor por defecto, que
+    // Postgres rechaza si la tabla ya tiene filas ("contains null values") —
+    // `ddl-auto: update` no es una herramienta de migración real (ver
+    // comentario en application.yml), así que esta columna debe poder
+    // agregarse sobre una tabla con datos existentes.
+    @Column(name = "es_correccion", nullable = false, columnDefinition = "boolean not null default false")
+    var esCorreccion: Boolean = false,
 )
 
 // specs/spec-infra-servicios.md §4: "Sugerencia -> tabla sugerencias, con

@@ -152,6 +152,39 @@ class RecordsCustodiaHttpTest {
     }
 
     @Test
+    fun `GET documentos correcciones incluye una decision marcada esCorreccion y excluye una que no lo es - RF-VH-009`() {
+        custodiarDocumento("doc-http-005c")
+        val correccion = mapOf(
+            "actor" to "archivista-1",
+            "fecha" to fecha,
+            "sugerenciasReferenciadas" to emptyList<Any>(),
+            "clasificacionResultante" to mapOf("documentoId" to "doc-http-005c", "trdVersion" to 1, "serieId" to "serie-corregida"),
+            "esCorreccion" to true,
+        )
+        restTemplate.postForEntity(url("/documentos/doc-http-005c/decisiones"), correccion, Map::class.java)
+
+        custodiarDocumento("doc-http-005d")
+        val aceptacion = mapOf(
+            "actor" to "archivista-1",
+            "fecha" to fecha,
+            "sugerenciasReferenciadas" to emptyList<Any>(),
+            "clasificacionResultante" to mapOf("documentoId" to "doc-http-005d", "trdVersion" to 1, "serieId" to "serie-1"),
+            "esCorreccion" to false,
+        )
+        restTemplate.postForEntity(url("/documentos/doc-http-005d/decisiones"), aceptacion, Map::class.java)
+
+        val response = restTemplate.getForEntity(url("/documentos/correcciones"), List::class.java)
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        val correcciones = response.body as List<*>
+        assertTrue(correcciones.any { (it as Map<*, *>)["estadoPosterior"] == "serie-corregida" })
+        assertTrue(correcciones.none { (it as Map<*, *>)["estadoPosterior"] == "serie-1" })
+        val entrada = correcciones.first { (it as Map<*, *>)["estadoPosterior"] == "serie-corregida" } as Map<*, *>
+        assertEquals("PENDIENTE_DE_REREVISION", entrada["estadoDeRevision"])
+        assertEquals("archivista-1", entrada["actor"])
+    }
+
+    @Test
     fun `POST verificacion-integridad de un documento intacto no reporta discrepancia - RF-RC-009`() {
         custodiarDocumento("doc-http-006")
         val request = mapOf("actor" to "auditor-1", "fecha" to "2026-08-21T13:00:00Z")

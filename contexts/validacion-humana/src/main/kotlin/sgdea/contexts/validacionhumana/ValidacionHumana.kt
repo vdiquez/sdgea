@@ -18,6 +18,22 @@ data class SugerenciaPendiente(
     val fecha: Instant,
 )
 
+// RF-VH-001 (T-39): forma local de una sugerencia de límites pendiente de
+// Normalización — mismo criterio de independencia entre bounded contexts que
+// `SugerenciaPendiente` frente a `Sugerencia` (records-custodia). No es la
+// misma cola que `SugerenciaPendiente`/`ColaDeRevision` (clasificación):
+// revisar una sugerencia de límites no produce una `DecisionDeClasificacion`,
+// produce una confirmación (`GestionDeLimites.confirmar`, T-38) — por eso es
+// un tipo y una cola separados, no una variante del mismo.
+data class UnidadPendienteDeLimites(
+    val unidadId: String,
+    val loteId: String,
+    val modeloId: String,
+    val evidencia: List<String>,
+    val confianza: Double,
+    val fecha: Instant,
+)
+
 // Réplica local mínima de `Clasificacion` (records-custodia): lo que hace
 // falta para construir el cuerpo de `POST /documentos/{id}/decisiones`.
 data class ClasificacionPropuesta(
@@ -58,6 +74,13 @@ interface VerificadorDePermisos {
     fun tienePermiso(identidadId: String, accion: String, tipoRecurso: String): Boolean
 }
 
+// RF-VH-001 (T-39): puerto de la cola de límites — en producción lo implementa
+// un cliente HTTP real contra Normalización (`GET /unidades/pendientes-de-limites`,
+// T-39/§7), primer consumidor real de ese endpoint.
+interface FuenteDeSugerenciasDeLimites {
+    fun pendientes(): List<UnidadPendienteDeLimites>
+}
+
 // RF-VH-005: confirmación (o corrección) de límites de documento pendiente en
 // Normalización. Normalización no distingue "confirmar" de "corregir" como
 // operaciones separadas — `confirmar_limites` (dominio.py) admite límites
@@ -82,6 +105,22 @@ class ColaDeRevision(private val fuente: FuenteDeSugerencias) {
     // solo se aplica el que reciba el llamador).
     fun candidatasAAprobacionMasiva(umbralDeConfianza: Double): List<SugerenciaPendiente> =
         fuente.pendientes().filter { it.confianza >= umbralDeConfianza }
+
+    fun volumenYAntiguedadDeLaCola(): Pair<Int, Instant?> {
+        val pendientes = fuente.pendientes()
+        return pendientes.size to pendientes.minOfOrNull { it.fecha }
+    }
+}
+
+// RF-VH-001/002 (T-39): agrega las unidades con sugerencia de límites
+// pendiente de Normalización y las ordena por confianza ascendente — mismo
+// criterio que `ColaDeRevision`, pero sin aprobación masiva: el
+// `[CLARIFICAR]` de la spec (§8) sobre si existe un mecanismo de aprobación
+// masiva análogo para sugerencias distintas de clasificación sigue abierto,
+// así que esta cola no lo inventa.
+class ColaDeLimites(private val fuente: FuenteDeSugerenciasDeLimites) {
+
+    fun ordenadasPorConfianza(): List<UnidadPendienteDeLimites> = fuente.pendientes().sortedBy { it.confianza }
 
     fun volumenYAntiguedadDeLaCola(): Pair<Int, Instant?> {
         val pendientes = fuente.pendientes()

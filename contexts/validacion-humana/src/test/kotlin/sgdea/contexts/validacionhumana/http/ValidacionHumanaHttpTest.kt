@@ -189,4 +189,52 @@ class ValidacionHumanaHttpTest {
         assertEquals(HttpStatus.FORBIDDEN, response.statusCode)
         servidor.verify()
     }
+
+    @Test
+    fun `GET colas limites deniega cuando seguridad-acceso responde DENEGADO - RF-VH-007`() {
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("DENEGADO", servidor)
+
+        val response = restTemplate.getForEntity(url("/colas/limites?identidadId=id-1"), Map::class.java)
+
+        assertEquals(HttpStatus.FORBIDDEN, response.statusCode)
+        servidor.verify()
+    }
+
+    @Test
+    fun `GET colas limites devuelve la cola ordenada por confianza cuando el permiso se concede - RF-VH-001, RF-VH-002`() {
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("PERMITIDO", servidor)
+        servidor.expect(requestTo("http://localhost:8085/unidades/pendientes-de-limites"))
+            .andExpect(method(HttpMethod.GET))
+            .andRespond(
+                withSuccess(
+                    """[
+                        {"id":"unidad-alta","lote_id":"lote-1","item_ingesta_id":"i-1","procedencia":{"fuente":"f","fecha":"$fecha","disparador":"d","lote_o_flujo_id":"lote-1","item_ingesta_id":"i-1"},"estado":"PENDIENTE_DE_LIMITES","sugerencia_de_limites":{"modelo_id":"m","evidencia":[],"confianza":0.9,"fecha":"$fecha"}},
+                        {"id":"unidad-baja","lote_id":"lote-1","item_ingesta_id":"i-2","procedencia":{"fuente":"f","fecha":"$fecha","disparador":"d","lote_o_flujo_id":"lote-1","item_ingesta_id":"i-2"},"estado":"PENDIENTE_DE_LIMITES","sugerencia_de_limites":{"modelo_id":"m","evidencia":[],"confianza":0.1,"fecha":"$fecha"}}
+                    ]""",
+                    MediaType.APPLICATION_JSON,
+                ),
+            )
+
+        val response = restTemplate.getForEntity(url("/colas/limites?identidadId=id-1"), List::class.java)
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        val cola = response.body as List<*>
+        assertEquals(listOf("unidad-baja", "unidad-alta"), cola.map { (it as Map<*, *>)["unidadId"] })
+        servidor.verify()
+    }
+
+    @Test
+    fun `GET colas limites estado no requiere identidad y expone volumen - RF-VH-010`() {
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        servidor.expect(requestTo("http://localhost:8085/unidades/pendientes-de-limites"))
+            .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON))
+
+        val response = restTemplate.getForEntity(url("/colas/limites/estado"), Map::class.java)
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        assertEquals(0, response.body!!["volumen"])
+        servidor.verify()
+    }
 }

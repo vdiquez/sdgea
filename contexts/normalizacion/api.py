@@ -120,6 +120,19 @@ def recibir_item(
     return unidad
 
 
+# RF-VH-001 (T-39): mismo criterio que GET /sugerencias/pendientes en
+# records-custodia (T-28) — Validación Humana agrega esto en su propia cola
+# de límites, no lee la tabla directamente. Declarado ANTES de
+# GET /unidades/{id}: FastAPI/Starlette resuelve rutas en orden de
+# declaración, así que si fuera al revés "pendientes-de-limites" se
+# interpretaría como un {id} literal y esta ruta nunca se alcanzaría.
+@app.get("/unidades/pendientes-de-limites")
+def unidades_pendientes_de_limites(
+    almacen: AlmacenDeUnidades = Depends(obtener_almacen),
+) -> list[dominio.UnidadDocumentalCandidata]:
+    return dominio.pendientes_de_limites(almacen.todas())
+
+
 @app.get("/unidades/{id}")
 def consultar(id: str, almacen: AlmacenDeUnidades = Depends(obtener_almacen)) -> dominio.UnidadDocumentalCandidata:
     return _o_404(almacen.buscar(id), id)

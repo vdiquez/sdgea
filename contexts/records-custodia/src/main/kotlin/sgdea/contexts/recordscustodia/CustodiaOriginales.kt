@@ -15,12 +15,18 @@ data class OriginalInmutable(
 // Evento de auditoría (spec §3): atribuible, fechado, con estado anterior y posterior.
 // Boceto mínimo para satisfacer RF-RC-001; la bitácora de solo anexado a prueba de
 // manipulación es RF-RC-005 (T-10), fuera de alcance de esta tarea.
+// `esCorreccion` (T-39, RF-VH-009): distingue una decisión que corrige una
+// sugerencia de una que la acepta o de una decisión manual — con default
+// `false` para que ningún sitio existente que construye `EventoAuditoria`
+// (custodia, intento de modificación, discrepancia de integridad) necesite
+// cambiar. Solo `materializar` la fija según `DecisionHumana.esCorreccion`.
 data class EventoAuditoria(
     val actor: String,
     val fecha: Instant,
     val tipo: String,
     val estadoAnterior: String?,
     val estadoPosterior: String?,
+    val esCorreccion: Boolean = false,
 )
 
 class ModificacionDeOriginalRechazadaException(mensaje: String) : RuntimeException(mensaje)
@@ -169,6 +175,13 @@ class CustodiaOriginales(
 
     val eventosDeAuditoria: List<EventoAuditoria> get() = bitacora.todos
 
+    // RF-VH-009 (T-39): las correcciones quedan disponibles para re-revisión,
+    // sin incorporarse en crudo al set patrón del arnés — el mecanismo exacto
+    // de esa re-revisión sigue [CLARIFICAR] (specs/eval/edd-harness.md §9);
+    // esto solo expone las candidatas, marcadas como tales, no decide cómo se
+    // promueven a verdad de referencia.
+    fun correccionesPendientesDeRerevision(): List<EventoAuditoria> = eventosDeAuditoria.filter { it.esCorreccion }
+
     fun custodiar(id: String, bytes: ByteArray, actor: String, fecha: Instant, procedencia: Procedencia): OriginalInmutable {
         val original = OriginalInmutable(
             id = id,
@@ -221,6 +234,7 @@ class CustodiaOriginales(
                 tipo = "DECISION_HUMANA_MATERIALIZADA",
                 estadoAnterior = documentoActual.clasificacion?.serieId,
                 estadoPosterior = decision.clasificacionResultante.serieId,
+                esCorreccion = decision.esCorreccion,
             ),
         )
         return documentoActualizado
@@ -326,12 +340,19 @@ data class SugerenciaEntrante(
 // sugerencias que la motivaron (si las hubo) o actuando de forma manual
 // (sugerenciasReferenciadas vacía). Es lo único que transiciona el estado de
 // un documento (P-01).
+// `esCorreccion` (T-39, RF-VH-009): la asigna el llamador (Validación Humana
+// ya sabe si la decisión coincidió con la sugerencia que la originó o la
+// corrigió, `GestionDeDecisiones.construirDecision`) — records-custodia no
+// recalcula esa comparación, solo la persiste para exponerla como candidata a
+// re-revisión. Default `false`: una decisión manual sin sugerencia asociada
+// nunca es una "corrección".
 data class DecisionHumana(
     val documentoId: String,
     val actor: String,
     val fecha: Instant,
     val sugerenciasReferenciadas: List<Sugerencia>,
     val clasificacionResultante: Clasificacion,
+    val esCorreccion: Boolean = false,
 )
 
 interface AlmacenDeSugerencias {
