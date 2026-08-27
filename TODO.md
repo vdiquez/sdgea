@@ -405,14 +405,29 @@ repetirse aquí (ver STATE.md para el detalle completo de cada una):
       transiciones (P-08); verdes en el primer intento. `./test.sh` completo
       en verde (Gradle BUILD SUCCESSFUL — 25 tareas up-to-date; pytest:
       eval-harness 4 passed, normalizacion 40 passed, extraccion 25 passed).
-- [ ] T-41 RF-EX-001..010 — Servicio HTTP (FastAPI) + persistencia
+      **VETO real de Codex sobre este commit (`dd97fb4`)**: `recibir_resultado_ocr`
+      materializaba `Extraído` directo desde un resultado probabilístico, sin
+      Sugerencia ni decisión humana (P-01). Corregido tras decisión de Victor
+      (2026-08-27, ver `QUESTIONS.md`): `recibir_resultado_ocr` ahora solo
+      adjunta el resultado (`TextoExtraido.resultado_ocr`), sin tocar estado;
+      nueva `confirmar_extraccion(texto, actor, fecha)` (RF-EX-011, nueva RF)
+      es la única que materializa `Extraído`. También corregido un hallazgo
+      secundario de la misma revisión: `marcar_cuarentena_o_rechazo` ahora
+      exige `Pendiente de extracción` como precondición (no admitía
+      transiciones desde un estado ya terminal). 29/29 tests en el módulo tras
+      el fix. `specs/002-extraccion/spec.md` actualizada (§1, RF-EX-004,
+      RF-EX-011 nueva, §7). Ver commit siguiente para el detalle completo.
+- [ ] T-41 RF-EX-001..011 — Servicio HTTP (FastAPI) + persistencia
       (SQLAlchemy + Postgres) para Extracción, mismo patrón que T-34
       (Normalización): cada endpoint traduce un método de dominio ya
-      probado; `guardar_con_evento(texto, evento)` persiste ambos en una
-      única transacción con rollback explícito si falla (mismo criterio que
-      `AlmacenDeUnidades` en Normalización, T-37); `GET /eventos-auditoria`
-      desde el principio; endpoint de pendientes de revisión por baja
-      confianza (mismo criterio que `GET /sugerencias/pendientes`, T-28, y
+      probado, incluido `POST .../confirmacion` para `confirmar_extraccion`
+      (RF-EX-011, nueva — un resultado de OCR nunca materializa por sí
+      solo, ver QUESTIONS.md 2026-08-27); `guardar_con_evento(texto, evento)`
+      persiste ambos en una única transacción con rollback explícito si
+      falla (mismo criterio que `AlmacenDeUnidades` en Normalización, T-37);
+      `GET /eventos-auditoria` desde el principio; endpoint de pendientes de
+      revisión por baja confianza (mismo criterio que
+      `GET /sugerencias/pendientes`, T-28, y
       `GET /unidades/pendientes-de-limites`, T-39) declarado ANTES de
       cualquier ruta con `{id}`. Variables de entorno idénticas a los otros
       contextos Python: `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`.

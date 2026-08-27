@@ -74,6 +74,7 @@ class TextoExtraido:
     contenido: str | None = None
     calidad: float | None = None
     razon: str | None = None
+    resultado_ocr: ResultadoOcr | None = None
 
 
 # P-08 desde el primer commit de este contexto (lección de T-37/V-01: en
@@ -158,9 +159,18 @@ def extraer_texto_born_digital(
 
 
 # RF-EX-004: componente FICTICIO — recibe un resultado de OCR YA CALCULADO por el
-# llamador; el actor del evento es el modelo (mismo criterio que T-20 usó para
-# SUGERENCIA_RECIBIDA en records-custodia: modelo_id como actor de sistema
-# atribuible, dato ya existente en el contrato, sin inventar un campo nuevo).
+# llamador. VETO real de Codex sobre la primera versión de este archivo (commit
+# dd97fb4, ver REVIEW.md/QUESTIONS.md): un resultado de OCR es probabilístico y
+# NO puede materializar el estado por sí solo (P-01) — a diferencia de
+# extraer_texto_born_digital (determinístico, sin componente probabilístico de
+# por medio, P-01 no aplica ahí). Este resultado solo queda ADJUNTO al texto
+# extraído, que permanece Pendiente de extracción hasta que `confirmar_extraccion`
+# lo confirma explícitamente — mismo patrón de dos pasos que
+# recibir_sugerencia_de_limites/confirmar_limites en normalizacion (RF-NO-002/004).
+# Decisión de Victor, 2026-08-27 (QUESTIONS.md): esta confirmación humana es
+# obligatoria para TODO resultado de OCR, no solo los de baja confianza — el
+# enrutamiento por calidad (RF-EX-006/candidatas_a_revision_por_baja_confianza)
+# es un control adicional posterior a la confirmación, no un sustituto de ella.
 def recibir_resultado_ocr(
     texto: TextoExtraido, resultado: ResultadoOcr
 ) -> tuple[TextoExtraido, EventoAuditoria]:
@@ -168,12 +178,44 @@ def recibir_resultado_ocr(
         raise ErrorDeDominio(f"El texto extraído '{texto.id}' no está marcado como escaneo.")
     if texto.estado != EstadoTextoExtraido.PENDIENTE_DE_EXTRACCION:
         raise ErrorDeDominio(f"El texto extraído '{texto.id}' no está pendiente de extracción.")
-    estado_anterior = texto.estado.value
-    actualizado = replace(texto, estado=EstadoTextoExtraido.EXTRAIDO, contenido=resultado.contenido, calidad=resultado.calidad)
+    actualizado = replace(texto, resultado_ocr=resultado)
     evento = EventoAuditoria(
         actor=resultado.modelo_id,
         fecha=resultado.fecha,
-        tipo="EXTRACCION_OCR_RECIBIDA",
+        tipo="RESULTADO_OCR_RECIBIDO",
+        estado_anterior=None,
+        estado_posterior="RESULTADO_OCR_RECIBIDO",
+    )
+    return actualizado, evento
+
+
+# RF-EX-011 (decisión de Victor, 2026-08-27, ver QUESTIONS.md — corrige el VETO
+# de Codex sobre commit dd97fb4): única función que puede materializar un texto
+# extraído a partir de un resultado de OCR — mismo criterio que
+# confirmar_limites en normalizacion (RF-NO-004) y materializar en
+# records-custodia (RF-RC-004): nada probabilístico escribe estado por sí
+# solo (P-01). No admite corregir el contenido aquí (solo confirmar el
+# resultado adjunto tal cual): si un texto de baja confianza necesita
+# corrección humana del contenido, ese mecanismo sigue [CLARIFICAR] en
+# specs/002-extraccion/spec.md §8, no se inventa uno aquí.
+def confirmar_extraccion(
+    texto: TextoExtraido, actor: str, fecha: datetime
+) -> tuple[TextoExtraido, EventoAuditoria]:
+    if texto.resultado_ocr is None:
+        raise ErrorDeDominio(f"El texto extraído '{texto.id}' no tiene un resultado de OCR pendiente de confirmar.")
+    if texto.estado != EstadoTextoExtraido.PENDIENTE_DE_EXTRACCION:
+        raise ErrorDeDominio(f"El texto extraído '{texto.id}' no está pendiente de extracción.")
+    estado_anterior = texto.estado.value
+    actualizado = replace(
+        texto,
+        estado=EstadoTextoExtraido.EXTRAIDO,
+        contenido=texto.resultado_ocr.contenido,
+        calidad=texto.resultado_ocr.calidad,
+    )
+    evento = EventoAuditoria(
+        actor=actor,
+        fecha=fecha,
+        tipo="EXTRACCION_CONFIRMADA",
         estado_anterior=estado_anterior,
         estado_posterior=actualizado.estado.value,
     )
@@ -183,11 +225,16 @@ def recibir_resultado_ocr(
 # RF-EX-009: mismo criterio que marcar_cuarentena_o_rechazo en normalizacion
 # (RF-NO-009) y validar en captura-ingesta (RF-CI-006): recuperable dentro del
 # sistema actual (reescaneo) -> En cuarentena; solo recuperable con artefacto nuevo
-# -> Rechazado. Sin precondición de estado, igual que su análogo en normalizacion:
-# se puede detectar la falla en cualquier punto antes de completar la extracción.
+# -> Rechazado. Precondición de estado (hallazgo real de Codex sobre commit
+# dd97fb4): las tres ramas terminales (Extraído/Rechazado/En cuarentena) no
+# admiten otra transición — spec §3, "Ramas terminales alternativas". Sin este
+# chequeo, un texto ya Extraído podría "revalidarse" a Rechazado, violando la
+# invariante de estado terminal.
 def marcar_cuarentena_o_rechazo(
     texto: TextoExtraido, condicion: CondicionDeExtraccion, actor: str, fecha: datetime
 ) -> tuple[TextoExtraido, EventoAuditoria]:
+    if texto.estado != EstadoTextoExtraido.PENDIENTE_DE_EXTRACCION:
+        raise ErrorDeDominio(f"El texto extraído '{texto.id}' no está pendiente de extracción.")
     if condicion == CondicionDeExtraccion.CORRUPTO:
         estado = EstadoTextoExtraido.EN_CUARENTENA
         razon = "Artefacto corrupto: requiere reescaneo."

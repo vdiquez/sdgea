@@ -41,16 +41,27 @@ es una operación determinística de lectura de formato, especificada bajo SDD (
 igual que el resto de este contexto (recepción, enrutamiento por soporte,
 estratificación de calidad, propagación de procedencia, entrega).
 
-**Por qué el texto extraído no cruza la misma capa anticorrupción que una
-Sugerencia de clasificación:** el texto extraído no es en sí mismo estado
-archivístico de un documento (no es una serie, una subserie, ni un metadato
-materializado) — es el insumo intermedio que otros componentes probabilísticos
-posteriores (Clasificación, Enriquecimiento) consumen para producir sus propias
-Sugerencias, esas sí sujetas a la capa anticorrupción de `spec-records-custodia.md`
-§4. Por eso el componente de OCR se gobierna con un **gate de EDD a nivel de
-componente** (P-05: el motor de OCR no se libera sin pasar su gate de CER) en vez de
-una confirmación humana por instancia. Esta lectura es razonable pero no está escrita
-en ninguna spec previa como regla explícita — queda marcada en la sección 8.
+**Resuelto (Victor, 2026-08-27, ver `QUESTIONS.md`) — el resultado de OCR SÍ
+exige confirmación humana antes de materializar `Extraído`:** un borrador
+anterior de esta sección argumentaba que el texto extraído, al no ser en sí
+mismo estado archivístico (no es una serie, subserie ni metadato
+materializado), podía quedar exento de la capa anticorrupción que
+`spec-records-custodia.md` §4 exige para una Sugerencia, gobernándose en su
+lugar solo con un gate de EDD a nivel de componente (P-05: el motor de OCR no
+se libera sin pasar su gate de CER). Esa lectura nunca llegó a ser una regla
+explícita — el propio texto lo admitía ("razonable pero no está escrita...
+como regla explícita") — y Codex la vetó al revisar la primera implementación
+del dominio (T-40, commit `dd97fb4`) citando P-01: nada probabilístico escribe
+estado por sí solo. Victor ratificó el veto como la lectura correcta: RF-EX-004
+(§5) exige ahora una confirmación humana explícita entre recibir el resultado
+de OCR y materializar `Extraído`, mismo patrón que RF-RC-004/RF-NO-004 en
+records-custodia/Normalización, sin excepción para este contexto. El gate de
+EDD a nivel de componente (P-05) sigue vigente — filtra qué motor de OCR se
+libera a producción — pero ya no sustituye la confirmación por instancia; son
+controles complementarios, no alternativos. El enrutamiento por calidad
+(RF-EX-006) sigue siendo un control adicional posterior a la confirmación
+(revisión reforzada de extracciones ya confirmadas pero de baja calidad), no
+un sustituto de ella.
 
 ---
 
@@ -156,11 +167,25 @@ forma determinística, sin invocar el componente probabilístico.
 
 **RF-EX-004 · Extracción probabilística de texto vía OCR (escaneo)**
 Para un soporte de escaneo, el contexto invoca el componente probabilístico de OCR
-(gobernado por EDD, ver `specs/eval/edd-harness.md` §2 y §4), que produce el texto
-extraído junto con su calidad estimada.
-- Dada una unidad documental candidata de `escaneo`, Cuando se extrae su texto vía
-  OCR, Entonces el texto extraído queda en `Extraído` con una calidad estimada
-  asociada.
+(gobernado por EDD, ver `specs/eval/edd-harness.md` §2 y §4), que produce un
+resultado con su calidad estimada. Ese resultado no materializa el texto
+extraído por sí solo (P-01; resuelto 2026-08-27, ver §1 y RF-EX-011) — queda
+adjunto, pendiente de la confirmación humana que exige RF-EX-011.
+- Dada una unidad documental candidata de `escaneo`, Cuando se recibe el
+  resultado de su extracción vía OCR, Entonces el resultado (contenido y
+  calidad estimada) queda adjunto al texto extraído, que permanece `Pendiente
+  de extracción`.
+
+**RF-EX-011 · Confirmación humana de la extracción vía OCR**
+Un resultado de OCR nunca materializa el texto extraído por sí solo; solo una
+confirmación humana explícita lo hace, mismo criterio que RF-RC-004
+(records-custodia) y RF-NO-004 (Normalización) — resuelto 2026-08-27 (Victor,
+ver `QUESTIONS.md`), corrige el VETO de Codex sobre la primera implementación
+del dominio de este contexto (T-40, commit `dd97fb4`).
+- Dado un resultado de OCR adjunto a un texto extraído `Pendiente de
+  extracción`, Cuando un actor autorizado lo confirma, Entonces el texto
+  extraído queda `Extraído` con el contenido y la calidad del resultado
+  confirmado, y con el actor y la fecha de la confirmación registrados.
 
 **RF-EX-005 · Estratificación de calidad de la extracción**
 Todo texto extraído conserva una medida de calidad/confianza, sin importar su
@@ -248,6 +273,7 @@ tiempo real.
 | RF-EX-008 | Constitución del proyecto P-08; Ley 594 de 2000 (integridad del acervo) | PENDIENTE | ☐ |
 | RF-EX-009 | Requisitos funcionales de SGDEA (AGN) — captura | PENDIENTE | ☐ |
 | RF-EX-010 | Requisitos funcionales de SGDEA (AGN) | PENDIENTE | ☐ |
+| RF-EX-011 | Constitución del proyecto P-01; RF-RC-004; RF-NO-004 | N/A | ☐ |
 
 ---
 

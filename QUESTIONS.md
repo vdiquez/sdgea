@@ -310,3 +310,58 @@ Siguiente paso: actualizar `specs/006-seguridad-acceso/spec.md` §8 quitando
 los dos `[CLARIFICAR]` ya resueltos (mismo tratamiento que T-02 le dio a
 `spec-captura-ingesta.md` §8), y corregir el hallazgo restante de la revisión
 (V-01, P-08 en Normalización) como T-37.
+
+## 2026-08-27 · T-40 Extracción — VETO de Codex sobre materialización de OCR — Ratificado
+
+Contexto: Victor pidió continuar con Extracción en modo agéntico vía
+`./orquestador.sh loop` (esta vez con Codex revisando cada commit, como en
+T-01..T-22). En la primera iteración, la instancia headless implementó
+`contexts/extraccion/dominio.py` (T-40) siguiendo literalmente el criterio
+Dado/Cuando/Entonces de RF-EX-004 tal como estaba escrito: recibir un
+resultado de OCR movía el `TextoExtraido` directo a `Extraído`, con su
+contenido y calidad, sin ningún paso humano intermedio.
+
+Codex vetó el commit (`dd97fb4`) citando P-01: "nada probabilístico escribe
+estado; debe cruzar la capa anticorrupción como Sugerencia y solo una
+decisión humana puede materializarlo". La propia spec
+(`specs/002-extraccion/spec.md` §1, versión anterior a esta resolución)
+argumentaba lo contrario — que el texto extraído no es estado archivístico
+(no es serie/subserie/metadato) y por eso puede quedar exento de la capa
+Sugerencia+decisión que sí exige `spec-records-custodia.md` §4, gobernándose
+en su lugar solo con el gate de EDD a nivel de componente (P-05) — pero el
+propio texto admitía que esa lectura "es razonable pero no está escrita...
+como regla explícita". No era, pues, una decisión ratificada; era un
+argumento razonable sin resolver, exactamente el tipo de ambigüedad real que
+la constitución pide escalar antes de construir sobre ella.
+
+Pregunté a Victor con dos caminos: (a) exigir confirmación humana explícita
+del resultado de OCR antes de materializar, mismo patrón que
+RF-RC-004/RF-NO-004 en el resto del proyecto (más costoso: un humano
+interviene en cada extracción vía OCR, no solo en las de baja confianza); (b)
+ratificar el diseño original de la spec, dejando el enrutamiento por calidad
+(RF-EX-006) como único control humano, posterior a la materialización.
+
+**Decisión de Victor: (a) — exigir confirmación humana.** Se corrigió
+`dominio.py`: `recibir_resultado_ocr` ahora solo adjunta el resultado
+(`TextoExtraido.resultado_ocr`), sin tocar el estado; nueva función
+`confirmar_extraccion(texto, actor, fecha)` (RF-EX-011, nueva) es la única
+que materializa `Extraído`, usando el contenido/calidad del resultado
+adjunto — mismo patrón de dos pasos que
+`recibir_sugerencia_de_limites`/`confirmar_limites` en Normalización.
+`specs/002-extraccion/spec.md` actualizada: §1 documenta la resolución (ya no
+argumenta la excepción), RF-EX-004 revisado (el resultado de OCR ya no
+materializa por sí solo) y RF-EX-011 añadido con su Dado/Cuando/Entonces, §7
+con la fila de trazabilidad nueva. El gate de EDD a nivel de componente
+(P-05) y el enrutamiento por calidad (RF-EX-006) siguen vigentes como
+controles complementarios, no sustitutos de la confirmación.
+
+De paso se corrigió un segundo hallazgo, no bloqueante pero señalado por
+Codex en la misma revisión: `marcar_cuarentena_o_rechazo` no rechazaba
+transiciones desde un estado ya terminal (`Extraído`/`Rechazado`/`En
+cuarentena`), pese a que la spec §3 las declara terminales. Ahora exige
+`Pendiente de extracción` como precondición, con test nuevo.
+
+29/29 tests en `contexts/extraccion` (25 originales + 4 nuevos: 3 de
+`confirmar_extraccion`, 1 de la precondición corregida). Pendiente: comitear
+esta corrección, pedirle a Codex que revise el nuevo commit contra el mismo
+diff, y solo entonces retomar `./orquestador.sh loop` para T-41 en adelante.
