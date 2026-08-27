@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "a1e2c3d4-5f60-4a7b-8c9d-sgdea0000001",
-    "name": "SGDEA - Corte vertical (captura-ingesta + records-custodia + seguridad-acceso)",
-    "description": "Cubre los 21 endpoints reales de specs/spec-infra-servicios.md (T-16/T-17/T-25), en el mismo orden en que se probaron manualmente con curl. Corre la carpeta completa de arriba a abajo con el Collection Runner: cada request encadena su ID con la siguiente vía variables de entorno (lote_id, documento_id, trd_version, identidad_id_sa, rol_sa, actor_sa). Requiere el stack levantado con el overlay de puertos locales:\n\ndocker compose -f deploy/docker-compose.saas.yml -f deploy/docker-compose.local-ports.yml up -d --build",
+    "name": "SGDEA - Corte vertical (4 servicios: captura-ingesta + records-custodia + seguridad-acceso + validacion-humana)",
+    "description": "Cubre 23 de los 26 endpoints reales de specs/spec-infra-servicios.md (T-16/T-17/T-25/T-30) -- los 3 de validacion-humana que faltan (candidatas a aprobacion masiva, aprobacion en bloque, estado de la cola) ya tienen su propia cobertura en los tests de Gradle del modulo (T-30), no aqui. La carpeta 4 es un flujo end-to-end real entre los tres servicios (identidad -> custodia -> sugerencia -> cola de revision -> decision -> clasificacion materializada), no solo peticiones aisladas. Corre la carpeta completa de arriba a abajo con el Collection Runner. Requiere el stack levantado con el overlay de puertos locales:\n\ndocker compose -f deploy/docker-compose.saas.yml -f deploy/docker-compose.local-ports.yml up -d --build",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -1081,6 +1081,354 @@
                   "  pm.expect(tipos).to.include(\"AUTENTICACION_FALLIDA\");",
                   "  pm.expect(tipos).to.include(\"AUTORIZACION_PERMITIDA\");",
                   "  pm.expect(tipos).to.include(\"AUTORIZACION_DENEGADA\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Validacion-Humana (flujo end-to-end)",
+      "item": [
+        {
+          "name": "25 [E2E] Crear rol para el flujo de Validacion Humana",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/roles",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "roles"
+              ]
+            },
+            "description": "Primer paso del flujo end-to-end de T-32: un rol que puede leer y decidir sobre documentos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"{{rol_vh}}\",\n  \"permisos\": [\n    { \"accion\": \"decidir\", \"tipoRecurso\": \"documento\", \"nivelClasificacionMaximo\": \"PUBLICA\" },\n    { \"accion\": \"leer\", \"tipoRecurso\": \"documento\", \"nivelClasificacionMaximo\": \"PUBLICA\" }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"rol_vh\", \"rol-vh-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "26 [E2E] Crear identidad con ese rol",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/identidades",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "identidades"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{identidad_id_vh}}\",\n  \"actor\": \"{{actor_vh}}\",\n  \"credencial\": \"clave-vh-postman\",\n  \"roles\": [\"{{rol_vh}}\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"actor_vh\", \"actor-vh-postman-\" + Date.now());",
+                  "pm.environment.set(\"identidad_id_vh\", \"id-vh-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "27 [E2E] Custodiar el documento del flujo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{documento_id_vh}}\",\n  \"bytesBase64\": \"SG9sYSBWSA==\",\n  \"actor\": \"sistema-ingesta\",\n  \"fecha\": \"2026-08-26T12:00:00Z\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-26T12:00:00Z\",\n    \"loteOFlujoId\": \"lote-vh-postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"documento_id_vh\", \"doc-vh-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "28 [E2E] Recibir una sugerencia de clasificacion para ese documento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/sugerencias",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "sugerencias"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentoId\": \"{{documento_id_vh}}\",\n  \"tipo\": \"clasificacion\",\n  \"contenidoPropuesto\": \"serie-1\",\n  \"modeloId\": \"emisor-ficticio-v0\",\n  \"evidencia\": [\"pagina-1\"],\n  \"confianza\": 0.3,\n  \"fecha\": \"2026-08-26T12:05:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "29 [E2E] La cola de Validacion Humana incluye el documento (RF-VH-001, RF-VH-007)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{validacion_humana_base_url}}/colas/clasificacion?identidadId={{identidad_id_vh}}",
+              "host": [
+                "{{validacion_humana_base_url}}"
+              ],
+              "path": [
+                "colas",
+                "clasificacion"
+              ],
+              "query": [
+                {
+                  "key": "identidadId",
+                  "value": "{{identidad_id_vh}}"
+                }
+              ]
+            },
+            "description": "Primera integracion real entre los tres servicios: VH llama a records-custodia (sugerencias/pendientes) y a seguridad-acceso (/autorizacion) para responder esto."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const cola = pm.response.json();",
+                  "pm.test(\"el documento del flujo aparece en la cola\", () => {",
+                  "  pm.expect(cola.some((s) => s.documentoId === pm.environment.get(\"documento_id_vh\"))).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "30 [E2E] Decidir sobre la sugerencia desde Validacion Humana (RF-VH-003, RF-VH-006)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{validacion_humana_base_url}}/decisiones",
+              "host": [
+                "{{validacion_humana_base_url}}"
+              ],
+              "path": [
+                "decisiones"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identidadId\": \"{{identidad_id_vh}}\",\n  \"sugerencia\": {\n    \"documentoId\": \"{{documento_id_vh}}\",\n    \"tipo\": \"clasificacion\",\n    \"contenidoPropuesto\": \"serie-1\",\n    \"modeloId\": \"emisor-ficticio-v0\",\n    \"evidencia\": [\"pagina-1\"],\n    \"confianza\": 0.3,\n    \"fecha\": \"2026-08-26T12:05:00Z\"\n  },\n  \"clasificacionResultante\": { \"trdVersion\": 1, \"serieId\": \"serie-1\" },\n  \"actor\": \"archivista-postman\",\n  \"fecha\": \"2026-08-26T12:10:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const decision = pm.response.json();",
+                  "pm.test(\"aceptacion, no correccion\", () => pm.expect(decision.tipo).to.eql(\"ACEPTACION\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "31 [E2E] Records-Custodia confirma la clasificacion materializada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id_vh}}",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id_vh}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const documento = pm.response.json();",
+                  "pm.test(\"clasificacion materializada con la serie decidida en VH\", () => pm.expect(documento.clasificacion.serieId).to.eql(\"serie-1\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "32 [E2E] La cola de Validacion Humana ya no incluye el documento (RF-VH-001)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{validacion_humana_base_url}}/colas/clasificacion?identidadId={{identidad_id_vh}}",
+              "host": [
+                "{{validacion_humana_base_url}}"
+              ],
+              "path": [
+                "colas",
+                "clasificacion"
+              ],
+              "query": [
+                {
+                  "key": "identidadId",
+                  "value": "{{identidad_id_vh}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const cola = pm.response.json();",
+                  "pm.test(\"el documento ya no aparece: quedo materializado\", () => {",
+                  "  pm.expect(cola.some((s) => s.documentoId === pm.environment.get(\"documento_id_vh\"))).to.be.false;",
                   "});"
                 ]
               }

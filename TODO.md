@@ -210,3 +210,9 @@
       punta a punta real de los cuatro servicios a la vez** (identidad+rol
       → custodia+sugerencia → cola de VH → decisión → clasificación
       materializada → cola vacía), primer intento sin fallos.
+- [x] T-32 Colección Postman: carpeta "4. Validación-Humana (flujo
+      end-to-end)" (8 peticiones, ver STATE.md para el detalle completo).
+      Revalidada con los cuatro servicios corriendo a la vez — 33/33
+      peticiones, 66/66 aserciones, dos corridas seguidas sin fallos.
+      **Con esto, Validación Humana queda completa de punta a punta
+      (T-28..T-32).**

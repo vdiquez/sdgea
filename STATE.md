@@ -983,3 +983,34 @@ primero.
   Es la primera vez que el pipeline completo (identidad → custodia →
   sugerencia → revisión humana → materialización) funciona de extremo a
   extremo contra servicios reales, no contra dominio aislado.
+- [x] T-32 Colección Postman: carpeta nueva "4. Validación-Humana (flujo
+  end-to-end)" (8 peticiones, 25-32) — replica en Postman el mismo flujo que
+  T-31 verificó a mano: crear rol e identidad en Seguridad y Acceso →
+  custodiar documento y recibir sugerencia en Records/Custodia → la cola de
+  Validación Humana la incluye → decidir la acepta → Records/Custodia
+  confirma la clasificación materializada → la cola vuelve a estar vacía.
+  Cubre 2 de los 5 endpoints de validacion-humana (`GET /colas/clasificacion`,
+  `POST /decisiones`); los otros 3 (candidatas a aprobación masiva, aprobación
+  en bloque, estado de la cola) ya tienen su propia cobertura en los 17 tests
+  de Gradle de T-30 — no duplicados aquí a propósito. Variables de entorno
+  nuevas con timestamp (`identidad_id_vh`, `rol_vh`, `actor_vh`,
+  `documento_id_vh`), mismo patrón anti-colisión que las demás.
+  Revalidada con los **cuatro servicios corriendo a la vez** (`docker compose
+  up -d --build` con los cuatro Dockerfiles) y `npx newman run` — 33/33
+  peticiones, 66/66 aserciones, dos corridas seguidas sin fallos; stack
+  bajado al terminar.
+  **Con esto, Validación Humana (specs/007-validacion-humana/spec.md) queda
+  completo de punta a punta: dominio (T-29) → contrato HTTP + adaptadores
+  reales (T-30) → Docker (T-31) → Postman/Newman con flujo end-to-end real
+  (T-32) — más una extensión pequeña y justificada a Records/Custodia
+  (T-28) que ningún RF anterior necesitaba.**
+
+Siguiente paso: cuatro de los nueve bounded contexts están implementados y
+conectados de verdad entre sí (Captura/Ingesta y Records/Custodia siguen sin
+llamar a Seguridad y Acceso — brecha ya anotada en `spec-infra-servicios.md`
+§9). Los cinco contextos probabilísticos (Normalización, Extracción,
+Clasificación, Enriquecimiento, Indexación y Búsqueda) solo tienen spec de
+nivel 1 — implementarlos exige decidir primero cómo se ven sus componentes
+FICTICIO, ya que la constitución prohíbe los reales. Decisión de Victor:
+otro contexto, cerrar la brecha de autorización en captura-ingesta/
+records-custodia, diseño de UI/UX, o F4 (hilo comercial).
