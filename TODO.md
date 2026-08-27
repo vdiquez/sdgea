@@ -205,3 +205,8 @@
       sin contrato: Normalización no existe como servicio. TDD: 4 tests de
       adaptadores (MockRestServiceServer) + 5 HTTP del servicio propio, 17
       en el módulo, verdes en el primer intento. `./test.sh` en verde.
+- [x] T-31 Dockerfile + wiring en docker-compose para Validación Humana (ver
+      STATE.md para el detalle completo). **Verificado con un flujo de
+      punta a punta real de los cuatro servicios a la vez** (identidad+rol
+      → custodia+sugerencia → cola de VH → decisión → clasificación
+      materializada → cola vacía), primer intento sin fallos.

@@ -967,3 +967,19 @@ primero.
   decisión individual, aprobación en bloque, estado de la cola sin exigir
   permiso). 17 tests en el módulo, verdes en el primer intento. `./test.sh`
   en verde para todo el repo.
+- [x] T-31 Dockerfile real de validacion-humana (mismo patrón que los otros
+  tres) + wiring en `docker-compose.{saas,onprem}.yml` (sin `ports:`, con
+  `RECORDS_CUSTODIA_BASE_URL=http://records-custodia:8082` y
+  `SEGURIDAD_ACCESO_BASE_URL=http://seguridad-acceso:8083` — nombres de
+  servicio de docker-compose, no `localhost`, porque corre en un contenedor
+  aparte; `depends_on` los otros dos) y en `docker-compose.local-ports.yml`
+  (puerto 8084).
+  **Verificado en vivo con un flujo de punta a punta real, los cuatro
+  servicios a la vez, primer intento sin fallos:** crear rol e identidad en
+  Seguridad y Acceso → custodiar un documento y recibir una sugerencia en
+  Records/Custodia → `GET /colas/clasificacion` en Validación Humana
+  devuelve la sugerencia → `POST /decisiones` la acepta → Records/Custodia
+  confirma la clasificación materializada → la cola vuelve a estar vacía.
+  Es la primera vez que el pipeline completo (identidad → custodia →
+  sugerencia → revisión humana → materialización) funciona de extremo a
+  extremo contra servicios reales, no contra dominio aislado.

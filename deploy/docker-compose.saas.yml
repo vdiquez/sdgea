@@ -4,11 +4,12 @@
 # IMPLEMENTACIÓN detrás de cada interfaz de P-03 (almacenamiento de objetos, OCR,
 # embeddings, inferencia LLM, índice vectorial, índice léxico), nunca el código de
 # orquestación. Dockerfiles reales ya wireados para captura-ingesta,
-# records-custodia (T-18) y seguridad-acceso (T-26, specs/spec-infra-servicios.md);
-# el resto de contextos los suma cuando tengan código.
+# records-custodia (T-18), seguridad-acceso (T-26) y validacion-humana (T-31,
+# specs/spec-infra-servicios.md); el resto de contextos los suma cuando tengan
+# código. validacion-humana no tiene Postgres propio (T-30: orquestador HTTP
+# sobre records-custodia y seguridad-acceso, sin persistencia propia).
 #
 # TODO por contexto, cuando exista su Dockerfile:
-#   - contexts/validacion-humana   (Kotlin/Spring)
 #   - contexts/normalizacion       (Python/FastAPI)
 #   - contexts/extraccion          (Python/FastAPI)
 #   - contexts/clasificacion       (Python/FastAPI)
@@ -84,6 +85,20 @@ services:
       DB_PASSWORD: sgdea
     depends_on:
       - postgres
+
+  # T-29/T-30: sin Postgres — orquesta records-custodia y seguridad-acceso por
+  # HTTP real (primera integración entre servicios de este proyecto). Sin
+  # `ports:`, mismo criterio que los otros tres.
+  validacion-humana:
+    build:
+      context: ..
+      dockerfile: contexts/validacion-humana/Dockerfile
+    environment:
+      RECORDS_CUSTODIA_BASE_URL: http://records-custodia:8082
+      SEGURIDAD_ACCESO_BASE_URL: http://seguridad-acceso:8083
+    depends_on:
+      - records-custodia
+      - seguridad-acceso
 
 volumes:
   postgres-data:

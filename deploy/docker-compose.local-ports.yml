@@ -19,3 +19,7 @@ services:
   seguridad-acceso:
     ports:
       - "8083:8083"
+
+  validacion-humana:
+    ports:
+      - "8084:8084"
