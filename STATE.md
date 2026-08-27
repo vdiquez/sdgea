@@ -1103,3 +1103,36 @@ plano (sin `src/`), `pytest`, dataclasses `frozen=True` para value objects,
   Wiring en `docker-compose.{saas,onprem}.yml` (con Postgres propio, a
   diferencia de validacion-humana — este contexto sí mantiene estado) y en
   `docker-compose.local-ports.yml` (puerto 8085).
+- [x] T-36 Colección Postman: carpeta nueva "5. Normalizacion" (9
+  peticiones, 33-41) — ciclo completo: recibir ítem no trivial → sugerencia
+  de límites (EMISOR FICTICIO) → confirmación humana → normalizar →
+  entregar a Extracción, más un segundo ítem que se rechaza por formato no
+  soportado (RF-NO-009) para que el conteo final cuadre con dos unidades
+  terminales (RF-NO-008). Cubre los 8 endpoints de normalizacion.
+  **Bug real encontrado en la primera revalidación, no en el producto:** la
+  huella de contenido de la petición 33 era un string fijo
+  (`"huella-no-postman"`), no generada con timestamp como el resto de las
+  variables — la segunda corrida de Newman detectó (correctamente, RF-NO-006
+  funcionando tal como se diseñó) que esa huella ya había sido entregada en
+  la primera corrida, y la unidad quedó `VINCULADA_A_DUPLICADO` en vez de
+  `ENTREGADA_A_EXTRACCION`, rompiendo la aserción de la petición 38. Corregido
+  generando `huella_no` con timestamp en el mismo prerequest script que ya
+  genera `unidad_id_no`/`lote_id_no`.
+  Revalidada con los **cinco servicios corriendo a la vez** — primera
+  corrida con el bug de arriba, corregida, y dos corridas seguidas limpias
+  después: 42/42 peticiones, 79/79 aserciones. Stack bajado al terminar.
+  **Con esto, Normalización (specs/001-normalizacion/spec.md) queda
+  completa de punta a punta: dominio (T-33) → HTTP + persistencia (T-34) →
+  Docker (T-35) → Postman/Newman (T-36).**
+
+Siguiente paso: cinco de los nueve bounded contexts están implementados;
+cuatro conectados entre sí de verdad (Normalización todavía se prueba
+aislada — RF-NO-001 no tiene una fuente real de Captura/Ingesta, y RF-VH-005
+sigue sin que Validación Humana llame al endpoint de confirmación de límites
+que Normalización ya expone, aunque ambos lados existen desde hoy). Quedan 4
+contextos probabilísticos sin implementar (Extracción, Clasificación,
+Enriquecimiento, Indexación y Búsqueda) — todos seguirían el mismo patrón
+Python/FastAPI que Normalización acaba de establecer. Decisión de Victor:
+cerrar el ciclo RF-VH-005 (Validación Humana → Normalización, ya con ambos
+extremos reales), otro contexto probabilístico, la brecha de autorización en
+captura-ingesta/records-custodia, diseño de UI/UX, o F4.

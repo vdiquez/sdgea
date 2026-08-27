@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "a1e2c3d4-5f60-4a7b-8c9d-sgdea0000001",
-    "name": "SGDEA - Corte vertical (4 servicios: captura-ingesta + records-custodia + seguridad-acceso + validacion-humana)",
-    "description": "Cubre 23 de los 26 endpoints reales de specs/spec-infra-servicios.md (T-16/T-17/T-25/T-30) -- los 3 de validacion-humana que faltan (candidatas a aprobacion masiva, aprobacion en bloque, estado de la cola) ya tienen su propia cobertura en los tests de Gradle del modulo (T-30), no aqui. La carpeta 4 es un flujo end-to-end real entre los tres servicios (identidad -> custodia -> sugerencia -> cola de revision -> decision -> clasificacion materializada), no solo peticiones aisladas. Corre la carpeta completa de arriba a abajo con el Collection Runner. Requiere el stack levantado con el overlay de puertos locales:\n\ndocker compose -f deploy/docker-compose.saas.yml -f deploy/docker-compose.local-ports.yml up -d --build",
+    "name": "SGDEA - Corte vertical (5 servicios: captura-ingesta + records-custodia + seguridad-acceso + validacion-humana + normalizacion)",
+    "description": "Cubre 31 de los 34 endpoints reales de specs/spec-infra-servicios.md (T-16/T-17/T-25/T-30/T-34). La carpeta 4 (Validacion-Humana) y la 5 (Normalizacion) ejercitan flujos reales, no solo peticiones aisladas -- normalizacion (T-33..T-35) es el primer contexto Python/FastAPI del proyecto. Corre la carpeta completa de arriba a abajo con el Collection Runner. Requiere el stack levantado con el overlay de puertos locales:\n\ndocker compose -f deploy/docker-compose.saas.yml -f deploy/docker-compose.local-ports.yml up -d --build",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -1429,6 +1429,384 @@
                   "const cola = pm.response.json();",
                   "pm.test(\"el documento ya no aparece: quedo materializado\", () => {",
                   "  pm.expect(cola.some((s) => s.documentoId === pm.environment.get(\"documento_id_vh\"))).to.be.false;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Normalizacion",
+      "item": [
+        {
+          "name": "33 Recibir item no trivial (RF-NO-001)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades"
+              ]
+            },
+            "description": "Primer contexto Python/FastAPI del proyecto (T-33..T-35).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{unidad_id_no}}\",\n  \"lote_id\": \"{{lote_id_no}}\",\n  \"item_ingesta_id\": \"item-no-postman\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-26T12:00:00Z\",\n    \"disparador\": \"carga_por_lote\",\n    \"lote_o_flujo_id\": \"{{lote_id_no}}\"\n  },\n  \"huella_de_contenido\": \"{{huella_no}}\",\n  \"es_caso_trivial\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"unidad_id_no\", \"unidad-no-postman-\" + Date.now());",
+                  "pm.environment.set(\"lote_id_no\", \"lote-no-postman-\" + Date.now());",
+                  "pm.environment.set(\"huella_no\", \"huella-no-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"queda pendiente de limites\", () => pm.expect(pm.response.json().estado).to.eql(\"PENDIENTE_DE_LIMITES\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "34 Consultar la unidad recien creada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades/{{unidad_id_no}}",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades",
+                "{{unidad_id_no}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "35 Recibir sugerencia de limites -- componente FICTICIO (RF-NO-002)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades/{{unidad_id_no}}/sugerencia-limites",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades",
+                "{{unidad_id_no}}",
+                "sugerencia-limites"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"modelo_id\": \"emisor-ficticio-v0\",\n  \"evidencia\": [\"pagina-1\"],\n  \"confianza\": 0.35,\n  \"fecha\": \"2026-08-26T12:05:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"la sugerencia no confirma por si sola (P-01)\", () => pm.expect(pm.response.json().estado).to.eql(\"PENDIENTE_DE_LIMITES\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "36 Confirmacion humana de limites (RF-NO-004)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades/{{unidad_id_no}}/confirmacion-limites",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades",
+                "{{unidad_id_no}}",
+                "confirmacion-limites"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"archivista-postman\",\n  \"fecha\": \"2026-08-26T12:10:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"limites confirmados\", () => pm.expect(pm.response.json().estado).to.eql(\"LIMITES_CONFIRMADOS\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "37 Normalizar a formato de preservacion (RF-NO-005)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades/{{unidad_id_no}}/normalizacion",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades",
+                "{{unidad_id_no}}",
+                "normalizacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"formato_normalizado\": \"application/pdf\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, NORMALIZADA\", () => pm.expect(pm.response.json().estado).to.eql(\"NORMALIZADA\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "38 Entregar a Extraccion (RF-NO-006, RF-NO-010)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades/{{unidad_id_no}}/entrega",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades",
+                "{{unidad_id_no}}",
+                "entrega"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, ENTREGADA_A_EXTRACCION\", () => pm.expect(pm.response.json().estado).to.eql(\"ENTREGADA_A_EXTRACCION\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "39 Un segundo item de formato no soportado queda Rechazada (RF-NO-009)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{unidad_id_no_2}}\",\n  \"lote_id\": \"{{lote_id_no}}\",\n  \"item_ingesta_id\": \"item-no-postman-2\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-26T12:00:00Z\",\n    \"disparador\": \"carga_por_lote\",\n    \"lote_o_flujo_id\": \"{{lote_id_no}}\"\n  },\n  \"es_caso_trivial\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"unidad_id_no_2\", \"unidad-no-postman-2-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "40 Validar el segundo item como formato no soportado -> Rechazada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades/{{unidad_id_no_2}}/validacion",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades",
+                "{{unidad_id_no_2}}",
+                "validacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"condicion\": \"FORMATO_NO_SOPORTADO\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"RECHAZADA con razon\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.estado).to.eql(\"RECHAZADA\");",
+                  "  pm.expect(body.razon).to.be.a(\"string\").and.not.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "41 Conteo por estado del lote -- cero perdida silenciosa (RF-NO-008)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/lotes/{{lote_id_no}}/conteo",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "lotes",
+                "{{lote_id_no}}",
+                "conteo"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const conteo = pm.response.json();",
+                  "pm.test(\"las dos unidades del lote llegaron a un estado terminal\", () => {",
+                  "  pm.expect(conteo.total).to.eql(2);",
+                  "  pm.expect(conteo.sin_perdida_silenciosa).to.be.true;",
                   "});"
                 ]
               }

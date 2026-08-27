@@ -243,4 +243,11 @@
       sugerencia de límites → confirmación → normalizar → entregar →
       conteo), primer intento sin fallos. Wiring en docker-compose (puerto
       8085, con Postgres propio).
+- [x] T-36 Colección Postman: carpeta "5. Normalizacion" (9 peticiones, ver
+      STATE.md para el detalle completo, incluido un bug real de test
+      encontrado en la primera revalidación: huella de contenido sin
+      timestamp, causando un falso "duplicado" en la segunda corrida).
+      Revalidada con los cinco servicios corriendo a la vez — 42/42
+      peticiones, 79/79 aserciones tras la corrección. **Con esto,
+      Normalización queda completa de punta a punta (T-33..T-36).**
 
