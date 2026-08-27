@@ -26,10 +26,17 @@ cualquier otro código.
   2026-08-21) — no un monolito modular. Arrancó con `captura-ingesta` y
   `records-custodia`; `seguridad-acceso` es el tercero (2026-08-25);
   `validacion-humana` es el cuarto (2026-08-26) y el primero que no tiene
-  persistencia propia — es un orquestador HTTP real sobre los otros dos (§6).
-  El resto de los contextos adoptan el mismo patrón cuando les toque turno.
-- **Framework de bootstrap: Spring Boot** — decisión activa (F1.D1,
-  confirmada como no-aspiracional el 2026-08-21), no una spec nueva.
+  persistencia propia — es un orquestador HTTP real sobre los otros dos (§6);
+  `normalizacion` es el quinto (2026-08-26) y el primero en Python/FastAPI en
+  vez de Kotlin/Spring (§7) — decisión de stack ya tomada antes de T-33 para
+  los cinco contextos probabilísticos restantes. El resto de los contextos
+  adoptan el mismo patrón (Python/FastAPI) cuando les toque turno.
+- **Framework de bootstrap: Spring Boot para los contextos deterministas o
+  híbridos ya construidos (captura-ingesta, records-custodia,
+  seguridad-acceso, validacion-humana); Python/FastAPI para los
+  probabilísticos** (F1.D1 fijó Spring Boot; la elección de Python/FastAPI
+  para los probabilísticos ya estaba en `docker-compose.saas.yml` y en el
+  workspace `uv` de la raíz antes de que se implementara ninguno).
 - **Persistencia: Postgres por contexto, sin esquema compartido** — cada
   contexto mapea sus propios agregados a sus propias tablas, en el mismo
   `postgres` que ya declaran `deploy/docker-compose.{saas,onprem}.yml`. Un
@@ -176,36 +183,79 @@ por entorno para que el mismo código base sirva a SaaS y on-premise, P-02).
 
 Sin mapeo de persistencia: no hay tablas propias de este contexto.
 
-Fuera de alcance de esta spec: RF-VH-005 (confirmación/corrección de límites
-de documento) — Normalización no existe todavía como servicio, así que no hay
-nada real que llamar; el puerto de dominio equivalente tampoco se construyó
-en T-29 por la misma razón (no inventar una integración contra un servicio
-que no existe).
+RF-VH-005 (confirmación/corrección de límites de documento) no se construyó
+en T-29/T-30 porque Normalización no existía todavía como servicio — ver §7
+(nueva) para su contrato ahora que sí existe. Cerrarlo en Validación Humana
+(nuevo puerto `ConfirmadorDeLimites` + adaptador HTTP real) queda como tarea
+explícita, no incluida en el alcance original de T-29/T-30.
 
-## 7. Formato de error y serialización
+## 7. Contrato mínimo — `normalizacion`
+
+Traduce las funciones de `contexts/normalizacion/dominio.py` (T-33):
+`recibir_item`, `recibir_sugerencia_de_limites`, `confirmar_limites`,
+`normalizar`, `marcar_cuarentena_o_rechazo`, `entregar`,
+`contar_por_estado`. **Primer contexto en Python/FastAPI** de este proyecto
+— decisión de stack ya tomada antes de esta tarea (`docker-compose.saas.yml`
+ya declaraba "Python/FastAPI" para este contexto y los otros cuatro
+probabilísticos; `contexts/normalizacion` ya era miembro del workspace `uv`
+de la raíz con su propio `pyproject.toml`). Sigue la misma convención que
+`eval-harness` (único proyecto Python que ya corría aquí): capa de dominio
+sin dependencias de framework, `pytest`, dataclasses `frozen=True`.
+
+| Método y ruta | Dominio que invoca | RF |
+|---|---|---|
+| `POST /unidades` | `recibir_item(...)` | RF-NO-001, RF-NO-003 |
+| `GET /unidades/{id}` | consulta directa del almacén | — |
+| `POST /unidades/{id}/sugerencia-limites` | `recibir_sugerencia_de_limites(...)` | RF-NO-002 |
+| `POST /unidades/{id}/confirmacion-limites` | `confirmar_limites(...)` | RF-NO-004 |
+| `POST /unidades/{id}/normalizacion` | `normalizar(...)` | RF-NO-005 |
+| `POST /unidades/{id}/validacion` | `marcar_cuarentena_o_rechazo(...)` | RF-NO-009 |
+| `POST /unidades/{id}/entrega` | `entregar(...)` (huellas ya entregadas calculadas server-side) | RF-NO-006, RF-NO-010 |
+| `GET /lotes/{lote_id}/conteo` | `contar_por_estado(...)` | RF-NO-008 |
+
+Mapeo de persistencia (estructura, no DDL): `UnidadDocumentalCandidata` →
+tabla `unidades_documentales`, con procedencia/sugerencia/confirmación
+aplanadas en columnas propias (mismo criterio que `Procedencia` en
+captura-ingesta) y `evidencia` serializada a JSON en una columna de texto
+(mismo criterio que `evidencia_json` en records-custodia). Variables de
+entorno idénticas a los contextos Kotlin: `DB_HOST`, `DB_PORT`, `DB_NAME`,
+`DB_USER`, `DB_PASSWORD`.
+
+Fuera de alcance de esta spec: la recepción real de ítems desde
+Captura/Ingesta (RF-NO-001 asume que `lote_id`/`item_ingesta_id`/`procedencia`
+ya llegan en la petición; Captura/Ingesta todavía no expone un mecanismo para
+que Normalización los descubra — mismo tipo de brecha que
+`GET /sugerencias/pendientes`, T-28, resolvió para Records/Custodia).
+
+## 8. Formato de error y serialización
 
 `[CLARIFICAR]` — esta spec no fija un formato de error HTTP (RFC 7807 u otro)
 ni convenciones de serialización (fechas ISO-8601, `snake_case` vs
 `camelCase` en JSON, etc.). Es una decisión de implementación transversal a
-los cuatro contextos; la tarea que ejecute esta spec debe fijarla y
+los cinco contextos; la tarea que ejecute esta spec debe fijarla y
 aplicarla consistente en todos los servicios, documentándola en el código —
 no queda bloqueada por esto porque no depende de una decisión de negocio, es
-convención técnica interna.
+convención técnica interna. Nota real de esta tarea: FastAPI/Pydantic no
+serializa las `@property` de un dataclass Python (a diferencia de
+Kotlin/Jackson, que sí serializa `val ... get()`) — cada endpoint que
+necesite exponer un valor derivado lo arma explícito en la capa HTTP
+(`api.py`), no asumas que devolver el dataclass del dominio alcanza.
 
-## 8. Trazabilidad
+## 9. Trazabilidad
 
 | Elemento | Traza a |
 |---|---|
 | Un servicio HTTP por contexto | Decisión de Victor, 2026-08-21; P-07 (cortes verticales) |
-| Spring Boot | F1.D1; confirmado activo 2026-08-21 |
+| Spring Boot (contextos deterministas/híbridos ya construidos) | F1.D1; confirmado activo 2026-08-21 |
+| Python/FastAPI (contextos probabilísticos) | Decisión ya tomada antes de T-33 — `docker-compose.saas.yml` y el workspace `uv` de la raíz ya la reflejaban |
 | Postgres por contexto, sin esquema compartido | Decisión de Victor, 2026-08-21; P-02 (mismo código base, ambos modos de despliegue) |
-| Cada endpoint traduce un método de dominio ya probado | P-06 (spec antes de código); TDD ya aplicado en T-01..T-11, T-23, T-29 |
+| Cada endpoint traduce un método de dominio ya probado | P-06 (spec antes de código); TDD ya aplicado en T-01..T-11, T-23, T-29, T-33 |
 | validacion-humana como orquestador HTTP real, sin persistencia propia | Decisión de Victor, 2026-08-26; specs/007-validacion-humana/spec.md §3 |
 
-## 9. Decisiones pendientes / preguntas abiertas
+## 10. Decisiones pendientes / preguntas abiertas
 
 - **[CLARIFICAR]** Formato de error HTTP y convenciones de serialización
-  (§7) — decisión técnica, no bloqueante.
+  (§8) — decisión técnica, no bloqueante.
 - **[CLARIFICAR]** Integración real de autenticación/autorización: el
   contexto Seguridad y Acceso ya existe como servicio (T-23, 2026-08-25,
   §5), pero `captura-ingesta` y `records-custodia` todavía no lo llaman —
@@ -215,5 +265,13 @@ convención técnica interna.
   records-custodia hagan lo mismo, ambos siguen sin deber exponerse fuera de
   una red de confianza (docker-compose interno).
 - **[CLARIFICAR]** RF-VH-005 (confirmación/corrección de límites de
-  documento) no tiene contrato aquí — Normalización no existe todavía como
-  servicio. Se agrega cuando ese contexto se implemente.
+  documento): Normalización ya existe como servicio (T-33/T-34, §7) y ya
+  expone `POST /unidades/{id}/confirmacion-limites`, pero Validación Humana
+  todavía no lo llama — mismo tipo de brecha que autenticación/autorización
+  arriba, no cerrada en esta tarea.
+- **[CLARIFICAR]** Recepción real de ítems desde Captura/Ingesta en
+  Normalización (RF-NO-001): Captura/Ingesta no expone todavía un mecanismo
+  para que Normalización descubra qué ítems están listos para recibir, ni
+  una forma de marcarlos `Entregado` (RF-CI-010 sigue sin implementar, ver
+  §3). `POST /unidades` de Normalización funciona hoy con los datos que le
+  pase el llamador directamente.

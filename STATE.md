@@ -1059,3 +1059,29 @@ plano (sin `src/`), `pytest`, dataclasses `frozen=True` para value objects,
   TDD: 16 tests nuevos (`tests/test_dominio.py`), verdes en el primer
   intento. `./test.sh` en verde para todo el repo (Gradle + los dos
   proyectos Python).
+- [x] T-34 Servicio HTTP (FastAPI) + persistencia (SQLAlchemy + Postgres)
+  para Normalización, contra `spec-infra-servicios.md` §7 (nueva): 8
+  endpoints (`persistencia.py`, `api.py`, `main.py`). Mismo criterio que los
+  contextos Kotlin para persistencia (procedencia/sugerencia/confirmación
+  aplanadas en columnas, `evidencia` como JSON en texto) y para variables de
+  entorno (`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`, iguales a
+  los contextos Kotlin para que docker-compose no necesite un mecanismo
+  distinto por lenguaje).
+  Dos bugs reales encontrados y corregidos durante el TDD, específicos de
+  este stack (nunca aparecieron en los contextos Kotlin):
+  1. `sqlite:///:memory:` sin `poolclass=StaticPool` crea una base nueva y
+     vacía por cada conexión que el pool abre — los 14 tests HTTP fallaban
+     con "no such table" porque `create_all` y cada sesión de petición veían
+     bases distintas. `StaticPool` en el fixture de test lo corrige.
+  2. FastAPI/Pydantic **no serializa las `@property` de un dataclass
+     stdlib** — a diferencia de Kotlin, donde Jackson sí serializa
+     `val ... get()`. El endpoint `GET /lotes/{id}/conteo` devolvía
+     `ConteoPorEstado` sin `terminales`/`sin_perdida_silenciosa` en el JSON;
+     corregido devolviendo un dict explícito con los cuatro campos. Anotado
+     en `spec-infra-servicios.md` §8 como advertencia para los próximos
+     cuatro contextos Python.
+  RF-VH-005 (spec-infra-servicios.md §9): Normalización ya expone
+  `POST /unidades/{id}/confirmacion-limites`, pero Validación Humana
+  todavía no lo llama — brecha explícita, no cerrada en esta tarea.
+  TDD: 14 tests HTTP nuevos, verdes junto con los 16 de dominio (30 en el
+  módulo). `./test.sh` en verde para todo el repo.

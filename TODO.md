@@ -229,4 +229,12 @@
       dependencias reales; `test.sh` extendido con
       `uv run --directory contexts/normalizacion pytest`. TDD: 16 tests
       nuevos, verdes en el primer intento.
+- [x] T-34 Servicio HTTP (FastAPI) + persistencia (SQLAlchemy + Postgres)
+      para Normalización (ver STATE.md para el detalle completo, incluidos
+      dos bugs reales de stack encontrados y corregidos: `StaticPool` para
+      SQLite en memoria, y que FastAPI no serializa `@property` de
+      dataclasses). 8 endpoints contra `spec-infra-servicios.md` §7 (nueva).
+      RF-VH-005 sigue sin cerrarse: Normalización ya expone el endpoint,
+      Validación Humana todavía no lo llama. TDD: 14 tests HTTP nuevos, 30
+      en el módulo, verdes. `./test.sh` en verde.
 

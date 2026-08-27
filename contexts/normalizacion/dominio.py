@@ -1,24 +1,28 @@
 from dataclasses import dataclass, replace
 from datetime import datetime
-from enum import Enum, auto
+from enum import Enum
 
 
-class EstadoUnidadDocumental(Enum):
-    PENDIENTE_DE_LIMITES = auto()
-    LIMITES_CONFIRMADOS = auto()
-    NORMALIZADA = auto()
-    ENTREGADA_A_EXTRACCION = auto()
-    RECHAZADA = auto()
-    EN_CUARENTENA = auto()
-    VINCULADA_A_DUPLICADO = auto()
+# `str, Enum` (en vez de `auto()`) para que el valor JSON sea el nombre del
+# miembro ("EN_CUARENTENA"), igual que Kotlin serializa sus enums con Jackson
+# — necesario para que Pydantic/FastAPI (api.py) validen el mismo texto que ya
+# usan captura-ingesta/records-custodia en sus propias peticiones HTTP.
+class EstadoUnidadDocumental(str, Enum):
+    PENDIENTE_DE_LIMITES = "PENDIENTE_DE_LIMITES"
+    LIMITES_CONFIRMADOS = "LIMITES_CONFIRMADOS"
+    NORMALIZADA = "NORMALIZADA"
+    ENTREGADA_A_EXTRACCION = "ENTREGADA_A_EXTRACCION"
+    RECHAZADA = "RECHAZADA"
+    EN_CUARENTENA = "EN_CUARENTENA"
+    VINCULADA_A_DUPLICADO = "VINCULADA_A_DUPLICADO"
 
 
 # RF-NO-009: mismo criterio que CondicionValidacion en captura-ingesta (T-02):
 # el llamador declara la condición, el dominio no la detecta.
-class CondicionDeNormalizacion(Enum):
-    CORRUPTO = auto()
-    ILEGIBLE = auto()
-    FORMATO_NO_SOPORTADO = auto()
+class CondicionDeNormalizacion(str, Enum):
+    CORRUPTO = "CORRUPTO"
+    ILEGIBLE = "ILEGIBLE"
+    FORMATO_NO_SOPORTADO = "FORMATO_NO_SOPORTADO"
 
 
 class ErrorDeDominio(Exception):
