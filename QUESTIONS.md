@@ -282,3 +282,31 @@ gradación que la spec no define.
 
 Siguiente paso: escribir los tests Dado/Cuando/Entonces de RF-CI-006 contra
 este mapeo e implementar T-02; marcar T-02 `- [x]` en TODO.md al cerrar.
+
+## 2026-08-27 · V-02 (revisión acumulada de Codex, `65c3c43..HEAD`) — Ratificado
+
+Hallazgo de Codex (ver `REVIEW.md`, revisión del rango T-22..T-36): T-23
+implementó dos decisiones que `specs/006-seguridad-acceso/spec.md` §8 dejaba
+explícitamente `[CLARIFICAR]` — el modelo de permisos (RBAC/ABAC/híbrido, "no
+se fija sin dato real del design partner") y el proveedor de identidad (propio
+vs. LDAP/SSO externo) — sin pasar por este archivo como exige la constitución
+ante un `[CLARIFICAR]` real. Error de proceso propio: la spec pedía detenerse
+y preguntar; implementé un valor por defecto razonado en su lugar.
+
+Corregido preguntando directo a Victor (2026-08-27), en vez de seguir
+construyendo sobre una decisión no ratificada:
+
+1. **Modelo de permisos**: ratifica RBAC simple (`Rol` → lista de `Permiso`,
+   cada uno con `accion` + `tipoRecurso` + `nivelClasificacionMaximo`) como
+   decisión definitiva, no un valor por defecto provisional. Puede
+   enriquecerse a futuro con atributos (ABAC — p. ej. dependencia
+   organizacional) si el design partner lo requiere; no es una decisión que
+   bloquee lo ya construido.
+2. **Proveedor de identidad**: ratifica el almacén autoalojado (Postgres
+   propio) como decisión definitiva. No hay proveedor externo (LDAP/AD/SSO)
+   que integrar por ahora.
+
+Siguiente paso: actualizar `specs/006-seguridad-acceso/spec.md` §8 quitando
+los dos `[CLARIFICAR]` ya resueltos (mismo tratamiento que T-02 le dio a
+`spec-captura-ingesta.md` §8), y corregir el hallazgo restante de la revisión
+(V-01, P-08 en Normalización) como T-37.

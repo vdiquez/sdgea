@@ -231,13 +231,17 @@ amplios por defecto; cada permiso se otorga explícitamente.
   Enriquecimiento (ya `[CLARIFICAR]` en `specs/004-enriquecimiento/spec.md` §8),
   una decisión humana separada, o un atributo que este contexto gestiona de forma
   independiente?
-- **[CLARIFICAR]** Modelo de roles y permisos concreto: basado en rol (RBAC), en
-  atributos (ABAC — p. ej. dependencia organizacional + nivel de clasificación), o
-  un híbrido. No se fija sin dato real del design partner.
-- **[CLARIFICAR]** Proveedor de identidad: si el sistema implementa su propio
-  almacén de identidades o se integra con uno externo (LDAP/AD, SSO), y en ese
-  caso cómo se sostiene RF-SA-009 (operación sin conectividad saliente) si el
-  proveedor elegido es externo.
+- **Resuelto (Victor, 2026-08-27, ver `QUESTIONS.md`):** modelo de roles y
+  permisos = RBAC simple (`Rol` → lista de `Permiso`, cada uno con `accion` +
+  `tipoRecurso` + `nivelClasificacionMaximo`), decisión definitiva — no un
+  valor por defecto provisional. Puede enriquecerse a futuro con atributos
+  (ABAC, p. ej. dependencia organizacional) si el design partner lo requiere;
+  eso no invalida lo ya construido en T-23.
+- **Resuelto (Victor, 2026-08-27, ver `QUESTIONS.md`):** proveedor de
+  identidad = almacén autoalojado (Postgres propio de este contexto),
+  decisión definitiva. No hay proveedor externo (LDAP/AD/SSO) que integrar
+  por ahora; RF-SA-009 (sin conectividad saliente) queda satisfecho sin
+  ninguna excepción que resolver.
 - **Relación sin resolver entre "eventos de seguridad" y "eventos de auditoría de
   dominio":** cada contexto ya especificado (Captura/Ingesta, Normalización,
   Extracción) declara "Seguridad y Acceso" como destino de sus eventos de
