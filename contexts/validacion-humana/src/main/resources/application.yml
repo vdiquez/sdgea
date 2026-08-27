@@ -1,0 +1,15 @@
+# specs/007-validacion-humana/spec.md §3: este contexto no tiene base de
+# datos propia — sus adaptadores reales (integracion/IntegracionHttp.kt)
+# llaman a records-custodia y seguridad-acceso por HTTP. Las URLs base se
+# parametrizan por variable de entorno para que el mismo código base sirva a
+# SaaS y a on-premise (P-02) sin cambiar nada aquí, solo la topología de red
+# de docker-compose.
+spring:
+  application:
+    name: validacion-humana
+records-custodia:
+  base-url: ${RECORDS_CUSTODIA_BASE_URL:http://localhost:8082}
+seguridad-acceso:
+  base-url: ${SEGURIDAD_ACCESO_BASE_URL:http://localhost:8083}
+server:
+  port: ${SERVER_PORT:8084}

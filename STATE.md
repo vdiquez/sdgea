@@ -942,3 +942,28 @@ primero.
   TDD: 8 tests nuevos con dobles en memoria de los tres puertos (mismo
   patrón que los `AlmacenDe*EnMemoria` de los demás contextos), verdes en el
   primer intento.
+- [x] T-30 Servicio HTTP + adaptadores reales para Validación Humana, contra
+  `spec-infra-servicios.md` §6 (nueva): `ColasController`
+  (`GET /colas/clasificacion`, `/masivo`, `/estado`) y `DecisionesController`
+  (`POST /decisiones`, `/masivo`) traducen los métodos de dominio de T-29.
+  `integracion/IntegracionHttp.kt` implementa los tres puertos con
+  `RestTemplate` real contra `records-custodia`
+  (`GET /sugerencias/pendientes`, `POST /documentos/{id}/decisiones`) y
+  `seguridad-acceso` (`POST /autorizacion`) — **primera integración HTTP real
+  entre servicios del proyecto**; hasta ahora cada contexto solo se probaba
+  aislado. `SugerenciaPendiente` reutiliza los mismos nombres de campo que
+  `Sugerencia` en records-custodia, así que Jackson serializa/deserializa sin
+  una capa de traducción adicional. Variables de entorno
+  `RECORDS_CUSTODIA_BASE_URL`/`SEGURIDAD_ACCESO_BASE_URL`, puerto 8084.
+  `ServicioNoDisponibleException` → 502 cuando un servicio aguas abajo falla
+  (primera vez que este proyecto tiene un fallo de "servicio remoto",
+  distinto de un fallo de regla de negocio).
+  RF-VH-005 (límites de documento) deliberadamente sin contrato ni puerto:
+  Normalización no existe como servicio, así que no hay nada real que
+  llamar — anotado en `spec-infra-servicios.md` §9, no inventado.
+  TDD: 4 tests de los adaptadores (`MockRestServiceServer`, sin dependencia
+  nueva — ya viene con `spring-boot-starter-test`) + 5 tests HTTP del
+  servicio propio (permiso denegado/concedido, orden por confianza,
+  decisión individual, aprobación en bloque, estado de la cola sin exigir
+  permiso). 17 tests en el módulo, verdes en el primer intento. `./test.sh`
+  en verde para todo el repo.

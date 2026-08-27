@@ -24,8 +24,10 @@ cualquier otro código.
 
 - **Cada bounded context es su propio proceso/servicio HTTP** (Victor,
   2026-08-21) — no un monolito modular. Arrancó con `captura-ingesta` y
-  `records-custodia`; `seguridad-acceso` es el tercero (2026-08-25); el resto
-  de los contextos adoptan el mismo patrón cuando les toque turno.
+  `records-custodia`; `seguridad-acceso` es el tercero (2026-08-25);
+  `validacion-humana` es el cuarto (2026-08-26) y el primero que no tiene
+  persistencia propia — es un orquestador HTTP real sobre los otros dos (§6).
+  El resto de los contextos adoptan el mismo patrón cuando les toque turno.
 - **Framework de bootstrap: Spring Boot** — decisión activa (F1.D1,
   confirmada como no-aspiracional el 2026-08-21), no una spec nueva.
 - **Persistencia: Postgres por contexto, sin esquema compartido** — cada
@@ -83,6 +85,7 @@ tablas, sin cambiar el contrato de los métodos.
 | `POST /verificacion-integridad` | `verificarTodos(actor, fecha)` | RF-RC-009 |
 | `POST /sugerencias` | `CapaAnticorrupcionSugerencias.recibir(entrada, fecha)` | RF-RC-003 |
 | `GET /documentos/{id}/sugerencias` | `sugerenciasDe(documentoId)` | RF-RC-003 |
+| `GET /sugerencias/pendientes` | `CapaAnticorrupcionSugerencias.sugerenciasPendientes()` | RF-VH-001 (T-28) |
 | `POST /trd` | `RegistroTrd.publicar(trd)` | RF-RC-006 |
 | `GET /trd/{version}` | `RegistroTrd.version(numero)` | RF-RC-006 |
 
@@ -143,36 +146,74 @@ Mapeo de persistencia (estructura, no DDL):
 
 Fuera de alcance de esta spec: la integración real de `captura-ingesta` y
 `records-custodia` con este servicio (que sus endpoints efectivamente llamen
-a `POST /autorizacion` antes de responder) — sigue sin implementarse; ver §8
+a `POST /autorizacion` antes de responder) — sigue sin implementarse; ver §9
 [CLARIFICAR] actualizado.
 
-## 6. Formato de error y serialización
+## 6. Contrato mínimo — `validacion-humana`
+
+Traduce las funciones de
+`contexts/validacion-humana/.../ValidacionHumana.kt` (T-29): `ColaDeRevision`
+y `GestionDeDecisiones`. A diferencia de los otros tres contextos, este
+**no tiene persistencia propia** (`specs/007-validacion-humana/spec.md` §3):
+sus tres puertos de dominio (`FuenteDeSugerencias`, `RegistradorDeDecisiones`,
+`VerificadorDePermisos`) los implementan adaptadores HTTP reales
+(`integracion/IntegracionHttp.kt`, T-30) contra `records-custodia` y
+`seguridad-acceso` — la **primera integración HTTP real entre servicios** de
+este proyecto; hasta T-29/T-30 cada contexto solo se había probado de forma
+aislada (Postman contra uno a la vez).
+
+| Método y ruta | Dominio que invoca | RF |
+|---|---|---|
+| `GET /colas/clasificacion?identidadId=` | `ColaDeRevision.ordenadasPorConfianza()` (tras verificar permiso) | RF-VH-001, RF-VH-002, RF-VH-007 |
+| `GET /colas/clasificacion/masivo?identidadId=&umbral=` | `ColaDeRevision.candidatasAAprobacionMasiva(umbral)` | RF-VH-004, RF-VH-007 |
+| `GET /colas/clasificacion/estado` | `ColaDeRevision.volumenYAntiguedadDeLaCola()` | RF-VH-010 |
+| `POST /decisiones` | `GestionDeDecisiones.decidir(...)` | RF-VH-003, RF-VH-006, RF-VH-007, RF-VH-008 |
+| `POST /decisiones/masivo` | `GestionDeDecisiones.aprobarEnBloque(...)` | RF-VH-004, RF-VH-006, RF-VH-007 |
+
+Variables de entorno: `RECORDS_CUSTODIA_BASE_URL`, `SEGURIDAD_ACCESO_BASE_URL`
+(mismo patrón que `DB_HOST`/`DB_PORT` en los otros contextos — parametrizar
+por entorno para que el mismo código base sirva a SaaS y on-premise, P-02).
+
+Sin mapeo de persistencia: no hay tablas propias de este contexto.
+
+Fuera de alcance de esta spec: RF-VH-005 (confirmación/corrección de límites
+de documento) — Normalización no existe todavía como servicio, así que no hay
+nada real que llamar; el puerto de dominio equivalente tampoco se construyó
+en T-29 por la misma razón (no inventar una integración contra un servicio
+que no existe).
+
+## 7. Formato de error y serialización
 
 `[CLARIFICAR]` — esta spec no fija un formato de error HTTP (RFC 7807 u otro)
 ni convenciones de serialización (fechas ISO-8601, `snake_case` vs
 `camelCase` en JSON, etc.). Es una decisión de implementación transversal a
-los tres contextos; la tarea que ejecute esta spec debe fijarla y aplicarla
-consistente en todos los servicios, documentándola en el código — no queda
-bloqueada por esto porque no depende de una decisión de negocio, es
+los cuatro contextos; la tarea que ejecute esta spec debe fijarla y
+aplicarla consistente en todos los servicios, documentándola en el código —
+no queda bloqueada por esto porque no depende de una decisión de negocio, es
 convención técnica interna.
 
-## 7. Trazabilidad
+## 8. Trazabilidad
 
 | Elemento | Traza a |
 |---|---|
 | Un servicio HTTP por contexto | Decisión de Victor, 2026-08-21; P-07 (cortes verticales) |
 | Spring Boot | F1.D1; confirmado activo 2026-08-21 |
 | Postgres por contexto, sin esquema compartido | Decisión de Victor, 2026-08-21; P-02 (mismo código base, ambos modos de despliegue) |
-| Cada endpoint traduce un método de dominio ya probado | P-06 (spec antes de código); TDD ya aplicado en T-01..T-11, T-23 |
+| Cada endpoint traduce un método de dominio ya probado | P-06 (spec antes de código); TDD ya aplicado en T-01..T-11, T-23, T-29 |
+| validacion-humana como orquestador HTTP real, sin persistencia propia | Decisión de Victor, 2026-08-26; specs/007-validacion-humana/spec.md §3 |
 
-## 8. Decisiones pendientes / preguntas abiertas
+## 9. Decisiones pendientes / preguntas abiertas
 
 - **[CLARIFICAR]** Formato de error HTTP y convenciones de serialización
-  (§6) — decisión técnica, no bloqueante.
+  (§7) — decisión técnica, no bloqueante.
 - **[CLARIFICAR]** Integración real de autenticación/autorización: el
   contexto Seguridad y Acceso ya existe como servicio (T-23, 2026-08-25,
   §5), pero `captura-ingesta` y `records-custodia` todavía no lo llaman —
   sus endpoints siguen sin exigir una decisión de `POST /autorizacion` antes
-  de responder. Hasta que esa integración se implemente, ambos servicios no
-  deben exponerse fuera de una red de confianza (docker-compose interno),
-  igual que antes de que Seguridad y Acceso existiera.
+  de responder. `validacion-humana` (T-30) sí lo llama de verdad, siendo el
+  primer consumidor real de `/autorizacion`. Hasta que captura-ingesta y
+  records-custodia hagan lo mismo, ambos siguen sin deber exponerse fuera de
+  una red de confianza (docker-compose interno).
+- **[CLARIFICAR]** RF-VH-005 (confirmación/corrección de límites de
+  documento) no tiene contrato aquí — Normalización no existe todavía como
+  servicio. Se agrega cuando ese contexto se implemente.

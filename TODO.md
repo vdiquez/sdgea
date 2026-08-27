@@ -196,3 +196,12 @@
       `VerificadorDePermisos`), sin persistencia propia (spec §3). Cubre
       RF-VH-001/002/003/004/006/007/008/010. TDD: 8 tests nuevos con dobles
       en memoria, verdes en el primer intento.
+- [x] T-30 Servicio HTTP + adaptadores HTTP reales para Validación Humana
+      (ver STATE.md para el detalle completo): `spec-infra-servicios.md` §6
+      nueva (5 endpoints). `ColasController`/`DecisionesController` +
+      `integracion/IntegracionHttp.kt` (RestTemplate real contra
+      records-custodia y seguridad-acceso — primera integración HTTP real
+      entre servicios del proyecto). Puerto 8084. RF-VH-005 deliberadamente
+      sin contrato: Normalización no existe como servicio. TDD: 4 tests de
+      adaptadores (MockRestServiceServer) + 5 HTTP del servicio propio, 17
+      en el módulo, verdes en el primer intento. `./test.sh` en verde.
