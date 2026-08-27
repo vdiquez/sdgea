@@ -355,3 +355,73 @@
       limpio); corregido y confirmado con dos corridas seguidas limpias
       después: 54/54 peticiones, 97/97 aserciones.
       `specs/spec-infra-servicios.md` §4/§6/§7/§9/§10 actualizadas.
+
+# Extracción
+
+Decisión de Victor, 2026-08-27: "continuar con Extracción en modo agéntico"
+vía `./orquestador.sh loop` — esta vez con revisión de Codex tras cada
+commit, como en T-01..T-22. Sigue `specs/002-extraccion/spec.md`
+(RF-EX-001..010) y el mismo patrón que Normalización (T-33..T-36): contexto
+híbrido, Python/FastAPI, con OCR como componente FICTICIO (nunca se
+implementa un motor de OCR real — constitución, disciplina de alcance).
+
+Lecciones ya aprendidas en Normalización/Validación Humana que NO deben
+repetirse aquí (ver STATE.md para el detalle completo de cada una):
+- P-08 desde el inicio (hallazgo V-01, T-37): cada función de transición de
+  dominio debe devolver también un `EventoAuditoria` (actor, fecha, tipo,
+  estado_anterior, estado_posterior) — no lo agregues como fix posterior.
+- En FastAPI/Starlette, cualquier ruta GET literal (p. ej.
+  `/textos-extraidos/pendientes-de-revision`) debe declararse ANTES que su
+  ruta hermana con `{id}` (resuelve por orden de declaración, a diferencia
+  de Spring MVC) — hallazgo real de T-39.
+- Nunca inventar el umbral de calidad, el motor de OCR concreto, ni el
+  mecanismo de re-revisión de correcciones de texto — los tres están
+  `[CLARIFICAR]` en `specs/002-extraccion/spec.md` §8; recíbelos como
+  parámetro del llamador o déjalos fuera de alcance, nunca un valor fijo
+  inventado.
+- [ ] T-40 RF-EX-001..010 — dominio de Extracción en Python
+      (`contexts/extraccion/dominio.py`), TDD contra los criterios Dado/Cuando/
+      Entonces de cada RF. Mismo patrón que `contexts/normalizacion/dominio.py`
+      (T-33): estados `PENDIENTE_DE_EXTRACCION` -> `EXTRAIDO` (terminal de
+      éxito) | `RECHAZADO` | `EN_CUARENTENA` (terminales de fallo, mismo
+      criterio que RF-CI-006/RF-NO-009: recuperable con reescaneo ->
+      cuarentena, solo recuperable con artefacto nuevo -> rechazado);
+      determinación de soporte (`BORN_DIGITAL`/`ESCANEO`, RF-EX-002);
+      extracción determinística para born-digital (RF-EX-003, calidad
+      máxima, nunca invoca OCR); recepción de un resultado de OCR YA
+      CALCULADO para escaneo (RF-EX-004 — componente FICTICIO, mismo
+      criterio que `recibir_sugerencia_de_limites` en Normalización/EMISOR
+      FICTICIO en records-custodia: esta función NUNCA calcula OCR real,
+      solo recibe calidad+texto ya producidos por el llamador); calidad
+      expuesta con el soporte de origen (RF-EX-005); función que filtra
+      textos bajo un umbral RECIBIDO COMO PARÁMETRO, nunca inventado
+      (RF-EX-006, mismo criterio que `candidatasAAprobacionMasiva` en
+      Validación Humana); propagación de procedencia heredada (RF-EX-007);
+      entrega sin distinguir por consumidor (RF-EX-010); conteo por estado
+      para cero pérdida silenciosa (RF-EX-008). Cada función de transición
+      devuelve `(TextoExtraido, EventoAuditoria)` desde el primer commit —
+      P-08 no es un fix posterior aquí, ver nota de la sección arriba.
+- [ ] T-41 RF-EX-001..010 — Servicio HTTP (FastAPI) + persistencia
+      (SQLAlchemy + Postgres) para Extracción, mismo patrón que T-34
+      (Normalización): cada endpoint traduce un método de dominio ya
+      probado; `guardar_con_evento(texto, evento)` persiste ambos en una
+      única transacción con rollback explícito si falla (mismo criterio que
+      `AlmacenDeUnidades` en Normalización, T-37); `GET /eventos-auditoria`
+      desde el principio; endpoint de pendientes de revisión por baja
+      confianza (mismo criterio que `GET /sugerencias/pendientes`, T-28, y
+      `GET /unidades/pendientes-de-limites`, T-39) declarado ANTES de
+      cualquier ruta con `{id}`. Variables de entorno idénticas a los otros
+      contextos Python: `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`.
+- [ ] T-42 Dockerfile real de extraccion + wiring en
+      `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que T-35
+      (Normalización): build en dos etapas con `uv sync --no-dev --frozen`;
+      Postgres propio; puerto siguiente disponible (8086) en
+      `docker-compose.local-ports.yml`.
+- [ ] T-43 Colección Postman con el ciclo completo de Extracción, mismo
+      patrón que T-36 (Normalización): recepción -> determinación de
+      soporte -> extracción (born-digital y vía OCR ficticio) -> conteo por
+      estado -> consulta de la bitácora de auditoría. Verificar con Docker
+      real y dos corridas de Newman seguidas sin fallos (mismo estándar de
+      verificación que el resto de este proyecto — el loop agéntico no lo
+      hace solo, así que Victor o una sesión interactiva de Claude Code debe
+      confirmarlo después de que T-40..T-42 pasen la revisión de Codex).
