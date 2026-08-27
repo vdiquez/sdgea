@@ -1014,3 +1014,48 @@ nivel 1 — implementarlos exige decidir primero cómo se ven sus componentes
 FICTICIO, ya que la constitución prohíbe los reales. Decisión de Victor:
 otro contexto, cerrar la brecha de autorización en captura-ingesta/
 records-custodia, diseño de UI/UX, o F4 (hilo comercial).
+
+## Implementación de Normalización (2026-08-26, modo agéntico)
+
+Decisión de Victor (2026-08-26): continuar con Normalización. Antes de
+escribir código encontré algo que casi paso por alto: **`contexts/normalizacion`
+ya es un proyecto Python real** — tiene `pyproject.toml` propio y ya está
+declarado como miembro del `uv` workspace de la raíz junto a `platform-python`
+(que ya trae las seis interfaces de P-03 en Python — `ocr.py`,
+`object_storage.py`, etc. — con el mismo patrón ABC + `NotImplementedError`
+que `platform-kotlin`). Los comentarios de `docker-compose.saas.yml` ya
+decían "Python/FastAPI" para este contexto y los otros cuatro probabilísticos
+— es una decisión de stack YA TOMADA, no algo que yo decida ahora. Implementar
+esto en Kotlin (como los cuatro contextos anteriores) habría violado "nunca
+cambiar el stack decidido". Seguí la convención ya establecida en
+`eval-harness` (el único proyecto Python que ya corre en este repo): layout
+plano (sin `src/`), `pytest`, dataclasses `frozen=True` para value objects,
+`Protocol`/enums en vez de interfaces Java-style, identificadores en español.
+
+- [x] T-33 Dominio de Normalización (`contexts/normalizacion/dominio.py`):
+  `recibir_item` (RF-NO-001/003 — el caso trivial lo declara el llamador
+  explícitamente, mismo criterio que `CondicionValidacion` en
+  captura-ingesta/T-02, porque el mecanismo automático sigue `[CLARIFICAR]`
+  en la spec §8), `recibir_sugerencia_de_limites` (RF-NO-002, componente
+  FICTICIO — igual que `CapaAnticorrupcionSugerencias.recibir` en T-08, esta
+  función nunca calcula límites de verdad, solo recibe una sugerencia ya
+  hecha), `confirmar_limites` (RF-NO-004 — cierra el ciclo que RF-VH-005 dejó
+  abierto en `spec-infra-servicios.md` §9), `normalizar` (RF-NO-005 — sin
+  fingir una conversión de formato real: el formato de preservación exacto
+  sigue `[CLARIFICAR]`, así que esta función solo transiciona estado y
+  conserva una referencia honesta), `marcar_cuarentena_o_rechazo` (RF-NO-009,
+  misma taxonomía que RF-CI-006), `entregar` (RF-NO-006/010, deduplicación
+  por huella de contenido suministrada por el llamador — no hay bytes reales
+  fluyendo por este contexto, igual que en captura-ingesta) y
+  `contar_por_estado` (RF-NO-008, mismo patrón que `ConteoPorEstado` en T-05).
+  `pyproject.toml` actualizado con dependencias reales (`fastapi`, `uvicorn`,
+  `sqlalchemy`, `psycopg[binary]`; dev: `pytest`, `httpx`) — elecciones
+  estándar y sin controversia para un servicio Python/FastAPI + Postgres,
+  mismo nivel de decisión técnica que "Spring Boot + JPA" lo fue para los
+  contextos Kotlin.
+  `test.sh` actualizado con una línea nueva
+  (`uv run --directory contexts/normalizacion pytest`) — antes solo cubría
+  `eval-harness`; ahora también corre esto en cada verificación.
+  TDD: 16 tests nuevos (`tests/test_dominio.py`), verdes en el primer
+  intento. `./test.sh` en verde para todo el repo (Gradle + los dos
+  proyectos Python).

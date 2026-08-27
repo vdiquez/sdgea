@@ -216,3 +216,17 @@
       peticiones, 66/66 aserciones, dos corridas seguidas sin fallos.
       **Con esto, Validación Humana queda completa de punta a punta
       (T-28..T-32).**
+
+# Implementación de specs/001-normalizacion/spec.md (2026-08-26, modo agéntico)
+# Hallazgo importante: contexts/normalizacion YA es un proyecto Python real
+# (pyproject.toml + miembro del workspace uv), decisión de stack ya tomada en
+# docker-compose.saas.yml ("Python/FastAPI") — no Kotlin como los 4 anteriores.
+- [x] T-33 Dominio de Normalización en Python (ver STATE.md para el detalle
+      completo): `dominio.py` — `recibir_item`, `recibir_sugerencia_de_limites`
+      (componente FICTICIO, RF-NO-002), `confirmar_limites`, `normalizar`,
+      `marcar_cuarentena_o_rechazo`, `entregar`, `contar_por_estado`. Cubre
+      RF-NO-001/002/003/004/005/006/008/009/010. `pyproject.toml` con
+      dependencias reales; `test.sh` extendido con
+      `uv run --directory contexts/normalizacion pytest`. TDD: 16 tests
+      nuevos, verdes en el primer intento.
+

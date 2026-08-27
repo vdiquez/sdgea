@@ -4,3 +4,4 @@
 set -euo pipefail
 ./gradlew test --no-daemon
 uv run --directory eval-harness pytest
+uv run --directory contexts/normalizacion pytest
