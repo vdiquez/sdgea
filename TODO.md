@@ -379,32 +379,32 @@ repetirse aquí (ver STATE.md para el detalle completo de cada una):
   `[CLARIFICAR]` en `specs/002-extraccion/spec.md` §8; recíbelos como
   parámetro del llamador o déjalos fuera de alcance, nunca un valor fijo
   inventado.
-- [ ] T-40 RF-EX-001..010 — dominio de Extracción en Python
-      (`contexts/extraccion/dominio.py`), TDD contra los criterios Dado/Cuando/
-      Entonces de cada RF. Mismo patrón que `contexts/normalizacion/dominio.py`
-      (T-33): estados `PENDIENTE_DE_EXTRACCION` -> `EXTRAIDO` (terminal de
-      éxito) | `RECHAZADO` | `EN_CUARENTENA` (terminales de fallo, mismo
-      criterio que RF-CI-006/RF-NO-009: recuperable con reescaneo ->
-      cuarentena, solo recuperable con artefacto nuevo -> rechazado);
-      determinación de soporte (`BORN_DIGITAL`/`ESCANEO`, RF-EX-002);
-      extracción determinística para born-digital (RF-EX-003, calidad
-      máxima, nunca invoca OCR); recepción de un resultado de OCR YA
-      CALCULADO para escaneo (RF-EX-004 — componente FICTICIO, mismo
-      criterio que `recibir_sugerencia_de_limites` en Normalización/EMISOR
-      FICTICIO en records-custodia: esta función NUNCA calcula OCR real,
-      solo recibe calidad+texto ya producidos por el llamador); calidad
-      expuesta con el soporte de origen (RF-EX-005); función que filtra
-      textos bajo un umbral RECIBIDO COMO PARÁMETRO, nunca inventado
-      (RF-EX-006, mismo criterio que `candidatasAAprobacionMasiva` en
-      Validación Humana); propagación de procedencia heredada (RF-EX-007);
-      entrega sin distinguir por consumidor (RF-EX-010); conteo por estado
+- [x] T-40 RF-EX-001..010 — dominio de Extracción en Python
+      (`contexts/extraccion/dominio.py`). Implementado siguiendo el mismo
+      patrón que `contexts/normalizacion/dominio.py` (T-33): estados
+      `PENDIENTE_DE_EXTRACCION` -> `EXTRAIDO` (terminal de éxito) |
+      `RECHAZADO` | `EN_CUARENTENA` (terminales de fallo); `CondicionDeExtraccion`
+      (CORRUPTO/ILEGIBLE -> En cuarentena, FORMATO_NO_SOPORTADO -> Rechazado,
+      mismo mapeo ya ratificado para RF-CI-006); `determinar_soporte`
+      (BORN_DIGITAL/ESCANEO, RF-EX-002, no cambia estado, solo marca);
+      `extraer_texto_born_digital` (RF-EX-003, calidad 1.0, nunca invoca OCR);
+      `recibir_resultado_ocr` (RF-EX-004 — componente FICTICIO, recibe un
+      `ResultadoOcr` YA CALCULADO por el llamador, actor = modelo_id, mismo
+      criterio que T-20); calidad/soporte expuestos como campos del agregado
+      (RF-EX-005); `candidatas_a_revision_por_baja_confianza(textos, umbral)`
+      con umbral recibido como parámetro, nunca inventado (RF-EX-006);
+      `ProcedenciaHeredada` propagada sin tocar en ninguna transición
+      (RF-EX-007); `entregar()` valida estado `Extraído` y devuelve el mismo
+      texto sin diferenciar por consumidor (RF-EX-010); `contar_por_estado`
       para cero pérdida silenciosa (RF-EX-008). Cada función de transición
-      devuelve `(TextoExtraido, EventoAuditoria)` desde el primer commit —
-      P-08 no es un fix posterior aquí, ver nota de la sección arriba.
-      IMPORTANTE: agrega la línea `uv run --directory contexts/extraccion
-      pytest` a `test.sh` en este mismo commit (mismo tratamiento que T-33
-      le dio a Normalización) — sin esto, `./test.sh` (el árbitro del loop)
-      nunca ejecuta los tests nuevos de este contexto.
+      devuelve `(TextoExtraido, EventoAuditoria)` desde el primer commit — P-08
+      no fue un fix posterior aquí. `uv run --directory contexts/extraccion
+      pytest` agregado a `test.sh` en este mismo commit.
+      TDD: 25 tests nuevos (`tests/test_dominio.py`), uno por rama de cada
+      Dado/Cuando/Entonces de RF-EX-001..010 más una clase de auditoría de
+      transiciones (P-08); verdes en el primer intento. `./test.sh` completo
+      en verde (Gradle BUILD SUCCESSFUL — 25 tareas up-to-date; pytest:
+      eval-harness 4 passed, normalizacion 40 passed, extraccion 25 passed).
 - [ ] T-41 RF-EX-001..010 — Servicio HTTP (FastAPI) + persistencia
       (SQLAlchemy + Postgres) para Extracción, mismo patrón que T-34
       (Normalización): cada endpoint traduce un método de dominio ya

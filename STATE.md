@@ -1368,3 +1368,65 @@ rutas literales antes que las rutas con `{id}` que las puedan capturar
 Enriquecimiento (cerraría RF-VH-001 del todo y añadiría un contexto
 probabilístico más), la brecha de autorización en
 captura-ingesta/records-custodia, diseño de UI/UX, o F4.
+
+# Implementación de specs/002-extraccion/spec.md (2026-08-27, modo agéntico,
+# orquestador.sh loop con revisión de Codex tras cada commit, decisión de
+# Victor: "continuar con Extracción en modo agéntico")
+- F3: T-40 (RF-EX-001..010, dominio de Extracción en Python) implementado en
+  `contexts/extraccion/dominio.py`, mismo patrón que
+  `contexts/normalizacion/dominio.py` (T-33) — contexto híbrido: OCR es el
+  componente probabilístico FICTICIO (RF-EX-004), el resto es determinístico
+  (SDD). Modelo: `EstadoTextoExtraido` (`PENDIENTE_DE_EXTRACCION` ->
+  `EXTRAIDO` terminal de éxito | `RECHAZADO` | `EN_CUARENTENA` terminales de
+  fallo), `Soporte` (`BORN_DIGITAL`/`ESCANEO`), `CondicionDeExtraccion`
+  (`CORRUPTO`/`ILEGIBLE`/`FORMATO_NO_SOPORTADO` — mismo mapeo ya ratificado
+  por Victor para RF-CI-006 en QUESTIONS.md 2026-08-23 y reaplicado aquí
+  porque tanto RF-EX-009 como TODO.md lo piden explícitamente ("mismo
+  criterio que RF-CI-006/RF-NO-009"), no una taxonomía nueva inventada),
+  `ProcedenciaHeredada` (mismo shape que en normalizacion, con
+  `unidad_documental_id` añadido porque Extracción rastrea hasta esa unidad),
+  `ResultadoOcr` (componente FICTICIO — transporta un resultado YA CALCULADO
+  por el llamador, mismo criterio que `SugerenciaDeLimites`/`Sugerencia`),
+  `TextoExtraido` (agregado raíz), `EventoAuditoria` (P-08 desde el primer
+  commit, no un fix posterior como ocurrió en Normalización/T-37).
+  Funciones: `recibir_unidad` (RF-EX-001), `determinar_soporte` (RF-EX-002,
+  no cambia estado, solo marca antes de extraer — invariante 2),
+  `extraer_texto_born_digital` (RF-EX-003, calidad 1.0 — el propio
+  Dado/Cuando/Entonces del RF exige literalmente "calidad máxima", no es un
+  umbral inventado — nunca invoca OCR), `recibir_resultado_ocr` (RF-EX-004,
+  actor = `resultado.modelo_id`, mismo criterio que T-20 usó para
+  `SUGERENCIA_RECIBIDA`), `candidatas_a_revision_por_baja_confianza(textos,
+  umbral)` (RF-EX-006, umbral RECIBIDO COMO PARÁMETRO, nunca inventado — la
+  spec §8 deja el valor real `[CLARIFICAR]`, "se calibra con el arnés"),
+  `marcar_cuarentena_o_rechazo` (RF-EX-009, sin precondición de estado, mismo
+  patrón que su análogo en normalizacion), `entregar` (RF-EX-010, valida
+  estado `Extraído` y devuelve el mismo texto sin diferenciar por consumidor
+  — no hay evento porque no es una transición de estado, mismo criterio que
+  una consulta), `contar_por_estado`/`ConteoPorEstado` (RF-EX-008). RF-EX-005
+  y RF-EX-007 (calidad/soporte/procedencia expuestos y propagados) se
+  satisfacen estructuralmente por los campos del propio agregado — no
+  necesitan función aparte, mismo criterio que records-custodia con sus value
+  objects.
+  Alcance deliberadamente angosto: solo dominio puro en memoria (sin
+  persistencia ni servicio HTTP — eso es T-41); `pyproject.toml` solo ganó
+  `pytest` como dependencia dev (no `fastapi`/`sqlalchemy`/`psycopg` todavía,
+  a diferencia de lo que hizo T-33 en Normalización de forma adelantada —
+  aquí se prefirió no adelantar dependencias que ninguna función de este
+  commit usa; T-41 las añadirá cuando construya el servicio real). `main.py`
+  no se tocó (sigue el scaffold trivial; T-41 lo reemplaza con el bootstrap
+  de uvicorn, mismo orden que T-33->T-34 en Normalización).
+  TDD: 25 tests nuevos (`tests/test_dominio.py`), organizados en una clase
+  por RF (más `TestAuditoriaDeTransiciones` para P-08), escritos contra cada
+  rama Dado/Cuando/Entonces antes de escribir `dominio.py`; verdes en el
+  primer intento (`uv run --directory contexts/extraccion pytest`: 25
+  passed). `test.sh` ganó la línea `uv run --directory contexts/extraccion
+  pytest` en el mismo commit (sin esto el árbitro del loop nunca correría
+  estos tests). `./test.sh` completo en verde: Gradle BUILD SUCCESSFUL (25
+  tareas, todos los contextos Kotlin sin tocar), pytest eval-harness 4
+  passed, normalizacion 40 passed, extraccion 25 passed. No se tocó ningún
+  `[CLARIFICAR]` de `specs/002-extraccion/spec.md` §8 (motor de OCR, umbral
+  de calidad, mecanismo de corrección/re-revisión y propagación de la marca
+  de baja confianza siguen pendientes, tal como exige la constitución).
+  Siguiente paso: T-41 (servicio HTTP FastAPI + persistencia SQLAlchemy/
+  Postgres para Extracción, contra una nueva sección de
+  `specs/spec-infra-servicios.md`) es la próxima tarea abierta en TODO.md.
