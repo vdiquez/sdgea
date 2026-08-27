@@ -123,6 +123,35 @@ class RecordsCustodiaHttpTest {
     }
 
     @Test
+    fun `GET sugerencias pendientes incluye la sugerencia de un documento sin clasificar y la excluye tras materializar - RF-VH-001`() {
+        custodiarDocumento("doc-http-005b")
+        val entrada = mapOf(
+            "documentoId" to "doc-http-005b",
+            "tipo" to "clasificacion",
+            "contenidoPropuesto" to "serie-1",
+            "modeloId" to "emisor-ficticio-v0",
+            "evidencia" to listOf("pagina-1"),
+            "confianza" to 0.42,
+            "fecha" to fecha,
+        )
+        restTemplate.postForEntity(url("/sugerencias"), entrada, Map::class.java)
+
+        val antes = restTemplate.getForEntity(url("/sugerencias/pendientes"), List::class.java)
+        assertTrue((antes.body as List<*>).any { (it as Map<*, *>)["documentoId"] == "doc-http-005b" })
+
+        val decision = mapOf(
+            "actor" to "archivista-1",
+            "fecha" to fecha,
+            "sugerenciasReferenciadas" to emptyList<Any>(),
+            "clasificacionResultante" to mapOf("documentoId" to "doc-http-005b", "trdVersion" to 1, "serieId" to "serie-1"),
+        )
+        restTemplate.postForEntity(url("/documentos/doc-http-005b/decisiones"), decision, Map::class.java)
+
+        val despues = restTemplate.getForEntity(url("/sugerencias/pendientes"), List::class.java)
+        assertTrue((despues.body as List<*>).none { (it as Map<*, *>)["documentoId"] == "doc-http-005b" })
+    }
+
+    @Test
     fun `POST verificacion-integridad de un documento intacto no reporta discrepancia - RF-RC-009`() {
         custodiarDocumento("doc-http-006")
         val request = mapOf("actor" to "auditor-1", "fecha" to "2026-08-21T13:00:00Z")

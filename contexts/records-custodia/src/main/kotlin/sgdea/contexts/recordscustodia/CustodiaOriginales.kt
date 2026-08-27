@@ -135,6 +135,7 @@ class AlmacenDeOriginalesEnMemoria : AlmacenDeOriginales {
 interface AlmacenDeDocumentos {
     fun guardar(documento: DocumentoDeArchivo)
     fun buscar(id: String): DocumentoDeArchivo?
+    fun todos(): List<DocumentoDeArchivo>
 }
 
 class AlmacenDeDocumentosEnMemoria : AlmacenDeDocumentos {
@@ -143,6 +144,7 @@ class AlmacenDeDocumentosEnMemoria : AlmacenDeDocumentos {
         documentos[documento.id] = documento
     }
     override fun buscar(id: String): DocumentoDeArchivo? = documentos[id]
+    override fun todos(): List<DocumentoDeArchivo> = documentos.values.toList()
 }
 
 private fun <T> T?.oClaveFaltante(id: String): T = this ?: throw NoSuchElementException("Key $id is missing in the map.")
@@ -194,6 +196,14 @@ class CustodiaOriginales(
     fun consultarProcedencia(id: String): Procedencia = almacenDeDocumentos.buscar(id).oClaveFaltante(id).procedencia
 
     fun consultarDocumento(id: String): DocumentoDeArchivo = almacenDeDocumentos.buscar(id).oClaveFaltante(id)
+
+    // RF-VH-001 (specs/007-validacion-humana/spec.md): Validación Humana necesita
+    // agregar sugerencias de documentos que todavía no tienen una decisión
+    // materializada, a través de todos los documentos, no de uno a la vez
+    // (GET /documentos/{id}/sugerencias, RF-RC-003, ya existía pero es por
+    // documento). `clasificacion == null` es la señal que RF-RC-004 ya produce
+    // — no se inventa un campo de estado nuevo para esto.
+    fun documentosSinClasificar(): List<DocumentoDeArchivo> = almacenDeDocumentos.todos().filter { it.clasificacion == null }
 
     // RF-RC-004: única operación que puede cambiar la clasificación de un
     // documento. No existe ningún otro método público que la mute — recibir
@@ -377,6 +387,11 @@ class CapaAnticorrupcionSugerencias(
     }
 
     fun sugerenciasDe(documentoId: String): List<Sugerencia> = almacen.de(documentoId)
+
+    // RF-VH-001: la cola de revisión de Validación Humana se construye sobre
+    // esto — todas las sugerencias de todos los documentos sin clasificar
+    // todavía, sin importar cuál los generó.
+    fun sugerenciasPendientes(): List<Sugerencia> = custodia.documentosSinClasificar().flatMap { sugerenciasDe(it.id) }
 }
 
 // Regla de retención de una serie/subserie de la TRD (spec §2/§3): tiempo de

@@ -173,6 +173,69 @@ class RecepcionDeSugerenciasTest {
     }
 }
 
+// RF-VH-001 (specs/007-validacion-humana/spec.md): sugerencias pendientes a
+// través de todos los documentos, base de la cola de revisión de Validación
+// Humana.
+class SugerenciasPendientesTest {
+
+    private val procedenciaDePrueba = Procedencia(
+        fuente = "escaner-sala-3",
+        fecha = Instant.parse("2026-08-26T00:00:00Z"),
+        loteOFlujoId = "lote-001",
+    )
+
+    private val sugerenciaFicticiaEntrante = SugerenciaEntrante(
+        documentoId = "doc-1",
+        tipo = "clasificacion",
+        contenidoPropuesto = "serie-1",
+        modeloId = "emisor-ficticio-v0",
+        evidencia = listOf("pagina-1"),
+        confianza = 0.42,
+    )
+
+    @Test
+    fun `una sugerencia de un documento sin clasificar aparece en las pendientes`() {
+        val custodia = CustodiaOriginales()
+        custodia.custodiar(
+            id = "doc-1",
+            bytes = "contenido".toByteArray(),
+            actor = "sistema-ingesta",
+            fecha = Instant.parse("2026-08-26T00:00:00Z"),
+            procedencia = procedenciaDePrueba,
+        )
+        val capa = CapaAnticorrupcionSugerencias(custodia)
+        capa.recibir(sugerenciaFicticiaEntrante, fecha = Instant.parse("2026-08-26T01:00:00Z"))
+
+        assertEquals(1, capa.sugerenciasPendientes().size)
+    }
+
+    @Test
+    fun `una sugerencia de un documento ya clasificado no aparece en las pendientes`() {
+        val custodia = CustodiaOriginales()
+        custodia.custodiar(
+            id = "doc-1",
+            bytes = "contenido".toByteArray(),
+            actor = "sistema-ingesta",
+            fecha = Instant.parse("2026-08-26T00:00:00Z"),
+            procedencia = procedenciaDePrueba,
+        )
+        val capa = CapaAnticorrupcionSugerencias(custodia)
+        capa.recibir(sugerenciaFicticiaEntrante, fecha = Instant.parse("2026-08-26T01:00:00Z"))
+
+        custodia.materializar(
+            DecisionHumana(
+                documentoId = "doc-1",
+                actor = "archivista-1",
+                fecha = Instant.parse("2026-08-26T02:00:00Z"),
+                sugerenciasReferenciadas = emptyList(),
+                clasificacionResultante = Clasificacion(documentoId = "doc-1", trdVersion = 1, serieId = "serie-1"),
+            ),
+        )
+
+        assertTrue(capa.sugerenciasPendientes().isEmpty())
+    }
+}
+
 // RF-RC-004 · Materialización por decisión humana
 class MaterializacionPorDecisionHumanaTest {
 

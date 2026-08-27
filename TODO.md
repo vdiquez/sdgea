@@ -178,3 +178,15 @@
       (T-27) — mismo ciclo completo que recibieron captura-ingesta y
       records-custodia.**
 
+# Implementación de specs/007-validacion-humana/spec.md (2026-08-26, modo agéntico)
+# Decisión de Victor: orquestador real sobre records-custodia + seguridad-acceso
+# (primera integración HTTP real entre servicios del proyecto), no adaptadores
+# en memoria con integración diferida.
+- [x] T-28 `GET /sugerencias/pendientes` en records-custodia (ver STATE.md
+      para el detalle completo): agrega sugerencias de todos los documentos
+      sin clasificar, base de la cola de revisión de Validación Humana
+      (RF-VH-001). `AlmacenDeDocumentos.todos()` nuevo,
+      `CustodiaOriginales.documentosSinClasificar()`,
+      `CapaAnticorrupcionSugerencias.sugerenciasPendientes()`. TDD: 2 tests de
+      dominio + 1 HTTP nuevo, verdes junto con toda la suite existente de
+      records-custodia.

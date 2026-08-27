@@ -902,3 +902,28 @@ sería el complemento natural, ya que su interfaz consume permisos de
 Seguridad y Acceso), la integración real de captura-ingesta/records-custodia
 con `/autorizacion` (brecha anotada en spec-infra-servicios.md §8), diseño de
 UI/UX, o F4 (hilo comercial).
+
+## Implementación de Validación Humana (2026-08-26, modo agéntico)
+
+Decisión de Victor (2026-08-26): continuar con Validación Humana. Antes de
+empezar encontré que, a diferencia de todo lo implementado hasta ahora, esta
+spec dice explícitamente que el contexto **no tiene estado propio** (§3): sus
+datos reales (sugerencias, documentos, permisos) ya viven en Records/Custodia
+y Seguridad y Acceso. Implementarlo de verdad lo convierte en la **primera
+integración real entre servicios** del proyecto (HTTP real de un servicio
+Spring Boot a otro, no solo Postman contra cada uno por separado). Se lo
+presenté a Victor con dos caminos — orquestador real sobre RC+SA, o dominio
+con adaptadores en memoria y la integración real diferida — y eligió el
+primero.
+
+- [x] T-28 Records/Custodia: `GET /sugerencias/pendientes` (nuevo) — agrega
+  sugerencias de **todos** los documentos sin clasificar todavía, no de uno a
+  la vez (lo único que existía, RF-RC-003). `AlmacenDeDocumentos.todos()`
+  nuevo (mismo patrón que `AlmacenDeOriginales.todos()`, ya usado por
+  `verificarTodos`); `CustodiaOriginales.documentosSinClasificar()` filtra por
+  `clasificacion == null` — la misma señal que RF-RC-004 ya produce, sin
+  inventar un campo de estado nuevo en `Sugerencia`. `CapaAnticorrupcionSugerencias.sugerenciasPendientes()`
+  junta ambos. TDD: 2 tests de dominio (`SugerenciasPendientesTest`) + 1 test
+  HTTP nuevo (documento sin clasificar aparece, tras materializar desaparece).
+  `./gradlew :contexts:records-custodia:test` en verde (2 nuevos de dominio,
+  12/12 en el test HTTP existente, incluido el nuevo).

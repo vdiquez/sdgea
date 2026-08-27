@@ -1,11 +1,13 @@
 package sgdea.contexts.recordscustodia.http
 
 import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import sgdea.contexts.recordscustodia.CapaAnticorrupcionSugerencias
 import sgdea.contexts.recordscustodia.Sugerencia
 import sgdea.contexts.recordscustodia.SugerenciaEntrante
 import sgdea.contexts.recordscustodia.configuracion.RecepcionDeSugerenciasTransaccional
@@ -22,6 +24,7 @@ import sgdea.contexts.recordscustodia.configuracion.RecepcionDeSugerenciasTransa
 @RequestMapping("/sugerencias")
 class SugerenciasController(
     private val capa: RecepcionDeSugerenciasTransaccional,
+    private val capaDeLectura: CapaAnticorrupcionSugerencias,
 ) {
 
     @PostMapping
@@ -38,4 +41,10 @@ class SugerenciasController(
             ),
             fecha = request.fecha,
         )
+
+    // RF-VH-001 (specs/007-validacion-humana/spec.md): la cola de revisión de
+    // Validación Humana lee de aquí. Endpoint de solo lectura — sin wrapper
+    // transaccional, no escribe nada.
+    @GetMapping("/pendientes")
+    fun pendientes(): List<Sugerencia> = capaDeLectura.sugerenciasPendientes()
 }

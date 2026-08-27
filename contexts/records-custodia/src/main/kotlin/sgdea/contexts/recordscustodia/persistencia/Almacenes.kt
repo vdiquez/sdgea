@@ -90,6 +90,11 @@ class AlmacenDeDocumentosJpa(
     override fun buscar(id: String): DocumentoDeArchivo? =
         jpaRepository.findById(id).orElse(null)?.toDominio()
 
+    // RF-VH-001: respalda CustodiaOriginales.documentosSinClasificar() — la
+    // cola de revisión de Validación Humana necesita ver todos los documentos,
+    // no uno a la vez.
+    override fun todos(): List<DocumentoDeArchivo> = jpaRepository.findAll().map { it.toDominio() }
+
     private fun DocumentoEntity.toDominio() = DocumentoDeArchivo(
         id = id,
         originalId = original!!.id,
