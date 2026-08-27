@@ -927,3 +927,18 @@ primero.
   HTTP nuevo (documento sin clasificar aparece, tras materializar desaparece).
   `./gradlew :contexts:records-custodia:test` en verde (2 nuevos de dominio,
   12/12 en el test HTTP existente, incluido el nuevo).
+- [x] T-29 Dominio de Validación Humana (`contexts/validacion-humana`, mismo
+  paso de esqueleto vacío → módulo Kotlin/Spring que T-23, pero sin JPA/
+  Postgres — este contexto no tiene persistencia propia, spec §3): tipos
+  locales (`SugerenciaPendiente`, `ClasificacionPropuesta`,
+  `DecisionDeClasificacion`), tres puertos (`FuenteDeSugerencias`,
+  `RegistradorDeDecisiones`, `VerificadorDePermisos` — P-03 aplicado a
+  llamadas de red en vez de a una base de datos), `ColaDeRevision`
+  (RF-VH-001/002/004/010) y `GestionDeDecisiones` (RF-VH-003/004/006/007/008).
+  La distinción aceptación/corrección (RF-VH-008) compara
+  `contenidoPropuesto` contra la serie resultante — misma convención de texto
+  plano que el EMISOR FICTICIO de T-08 usa, documentada porque
+  `spec-records-custodia.md` no define un formato formal para ese campo.
+  TDD: 8 tests nuevos con dobles en memoria de los tres puertos (mismo
+  patrón que los `AlmacenDe*EnMemoria` de los demás contextos), verdes en el
+  primer intento.

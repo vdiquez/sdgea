@@ -190,3 +190,9 @@
       `CapaAnticorrupcionSugerencias.sugerenciasPendientes()`. TDD: 2 tests de
       dominio + 1 HTTP nuevo, verdes junto con toda la suite existente de
       records-custodia.
+- [x] T-29 Dominio de Validación Humana (ver STATE.md para el detalle
+      completo): `ColaDeRevision` + `GestionDeDecisiones` sobre tres puertos
+      (`FuenteDeSugerencias`, `RegistradorDeDecisiones`,
+      `VerificadorDePermisos`), sin persistencia propia (spec §3). Cubre
+      RF-VH-001/002/003/004/006/007/008/010. TDD: 8 tests nuevos con dobles
+      en memoria, verdes en el primer intento.
