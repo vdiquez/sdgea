@@ -9,9 +9,10 @@ import dominio
 from persistencia import AlmacenDeUnidades, crear_fabrica_de_sesiones
 
 # specs/spec-infra-servicios.md §7 · Contrato mínimo — normalizacion. Cada
-# endpoint traduce uno a uno un método de dominio ya probado por TDD (T-33);
-# este módulo no añade regla de negocio alguna, solo entrada/salida HTTP —
-# mismo criterio que los *Controller.kt de los contextos Kotlin.
+# endpoint traduce uno a uno un método de dominio ya probado por TDD (T-33),
+# incluida la bitácora de auditoría (P-08, T-37); este módulo no añade regla
+# de negocio alguna, solo entrada/salida HTTP — mismo criterio que los
+# *Controller.kt de los contextos Kotlin.
 app = FastAPI(title="normalizacion")
 
 _fabrica_de_sesiones: sessionmaker[Session] | None = None
@@ -63,6 +64,7 @@ class RecibirItemRequest(BaseModel):
     procedencia: ProcedenciaDto
     huella_de_contenido: str | None = None
     es_caso_trivial: bool = False
+    actor: str
 
 
 class SugerenciaDeLimitesRequest(BaseModel):
@@ -79,10 +81,19 @@ class ConfirmacionDeLimitesRequest(BaseModel):
 
 class NormalizarRequest(BaseModel):
     formato_normalizado: str
+    actor: str
+    fecha: datetime
 
 
 class ValidacionRequest(BaseModel):
     condicion: dominio.CondicionDeNormalizacion
+    actor: str
+    fecha: datetime
+
+
+class EntregaRequest(BaseModel):
+    actor: str
+    fecha: datetime
 
 
 # RF-NO-001/003
@@ -90,7 +101,7 @@ class ValidacionRequest(BaseModel):
 def recibir_item(
     request: RecibirItemRequest, almacen: AlmacenDeUnidades = Depends(obtener_almacen)
 ) -> dominio.UnidadDocumentalCandidata:
-    unidad = dominio.recibir_item(
+    unidad, evento = dominio.recibir_item(
         id=request.id,
         lote_id=request.lote_id,
         item_ingesta_id=request.item_ingesta_id,
@@ -103,8 +114,9 @@ def recibir_item(
         ),
         huella_de_contenido=request.huella_de_contenido,
         es_caso_trivial=request.es_caso_trivial,
+        actor=request.actor,
     )
-    almacen.guardar(unidad)
+    almacen.guardar_con_evento(unidad, evento)
     return unidad
 
 
@@ -119,13 +131,13 @@ def recibir_sugerencia_de_limites(
     id: str, request: SugerenciaDeLimitesRequest, almacen: AlmacenDeUnidades = Depends(obtener_almacen)
 ) -> dominio.UnidadDocumentalCandidata:
     unidad = _o_404(almacen.buscar(id), id)
-    actualizada = dominio.recibir_sugerencia_de_limites(
+    actualizada, evento = dominio.recibir_sugerencia_de_limites(
         unidad,
         dominio.SugerenciaDeLimites(
             modelo_id=request.modelo_id, evidencia=request.evidencia, confianza=request.confianza, fecha=request.fecha
         ),
     )
-    almacen.guardar(actualizada)
+    almacen.guardar_con_evento(actualizada, evento)
     return actualizada
 
 
@@ -136,8 +148,8 @@ def confirmar_limites(
     id: str, request: ConfirmacionDeLimitesRequest, almacen: AlmacenDeUnidades = Depends(obtener_almacen)
 ) -> dominio.UnidadDocumentalCandidata:
     unidad = _o_404(almacen.buscar(id), id)
-    actualizada = dominio.confirmar_limites(unidad, actor=request.actor, fecha=request.fecha)
-    almacen.guardar(actualizada)
+    actualizada, evento = dominio.confirmar_limites(unidad, actor=request.actor, fecha=request.fecha)
+    almacen.guardar_con_evento(actualizada, evento)
     return actualizada
 
 
@@ -147,8 +159,10 @@ def normalizar(
     id: str, request: NormalizarRequest, almacen: AlmacenDeUnidades = Depends(obtener_almacen)
 ) -> dominio.UnidadDocumentalCandidata:
     unidad = _o_404(almacen.buscar(id), id)
-    actualizada = dominio.normalizar(unidad, formato_normalizado=request.formato_normalizado)
-    almacen.guardar(actualizada)
+    actualizada, evento = dominio.normalizar(
+        unidad, formato_normalizado=request.formato_normalizado, actor=request.actor, fecha=request.fecha
+    )
+    almacen.guardar_con_evento(actualizada, evento)
     return actualizada
 
 
@@ -158,8 +172,10 @@ def validar(
     id: str, request: ValidacionRequest, almacen: AlmacenDeUnidades = Depends(obtener_almacen)
 ) -> dominio.UnidadDocumentalCandidata:
     unidad = _o_404(almacen.buscar(id), id)
-    actualizada = dominio.marcar_cuarentena_o_rechazo(unidad, request.condicion)
-    almacen.guardar(actualizada)
+    actualizada, evento = dominio.marcar_cuarentena_o_rechazo(
+        unidad, request.condicion, actor=request.actor, fecha=request.fecha
+    )
+    almacen.guardar_con_evento(actualizada, evento)
     return actualizada
 
 
@@ -168,15 +184,17 @@ def validar(
 # `documentosSinClasificar` en records-custodia (T-28) calcula su filtro a
 # partir de lo ya persistido, no de lo que declare cada petición.
 @app.post("/unidades/{id}/entrega")
-def entregar(id: str, almacen: AlmacenDeUnidades = Depends(obtener_almacen)) -> dominio.UnidadDocumentalCandidata:
+def entregar(
+    id: str, request: EntregaRequest, almacen: AlmacenDeUnidades = Depends(obtener_almacen)
+) -> dominio.UnidadDocumentalCandidata:
     unidad = _o_404(almacen.buscar(id), id)
     huellas_ya_entregadas = {
         u.huella_de_contenido
         for u in almacen.todas()
         if u.estado == dominio.EstadoUnidadDocumental.ENTREGADA_A_EXTRACCION and u.huella_de_contenido is not None
     }
-    actualizada = dominio.entregar(unidad, huellas_ya_entregadas)
-    almacen.guardar(actualizada)
+    actualizada, evento = dominio.entregar(unidad, huellas_ya_entregadas, actor=request.actor, fecha=request.fecha)
+    almacen.guardar_con_evento(actualizada, evento)
     return actualizada
 
 
@@ -193,3 +211,10 @@ def conteo_por_estado(lote_id: str, almacen: AlmacenDeUnidades = Depends(obtener
         "terminales": conteo.terminales,
         "sin_perdida_silenciosa": conteo.sin_perdida_silenciosa,
     }
+
+
+# P-08 (hallazgo V-01, ver REVIEW.md): observabilidad de la bitácora, mismo
+# criterio que `GET /eventos-seguridad` en seguridad-acceso.
+@app.get("/eventos-auditoria")
+def eventos_de_auditoria(almacen: AlmacenDeUnidades = Depends(obtener_almacen)) -> list[dominio.EventoAuditoria]:
+    return almacen.eventos_de_auditoria()

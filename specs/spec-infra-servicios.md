@@ -212,6 +212,12 @@ sin dependencias de framework, `pytest`, dataclasses `frozen=True`.
 | `POST /unidades/{id}/validacion` | `marcar_cuarentena_o_rechazo(...)` | RF-NO-009 |
 | `POST /unidades/{id}/entrega` | `entregar(...)` (huellas ya entregadas calculadas server-side) | RF-NO-006, RF-NO-010 |
 | `GET /lotes/{lote_id}/conteo` | `contar_por_estado(...)` | RF-NO-008 |
+| `GET /eventos-auditoria` | `AlmacenDeUnidades.eventos_de_auditoria()` | RF-NO-008, P-08 |
+
+`POST /unidades` (actor obligatorio en el cuerpo) y `POST
+/unidades/{id}/normalizacion`, `POST /unidades/{id}/validacion`, `POST
+/unidades/{id}/entrega` (actor y fecha obligatorios en el cuerpo) — añadidos
+en el hallazgo V-01 (ver más abajo) para que cada transición sea atribuible.
 
 Mapeo de persistencia (estructura, no DDL): `UnidadDocumentalCandidata` →
 tabla `unidades_documentales`, con procedencia/sugerencia/confirmación
@@ -220,6 +226,22 @@ captura-ingesta) y `evidencia` serializada a JSON en una columna de texto
 (mismo criterio que `evidencia_json` en records-custodia). Variables de
 entorno idénticas a los contextos Kotlin: `DB_HOST`, `DB_PORT`, `DB_NAME`,
 `DB_USER`, `DB_PASSWORD`.
+
+**P-08 (hallazgo V-01 de la revisión acumulada de Codex, `65c3c43..HEAD`,
+2026-08-27, ver `REVIEW.md`)**: la versión original de esta spec/T-33 no
+persistía ningún evento de auditoría — cada dominio de transición
+(`recibir_item`, `recibir_sugerencia_de_limites`, `confirmar_limites`,
+`normalizar`, `marcar_cuarentena_o_rechazo`, `entregar`) ahora devuelve una
+tupla `(UnidadDocumentalCandidata, EventoAuditoria)`, y
+`AlmacenDeUnidades.guardar_con_evento(unidad, evento)` persiste ambos en una
+única transacción SQLAlchemy (`merge` + `add` + `commit`, con
+`rollback()` explícito si falla el `commit`) sobre una nueva tabla
+`eventos_auditoria` (columnas: `actor`, `fecha`, `tipo`, `estado_anterior`,
+`estado_posterior`) — mismo criterio que `eventos_auditoria` en
+records-custodia y `eventos_seguridad` en seguridad-acceso. Verificado con un
+test de atomicidad real (violación de restricción NOT NULL, no un doble
+simulado) que confirma que si el evento no se puede anexar, la unidad
+tampoco queda persistida (`tests/test_persistencia.py`).
 
 Fuera de alcance de esta spec: la recepción real de ítems desde
 Captura/Ingesta (RF-NO-001 asume que `lote_id`/`item_ingesta_id`/`procedencia`

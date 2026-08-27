@@ -70,6 +70,26 @@ class UnidadDocumentalCandidata:
     formato_normalizado: str | None = None
 
 
+# P-08 (hallazgo V-01 de la revisión acumulada de Codex, 2026-08-27, ver
+# REVIEW.md): toda transición de estado debe generar un evento de auditoría
+# inmutable, atribuible y fechado, con estado anterior y posterior — mismo
+# criterio que `EventoAuditoria`/`BitacoraAuditoria` en records-custodia
+# (RF-RC-005) y `EventoSeguridad`/`BitacoraSeguridad` en seguridad-acceso.
+# Cada función de transición de este módulo ahora devuelve la unidad
+# actualizada JUNTO con el evento que la describe — dominio.py sigue siendo
+# funciones puras sin estado ni dependencias (a diferencia de las clases
+# Kotlin, que sostienen una bitácora inyectada); es la capa de persistencia
+# (persistencia.py) quien debe anexar ambos en una sola transacción, para no
+# recrear el riesgo de atomicidad que T-21/T-22 corrigieron en Kotlin.
+@dataclass(frozen=True)
+class EventoAuditoria:
+    actor: str
+    fecha: datetime
+    tipo: str
+    estado_anterior: str | None
+    estado_posterior: str | None
+
+
 # RF-NO-001/003: recibir un ítem validado desde Captura/Ingesta genera una
 # unidad documental candidata. El caso trivial (un artefacto = un documento) lo
 # declara explícitamente el llamador: el mecanismo automático para decidirlo
@@ -83,13 +103,14 @@ def recibir_item(
     procedencia: ProcedenciaHeredada,
     huella_de_contenido: str | None,
     es_caso_trivial: bool,
-) -> UnidadDocumentalCandidata:
+    actor: str,
+) -> tuple[UnidadDocumentalCandidata, EventoAuditoria]:
     estado = (
         EstadoUnidadDocumental.LIMITES_CONFIRMADOS
         if es_caso_trivial
         else EstadoUnidadDocumental.PENDIENTE_DE_LIMITES
     )
-    return UnidadDocumentalCandidata(
+    unidad = UnidadDocumentalCandidata(
         id=id,
         lote_id=lote_id,
         item_ingesta_id=item_ingesta_id,
@@ -97,14 +118,33 @@ def recibir_item(
         huella_de_contenido=huella_de_contenido,
         estado=estado,
     )
+    evento = EventoAuditoria(
+        actor=actor, fecha=procedencia.fecha, tipo="UNIDAD_RECIBIDA", estado_anterior=None, estado_posterior=estado.value
+    )
+    return unidad, evento
 
 
+# RF-NO-002: el actor del evento es `sugerencia.modelo_id` — mismo criterio que
+# T-20 usó para `SUGERENCIA_RECIBIDA` en records-custodia ("modeloId como actor
+# de sistema atribuible", dato ya existente en el contrato, sin inventar un
+# campo nuevo). `estado_posterior` es un sentinel ("SUGERENCIA_DE_LIMITES_
+# RECIBIDA"), no el estado real de la unidad: la sugerencia no cambia el
+# estado por sí sola (P-01, invariante 2), así que el evento no debe sugerir
+# que sí lo hizo.
 def recibir_sugerencia_de_limites(
     unidad: UnidadDocumentalCandidata, sugerencia: SugerenciaDeLimites
-) -> UnidadDocumentalCandidata:
+) -> tuple[UnidadDocumentalCandidata, EventoAuditoria]:
     if unidad.estado != EstadoUnidadDocumental.PENDIENTE_DE_LIMITES:
         raise ErrorDeDominio(f"La unidad '{unidad.id}' no está pendiente de límites.")
-    return replace(unidad, sugerencia_de_limites=sugerencia)
+    actualizada = replace(unidad, sugerencia_de_limites=sugerencia)
+    evento = EventoAuditoria(
+        actor=sugerencia.modelo_id,
+        fecha=sugerencia.fecha,
+        tipo="SUGERENCIA_DE_LIMITES_RECIBIDA",
+        estado_anterior=None,
+        estado_posterior="SUGERENCIA_DE_LIMITES_RECIBIDA",
+    )
+    return actualizada, evento
 
 
 # RF-NO-004: una sugerencia nunca separa documentos por sí sola (P-01); esta es
@@ -113,32 +153,55 @@ def recibir_sugerencia_de_limites(
 # (spec-infra-servicios.md §9): Validación Humana llama a esto por HTTP.
 def confirmar_limites(
     unidad: UnidadDocumentalCandidata, actor: str, fecha: datetime
-) -> UnidadDocumentalCandidata:
+) -> tuple[UnidadDocumentalCandidata, EventoAuditoria]:
     if unidad.estado != EstadoUnidadDocumental.PENDIENTE_DE_LIMITES:
         raise ErrorDeDominio(f"La unidad '{unidad.id}' no está pendiente de límites.")
-    return replace(
+    estado_anterior = unidad.estado.value
+    actualizada = replace(
         unidad,
         estado=EstadoUnidadDocumental.LIMITES_CONFIRMADOS,
         confirmacion_limites=ConfirmacionHumanaDeLimites(actor=actor, fecha=fecha),
     )
+    evento = EventoAuditoria(
+        actor=actor,
+        fecha=fecha,
+        tipo="LIMITES_CONFIRMADOS",
+        estado_anterior=estado_anterior,
+        estado_posterior=actualizada.estado.value,
+    )
+    return actualizada, evento
 
 
 # RF-NO-005: el formato de preservación exacto queda [CLARIFICAR] (spec §8,
 # ningún estándar decidido); esta función no inventa una conversión real, solo
 # transiciona el estado y conserva una referencia honesta a la forma
-# "normalizada" — nunca finge un formato que nadie decidió.
-def normalizar(unidad: UnidadDocumentalCandidata, formato_normalizado: str) -> UnidadDocumentalCandidata:
+# "normalizada" — nunca finge un formato que nadie decidió. `actor`/`fecha`
+# identifican quién o qué disparó la normalización (puede ser un componente de
+# sistema), mismo criterio que `verificarIntegridad(id, actor, fecha)` en
+# records-custodia para operaciones sin decisión humana pero igual auditables.
+def normalizar(
+    unidad: UnidadDocumentalCandidata, formato_normalizado: str, actor: str, fecha: datetime
+) -> tuple[UnidadDocumentalCandidata, EventoAuditoria]:
     if unidad.estado != EstadoUnidadDocumental.LIMITES_CONFIRMADOS:
         raise ErrorDeDominio(f"La unidad '{unidad.id}' no tiene límites confirmados.")
-    return replace(unidad, estado=EstadoUnidadDocumental.NORMALIZADA, formato_normalizado=formato_normalizado)
+    estado_anterior = unidad.estado.value
+    actualizada = replace(unidad, estado=EstadoUnidadDocumental.NORMALIZADA, formato_normalizado=formato_normalizado)
+    evento = EventoAuditoria(
+        actor=actor,
+        fecha=fecha,
+        tipo="UNIDAD_NORMALIZADA",
+        estado_anterior=estado_anterior,
+        estado_posterior=actualizada.estado.value,
+    )
+    return actualizada, evento
 
 
 # RF-NO-009: mismo criterio que RF-CI-006 (T-02): recuperable dentro del
 # sistema actual -> En cuarentena; solo recuperable con artefacto nuevo o
 # cambio de sistema -> Rechazada.
 def marcar_cuarentena_o_rechazo(
-    unidad: UnidadDocumentalCandidata, condicion: CondicionDeNormalizacion
-) -> UnidadDocumentalCandidata:
+    unidad: UnidadDocumentalCandidata, condicion: CondicionDeNormalizacion, actor: str, fecha: datetime
+) -> tuple[UnidadDocumentalCandidata, EventoAuditoria]:
     if condicion == CondicionDeNormalizacion.CORRUPTO:
         estado = EstadoUnidadDocumental.EN_CUARENTENA
         razon = "Artefacto corrupto: requiere reescaneo o confirmación manual."
@@ -148,19 +211,34 @@ def marcar_cuarentena_o_rechazo(
     else:
         estado = EstadoUnidadDocumental.RECHAZADA
         razon = "Formato no soportado: requiere un artefacto nuevo o soporte de formato añadido al sistema."
-    return replace(unidad, estado=estado, razon=razon)
+    estado_anterior = unidad.estado.value
+    actualizada = replace(unidad, estado=estado, razon=razon)
+    evento = EventoAuditoria(
+        actor=actor, fecha=fecha, tipo="VALIDACION_APLICADA", estado_anterior=estado_anterior, estado_posterior=estado.value
+    )
+    return actualizada, evento
 
 
 # RF-NO-006/010: entrega a Extracción; una unidad cuyo contenido ya entregó
 # otra unidad queda vinculada al duplicado en vez de entregarse otra vez.
 def entregar(
-    unidad: UnidadDocumentalCandidata, huellas_ya_entregadas: set[str]
-) -> UnidadDocumentalCandidata:
+    unidad: UnidadDocumentalCandidata, huellas_ya_entregadas: set[str], actor: str, fecha: datetime
+) -> tuple[UnidadDocumentalCandidata, EventoAuditoria]:
     if unidad.estado != EstadoUnidadDocumental.NORMALIZADA:
         raise ErrorDeDominio(f"La unidad '{unidad.id}' no está normalizada.")
+    estado_anterior = unidad.estado.value
     if unidad.huella_de_contenido is not None and unidad.huella_de_contenido in huellas_ya_entregadas:
-        return replace(unidad, estado=EstadoUnidadDocumental.VINCULADA_A_DUPLICADO)
-    return replace(unidad, estado=EstadoUnidadDocumental.ENTREGADA_A_EXTRACCION)
+        actualizada = replace(unidad, estado=EstadoUnidadDocumental.VINCULADA_A_DUPLICADO)
+    else:
+        actualizada = replace(unidad, estado=EstadoUnidadDocumental.ENTREGADA_A_EXTRACCION)
+    evento = EventoAuditoria(
+        actor=actor,
+        fecha=fecha,
+        tipo="ENTREGA_PROCESADA",
+        estado_anterior=estado_anterior,
+        estado_posterior=actualizada.estado.value,
+    )
+    return actualizada, evento
 
 
 _ESTADOS_TERMINALES = {

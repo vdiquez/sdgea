@@ -1462,7 +1462,7 @@
             "description": "Primer contexto Python/FastAPI del proyecto (T-33..T-35).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"{{unidad_id_no}}\",\n  \"lote_id\": \"{{lote_id_no}}\",\n  \"item_ingesta_id\": \"item-no-postman\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-26T12:00:00Z\",\n    \"disparador\": \"carga_por_lote\",\n    \"lote_o_flujo_id\": \"{{lote_id_no}}\"\n  },\n  \"huella_de_contenido\": \"{{huella_no}}\",\n  \"es_caso_trivial\": false\n}",
+              "raw": "{\n  \"id\": \"{{unidad_id_no}}\",\n  \"lote_id\": \"{{lote_id_no}}\",\n  \"item_ingesta_id\": \"item-no-postman\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-26T12:00:00Z\",\n    \"disparador\": \"carga_por_lote\",\n    \"lote_o_flujo_id\": \"{{lote_id_no}}\"\n  },\n  \"huella_de_contenido\": \"{{huella_no}}\",\n  \"es_caso_trivial\": false,\n  \"actor\": \"sistema-normalizacion\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1633,7 +1633,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"formato_normalizado\": \"application/pdf\"\n}",
+              "raw": "{\n  \"formato_normalizado\": \"application/pdf\",\n  \"actor\": \"sistema-normalizacion\",\n  \"fecha\": \"2026-08-26T12:15:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1657,7 +1657,12 @@
           "name": "38 Entregar a Extraccion (RF-NO-006, RF-NO-010)",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{normalizacion_base_url}}/unidades/{{unidad_id_no}}/entrega",
               "host": [
@@ -1668,6 +1673,15 @@
                 "{{unidad_id_no}}",
                 "entrega"
               ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"sistema-normalizacion\",\n  \"fecha\": \"2026-08-26T12:16:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           },
           "event": [
@@ -1703,7 +1717,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"{{unidad_id_no_2}}\",\n  \"lote_id\": \"{{lote_id_no}}\",\n  \"item_ingesta_id\": \"item-no-postman-2\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-26T12:00:00Z\",\n    \"disparador\": \"carga_por_lote\",\n    \"lote_o_flujo_id\": \"{{lote_id_no}}\"\n  },\n  \"es_caso_trivial\": false\n}",
+              "raw": "{\n  \"id\": \"{{unidad_id_no_2}}\",\n  \"lote_id\": \"{{lote_id_no}}\",\n  \"item_ingesta_id\": \"item-no-postman-2\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-26T12:00:00Z\",\n    \"disparador\": \"carga_por_lote\",\n    \"lote_o_flujo_id\": \"{{lote_id_no}}\"\n  },\n  \"es_caso_trivial\": false,\n  \"actor\": \"sistema-normalizacion\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1755,7 +1769,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"condicion\": \"FORMATO_NO_SOPORTADO\"\n}",
+              "raw": "{\n  \"condicion\": \"FORMATO_NO_SOPORTADO\",\n  \"actor\": \"sistema-normalizacion\",\n  \"fecha\": \"2026-08-26T12:20:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1807,6 +1821,42 @@
                   "pm.test(\"las dos unidades del lote llegaron a un estado terminal\", () => {",
                   "  pm.expect(conteo.total).to.eql(2);",
                   "  pm.expect(conteo.sin_perdida_silenciosa).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "42 Consultar bitacora de auditoria (RF-NO-008, P-08)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/eventos-auditoria",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "eventos-auditoria"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "const eventos = pm.response.json();",
+                  "pm.test(\"la unidad no trivial tiene su ciclo completo en la bitacora, atribuible\", () => {",
+                  "  const deEstaUnidad = eventos.filter((e) => e.estado_posterior === \"ENTREGADA_A_EXTRACCION\" || e.estado_posterior === \"PENDIENTE_DE_LIMITES\" || e.estado_posterior === \"LIMITES_CONFIRMADOS\" || e.estado_posterior === \"NORMALIZADA\");",
+                  "  pm.expect(deEstaUnidad.length).to.be.greaterThan(0);",
+                  "  deEstaUnidad.forEach((e) => {",
+                  "    pm.expect(e.actor).to.be.a(\"string\").and.not.be.empty;",
+                  "    pm.expect(e.fecha).to.be.a(\"string\").and.not.be.empty;",
+                  "  });",
                   "});"
                 ]
               }

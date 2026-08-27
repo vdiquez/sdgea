@@ -2,12 +2,13 @@ import json
 import os
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, String, Text, create_engine, select
+from sqlalchemy import DateTime, Float, Integer, String, Text, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from dominio import (
     ConfirmacionHumanaDeLimites,
     EstadoUnidadDocumental,
+    EventoAuditoria,
     ProcedenciaHeredada,
     SugerenciaDeLimites,
     UnidadDocumentalCandidata,
@@ -59,6 +60,43 @@ class UnidadDocumentalEntity(Base):
 
     confirmacion_actor: Mapped[str | None] = mapped_column(String, nullable=True)
     confirmacion_fecha: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# P-08 (hallazgo V-01 de la revisión acumulada de Codex, ver REVIEW.md):
+# bitácora de solo anexado, mismo tratamiento que `eventos_auditoria` en
+# records-custodia y `eventos_seguridad` en seguridad-acceso — se persiste
+# con `session.add` dentro de la MISMA transacción que la unidad (ver
+# `AlmacenDeUnidades.guardar_con_evento`), nunca con un commit propio, para no
+# recrear el riesgo de atomicidad que T-21/T-22 corrigieron en Kotlin.
+class EventoAuditoriaEntity(Base):
+    __tablename__ = "eventos_auditoria"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    actor: Mapped[str] = mapped_column(String, nullable=False)
+    fecha: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    tipo: Mapped[str] = mapped_column(String, nullable=False)
+    estado_anterior: Mapped[str | None] = mapped_column(String, nullable=True)
+    estado_posterior: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+def _evento_a_fila(evento: EventoAuditoria) -> EventoAuditoriaEntity:
+    return EventoAuditoriaEntity(
+        actor=evento.actor,
+        fecha=evento.fecha,
+        tipo=evento.tipo,
+        estado_anterior=evento.estado_anterior,
+        estado_posterior=evento.estado_posterior,
+    )
+
+
+def _evento_a_dominio(fila: EventoAuditoriaEntity) -> EventoAuditoria:
+    return EventoAuditoria(
+        actor=fila.actor,
+        fecha=fila.fecha,
+        tipo=fila.tipo,
+        estado_anterior=fila.estado_anterior,
+        estado_posterior=fila.estado_posterior,
+    )
 
 
 def _a_dominio(fila: UnidadDocumentalEntity) -> UnidadDocumentalCandidata:
@@ -125,9 +163,24 @@ class AlmacenDeUnidades:
     def __init__(self, session: Session):
         self._session = session
 
-    def guardar(self, unidad: UnidadDocumentalCandidata) -> None:
-        self._session.merge(_a_fila(unidad))
-        self._session.commit()
+    # P-08 (hallazgo V-01, ver REVIEW.md): la unidad y su evento de auditoría
+    # se anexan en la MISMA transacción de SQLAlchemy — ninguna llamada
+    # intermedia hace su propio `commit()`. Si el anexado del evento falla
+    # (p. ej. una violación de restricción NOT NULL), el `rollback()`
+    # explícito deshace también la escritura de la unidad: no puede existir
+    # una transición confirmada sin su evento, igual que
+    # `CustodiaTransaccional`/`RecepcionDeSugerenciasTransaccional` lo
+    # garantizan en Kotlin (T-21/T-22), aunque aquí no hace falta un wrapper
+    # `@Transactional` separado porque SQLAlchemy ya agrupa ambas escrituras
+    # bajo un único `commit()`.
+    def guardar_con_evento(self, unidad: UnidadDocumentalCandidata, evento: EventoAuditoria) -> None:
+        try:
+            self._session.merge(_a_fila(unidad))
+            self._session.add(_evento_a_fila(evento))
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
 
     def buscar(self, id: str) -> UnidadDocumentalCandidata | None:
         fila = self._session.get(UnidadDocumentalEntity, id)
@@ -144,6 +197,10 @@ class AlmacenDeUnidades:
             .all()
         )
         return [_a_dominio(fila) for fila in filas]
+
+    def eventos_de_auditoria(self) -> list[EventoAuditoria]:
+        filas = self._session.execute(select(EventoAuditoriaEntity).order_by(EventoAuditoriaEntity.id)).scalars().all()
+        return [_evento_a_dominio(fila) for fila in filas]
 
 
 def crear_fabrica_de_sesiones(url: str | None = None) -> sessionmaker[Session]:

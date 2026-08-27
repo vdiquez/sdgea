@@ -1125,14 +1125,89 @@ plano (sin `src/`), `pytest`, dataclasses `frozen=True` para value objects,
   completa de punta a punta: dominio (T-33) → HTTP + persistencia (T-34) →
   Docker (T-35) → Postman/Newman (T-36).**
 
-Siguiente paso: cinco de los nueve bounded contexts están implementados;
-cuatro conectados entre sí de verdad (Normalización todavía se prueba
-aislada — RF-NO-001 no tiene una fuente real de Captura/Ingesta, y RF-VH-005
-sigue sin que Validación Humana llame al endpoint de confirmación de límites
-que Normalización ya expone, aunque ambos lados existen desde hoy). Quedan 4
-contextos probabilísticos sin implementar (Extracción, Clasificación,
-Enriquecimiento, Indexación y Búsqueda) — todos seguirían el mismo patrón
-Python/FastAPI que Normalización acaba de establecer. Decisión de Victor:
-cerrar el ciclo RF-VH-005 (Validación Humana → Normalización, ya con ambos
-extremos reales), otro contexto probabilístico, la brecha de autorización en
-captura-ingesta/records-custodia, diseño de UI/UX, o F4.
+- Revisión acumulada de Codex (`65c3c43..HEAD`, 27 commits desde T-21,
+  2026-08-27): Victor preguntó directamente si Codex estaba revisando en
+  paralelo o solo Claude Code estaba trabajando. Investigación honesta:
+  Codex NO había revisado nada en toda esta sesión (Seguridad y Acceso,
+  Validación Humana, Normalización completos sin arbitraje). Victor eligió
+  "Codex revisa el acumulado ahora" (`AskUserQuestion`) en vez de seguir sin
+  revisar o retomarlo solo hacia adelante. Ejecutado con
+  `codex exec --json --sandbox workspace-write` contra el rango completo
+  (mismo prompt que `orquestador.sh`/`run_codex()`, invocado manualmente).
+  Resultado: **VETO**, dos hallazgos reales (`REVIEW.md`, commit `9f253a8`):
+  - **V-01** — RF-NO-008/P-08 incumplido en Normalización: ninguna función de
+    dominio producía un evento de auditoría a pesar de que el RF lo exige.
+    Corregido en T-37 (ver abajo).
+  - **V-02** — violación de proceso constitucional: `specs/006-seguridad-acceso/spec.md`
+    §8 marcó el modelo RBAC/ABAC y el proveedor de identidad como
+    `[CLARIFICAR]` ("no se fija sin dato real del design partner"), pero T-23
+    implementó ambas decisiones sin pausar a preguntar en `QUESTIONS.md` —
+    la constitución exige detenerse ante un `[CLARIFICAR]` real de
+    negocio/legal, y marcarlo así es un compromiso vinculante, no una nota
+    blanda. Autoidentificado como hallazgo real (no falso positivo) al
+    reportarlo a Victor, sin minimizarlo. Remediado correctamente: se
+    preguntó por fin en `QUESTIONS.md` (vía `AskUserQuestion`) y Victor
+    ratificó ambas decisiones como definitivas, no provisionales — "Ratificar
+    RBAC simple" y "Ratificar almacén propio" (`QUESTIONS.md`, entrada
+    2026-08-27; `specs/006-seguridad-acceso/spec.md` §8 actualizada a
+    "Resuelto"). V-02 queda cerrado con esta ratificación.
+  Codex confirmó además: sin otro VETO, specs/trazabilidad correctas, tests
+  ejecutados de verdad (no amañados) — ver `REVIEW.md` para el detalle
+  completo.
+- [x] T-37 (corrige VETO V-01) — bitácora de auditoría en Normalización.
+  Cada función de dominio (`recibir_item`, `recibir_sugerencia_de_limites`,
+  `confirmar_limites`, `normalizar`, `marcar_cuarentena_o_rechazo`,
+  `entregar`) devuelve ahora `tuple[UnidadDocumentalCandidata,
+  EventoAuditoria]` en vez de solo la unidad; `normalizar`,
+  `marcar_cuarentena_o_rechazo` y `entregar` ganaron parámetros obligatorios
+  `actor`/`fecha` (mismo criterio que `confirmar_limites` ya tenía desde
+  T-33), y `recibir_item` ganó `actor`. Nueva tabla `eventos_auditoria`
+  (`actor`, `fecha`, `tipo`, `estado_anterior`, `estado_posterior`) y
+  `AlmacenDeUnidades.guardar_con_evento(unidad, evento)` — persiste ambos en
+  una única transacción SQLAlchemy (`merge`+`add`+`commit()`, con
+  `rollback()` explícito si falla), mismo criterio de atomicidad que
+  `CustodiaTransaccional`/`RecepcionDeSugerenciasTransaccional` en Kotlin
+  (T-21/T-22), aunque aquí SQLAlchemy ya agrupa ambas escrituras bajo un
+  único `commit()` sin necesitar un wrapper `@Transactional` separado.
+  Nuevo endpoint `GET /eventos-auditoria` (mismo criterio que
+  `GET /eventos-seguridad` en seguridad-acceso).
+  Atomicidad verificada con una prueba real, no un doble simulado: un
+  `EventoAuditoria(actor=None, ...)` viola la restricción NOT NULL real de
+  SQLite al hacer `commit()`; el `rollback()` explícito deshace también el
+  `merge()` de la unidad hecho en la misma transacción — confirmado en
+  `tests/test_persistencia.py` (nuevo archivo, 2 tests) comprobando que tras
+  la excepción ni la unidad ni el evento quedan persistidos.
+  TDD: `tests/test_dominio.py` reescrito (18 tests, incluida una clase nueva
+  `TestAuditoriaDeTransiciones`); `tests/test_api.py` actualizado al nuevo
+  contrato (15 tests, incluida una clase nueva `TestAuditoria` contra
+  `GET /eventos-auditoria`); `tests/test_persistencia.py` nuevo (2 tests).
+  35/35 tests de `normalizacion` en verde; `./test.sh` completo del repo en
+  verde (Gradle + eval-harness + normalizacion).
+  `specs/spec-infra-servicios.md` §7 actualizada: nuevo endpoint en la tabla,
+  nota de los campos `actor`/`fecha` añadidos, y explicación completa del
+  hallazgo V-01 y su corrección.
+  Colección Postman "5. Normalizacion" ampliada: `actor` añadido a las dos
+  peticiones de `POST /unidades` (33, 39); `actor`/`fecha` añadidos a
+  `POST .../normalizacion` (37) y `POST .../validacion` (40); cuerpo nuevo
+  (antes no tenía) con `actor`/`fecha` en `POST .../entrega` (38); petición
+  nueva 42 contra `GET /eventos-auditoria` verificando que los eventos de la
+  unidad no trivial traen actor y fecha no vacíos. Revalidada con los cinco
+  servicios corriendo a la vez — 43/43 peticiones, 81/81 aserciones, dos
+  corridas seguidas sin fallos. Stack bajado al terminar.
+  `TODO.md` añadió T-38 (RF-VH-005: puerto `ConfirmadorDeLimites` en
+  Validación Humana) y T-39 (RF-VH-001/009: colas completas de Validación
+  Humana) como hallazgos de la misma revisión acumulada — ninguno de los dos
+  es VETO bloqueante ni ha sido priorizado todavía por Victor.
+
+Siguiente paso: con V-01 y V-02 cerrados, la revisión acumulada de Codex
+queda sin VETO pendiente. Cinco de los nueve bounded contexts están
+implementados; cuatro conectados entre sí de verdad (Normalización todavía
+se prueba aislada — RF-NO-001 no tiene una fuente real de Captura/Ingesta, y
+RF-VH-005/T-38 sigue sin que Validación Humana llame al endpoint de
+confirmación de límites que Normalización ya expone, aunque ambos lados
+existen desde hoy). Quedan 4 contextos probabilísticos sin implementar
+(Extracción, Clasificación, Enriquecimiento, Indexación y Búsqueda) — todos
+seguirían el mismo patrón Python/FastAPI que Normalización estableció.
+Opciones abiertas para Victor: T-38 (cerrar RF-VH-005), T-39 (completar las
+colas de Validación Humana), otro contexto probabilístico, la brecha de
+autorización en captura-ingesta/records-custodia, diseño de UI/UX, o F4.

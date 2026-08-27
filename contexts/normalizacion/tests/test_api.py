@@ -38,7 +38,7 @@ def _procedencia():
     return {"fuente": "escaner-sala-3", "fecha": FECHA, "disparador": "carga_por_lote", "lote_o_flujo_id": "lote-001"}
 
 
-def _crear_unidad(client, id_, lote_id, item_id, es_caso_trivial, huella=None):
+def _crear_unidad(client, id_, lote_id, item_id, es_caso_trivial, huella=None, actor="sistema-normalizacion"):
     return client.post(
         "/unidades",
         json={
@@ -48,8 +48,24 @@ def _crear_unidad(client, id_, lote_id, item_id, es_caso_trivial, huella=None):
             "procedencia": _procedencia(),
             "huella_de_contenido": huella,
             "es_caso_trivial": es_caso_trivial,
+            "actor": actor,
         },
     )
+
+
+def _normalizar(client, id_, actor="sistema-normalizacion"):
+    return client.post(
+        f"/unidades/{id_}/normalizacion",
+        json={"formato_normalizado": "application/pdf", "actor": actor, "fecha": FECHA},
+    )
+
+
+def _validar(client, id_, condicion, actor="sistema-normalizacion"):
+    return client.post(f"/unidades/{id_}/validacion", json={"condicion": condicion, "actor": actor, "fecha": FECHA})
+
+
+def _entregar(client, id_, actor="sistema-normalizacion"):
+    return client.post(f"/unidades/{id_}/entrega", json={"actor": actor, "fecha": FECHA})
 
 
 # RF-NO-001/003 · Recepción de ítems validados y caso trivial
@@ -115,7 +131,7 @@ class TestNormalizacionYCuarentena:
     def test_normalizar_una_unidad_con_limites_confirmados(self, client):
         _crear_unidad(client, "unidad-6", "lote-003", "item-006", es_caso_trivial=True)
 
-        response = client.post("/unidades/unidad-6/normalizacion", json={"formato_normalizado": "application/pdf"})
+        response = _normalizar(client, "unidad-6")
 
         assert response.json()["estado"] == "NORMALIZADA"
         assert response.json()["formato_normalizado"] == "application/pdf"
@@ -123,7 +139,7 @@ class TestNormalizacionYCuarentena:
     def test_validacion_corrupto_queda_en_cuarentena_con_razon(self, client):
         _crear_unidad(client, "unidad-7", "lote-003", "item-007", es_caso_trivial=False)
 
-        response = client.post("/unidades/unidad-7/validacion", json={"condicion": "CORRUPTO"})
+        response = _validar(client, "unidad-7", "CORRUPTO")
 
         assert response.json()["estado"] == "EN_CUARENTENA"
         assert response.json()["razon"]
@@ -131,7 +147,7 @@ class TestNormalizacionYCuarentena:
     def test_validacion_formato_no_soportado_queda_rechazada(self, client):
         _crear_unidad(client, "unidad-8", "lote-003", "item-008", es_caso_trivial=False)
 
-        response = client.post("/unidades/unidad-8/validacion", json={"condicion": "FORMATO_NO_SOPORTADO"})
+        response = _validar(client, "unidad-8", "FORMATO_NO_SOPORTADO")
 
         assert response.json()["estado"] == "RECHAZADA"
 
@@ -145,9 +161,9 @@ class TestEntregaYDeduplicacion:
             json={"modelo_id": "emisor-ficticio-v0", "evidencia": ["pagina-1"], "confianza": 0.4, "fecha": FECHA},
         )
         client.post("/unidades/unidad-9/confirmacion-limites", json={"actor": "archivista-1", "fecha": FECHA})
-        client.post("/unidades/unidad-9/normalizacion", json={"formato_normalizado": "application/pdf"})
+        _normalizar(client, "unidad-9")
 
-        response = client.post("/unidades/unidad-9/entrega")
+        response = _entregar(client, "unidad-9")
 
         assert response.status_code == 200
         assert response.json()["estado"] == "ENTREGADA_A_EXTRACCION"
@@ -155,10 +171,10 @@ class TestEntregaYDeduplicacion:
     def test_una_unidad_con_la_misma_huella_ya_entregada_queda_vinculada_a_duplicado(self, client):
         for id_, item_id in [("unidad-10a", "item-010a"), ("unidad-10b", "item-010b")]:
             _crear_unidad(client, id_, "lote-005", item_id, es_caso_trivial=True, huella="huella-repetida")
-            client.post(f"/unidades/{id_}/normalizacion", json={"formato_normalizado": "application/pdf"})
+            _normalizar(client, id_)
 
-        client.post("/unidades/unidad-10a/entrega")
-        segunda = client.post("/unidades/unidad-10b/entrega")
+        _entregar(client, "unidad-10a")
+        segunda = _entregar(client, "unidad-10b")
 
         assert segunda.json()["estado"] == "VINCULADA_A_DUPLICADO"
 
@@ -167,7 +183,7 @@ class TestEntregaYDeduplicacion:
 class TestConteoPorEstado:
     def test_conteo_cuadra_cuando_todas_las_unidades_del_lote_llegaron_a_un_terminal(self, client):
         _crear_unidad(client, "unidad-11", "lote-006", "item-011", es_caso_trivial=False)
-        client.post("/unidades/unidad-11/validacion", json={"condicion": "FORMATO_NO_SOPORTADO"})
+        _validar(client, "unidad-11", "FORMATO_NO_SOPORTADO")
 
         response = client.get("/lotes/lote-006/conteo")
 
@@ -182,3 +198,22 @@ class TestConteoPorEstado:
         response = client.get("/lotes/lote-007/conteo")
 
         assert response.json()["sin_perdida_silenciosa"] is False
+
+
+# P-08 (hallazgo V-01 de la revisión acumulada de Codex, ver REVIEW.md) · toda
+# transición queda en una bitácora consultable, con actor, fecha y estado
+# anterior/posterior.
+class TestAuditoria:
+    def test_cada_transicion_de_una_unidad_queda_registrada_en_la_bitacora(self, client):
+        _crear_unidad(client, "unidad-13", "lote-008", "item-013", es_caso_trivial=False)
+        _validar(client, "unidad-13", "CORRUPTO", actor="sistema-validacion")
+
+        eventos = client.get("/eventos-auditoria").json()
+
+        tipos = [evento["tipo"] for evento in eventos]
+        assert "UNIDAD_RECIBIDA" in tipos
+        assert "VALIDACION_APLICADA" in tipos
+        evento_validacion = next(e for e in eventos if e["tipo"] == "VALIDACION_APLICADA")
+        assert evento_validacion["actor"] == "sistema-validacion"
+        assert evento_validacion["estado_anterior"] == "PENDIENTE_DE_LIMITES"
+        assert evento_validacion["estado_posterior"] == "EN_CUARENTENA"

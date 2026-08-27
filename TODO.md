@@ -252,10 +252,24 @@
       Normalización queda completa de punta a punta (T-33..T-36).**
 
 # Hallazgos de revisión acumulada `65c3c43..HEAD` (2026-08-27)
-- [ ] T-37 RF-NO-008 / P-08 — incorporar en Normalización una bitácora de
-      auditoría append-only con actor, fecha, tipo, estado anterior y posterior
-      para cada transición; persistir la unidad y su evento en una única
-      transacción SQLAlchemy y probar rollback real si falla el anexado.
+- [x] T-37 RF-NO-008 / P-08 (corrige VETO V-01) — cada función de dominio de
+      Normalización (`recibir_item`, `recibir_sugerencia_de_limites`,
+      `confirmar_limites`, `normalizar`, `marcar_cuarentena_o_rechazo`,
+      `entregar`) devuelve ahora `tuple[UnidadDocumentalCandidata,
+      EventoAuditoria]`; `AlmacenDeUnidades.guardar_con_evento(unidad, evento)`
+      persiste ambos en una única transacción SQLAlchemy (`merge`+`add`+
+      `commit`, con `rollback()` explícito si falla), sobre una nueva tabla
+      `eventos_auditoria`. Nuevo endpoint `GET /eventos-auditoria` (mismo
+      criterio que `GET /eventos-seguridad`). Atomicidad verificada con un
+      test real (violación de restricción NOT NULL, no un doble simulado) en
+      `tests/test_persistencia.py` — confirma que si el evento no se anexa, la
+      unidad tampoco queda persistida. 35/35 tests de `normalizacion`
+      (18 dominio + 15 API + 2 persistencia), `./test.sh` completo verde.
+      Colección Postman "5. Normalizacion" ampliada con `actor`/`fecha` en los
+      cuerpos afectados y una petición nueva (42) contra
+      `/eventos-auditoria`; revalidada con los cinco servicios corriendo a la
+      vez — 43/43 peticiones, 81/81 aserciones, dos corridas seguidas sin
+      fallos. `specs/spec-infra-servicios.md` §7 actualizada.
 - [ ] T-38 RF-VH-005 / RF-NO-004 — implementar en Validación Humana el puerto
       `ConfirmadorDeLimites`, su adaptador HTTP real a Normalización y los tests
       de contrato/servicio que demuestren actor y fecha en la confirmación.
