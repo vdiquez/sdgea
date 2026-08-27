@@ -160,4 +160,33 @@ class ValidacionHumanaHttpTest {
         assertEquals(0, response.body!!["volumen"])
         servidor.verify()
     }
+
+    @Test
+    fun `POST unidades confirmacion-limites llama a Normalizacion con actor y fecha cuando el permiso se concede - RF-VH-005`() {
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("PERMITIDO", servidor)
+        servidor.expect(requestTo("http://localhost:8085/unidades/unidad-1/confirmacion-limites"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON))
+
+        val body = mapOf("identidadId" to "id-1", "actor" to "archivista-1", "fecha" to fecha)
+        val response = restTemplate.postForEntity(url("/unidades/unidad-1/confirmacion-limites"), body, Map::class.java)
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        assertEquals("unidad-1", response.body!!["unidadId"])
+        assertEquals("archivista-1", response.body!!["actor"])
+        servidor.verify()
+    }
+
+    @Test
+    fun `POST unidades confirmacion-limites deniega cuando seguridad-acceso responde DENEGADO - RF-VH-007`() {
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("DENEGADO", servidor)
+
+        val body = mapOf("identidadId" to "id-1", "actor" to "archivista-1", "fecha" to fecha)
+        val response = restTemplate.postForEntity(url("/unidades/unidad-1/confirmacion-limites"), body, Map::class.java)
+
+        assertEquals(HttpStatus.FORBIDDEN, response.statusCode)
+        servidor.verify()
+    }
 }

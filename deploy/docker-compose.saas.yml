@@ -98,9 +98,13 @@ services:
     environment:
       RECORDS_CUSTODIA_BASE_URL: http://records-custodia:8082
       SEGURIDAD_ACCESO_BASE_URL: http://seguridad-acceso:8083
+      # T-38 (cierra RF-VH-005): primer consumidor real de
+      # POST /unidades/{id}/confirmacion-limites en normalizacion.
+      NORMALIZACION_BASE_URL: http://normalizacion:8085
     depends_on:
       - records-custodia
       - seguridad-acceso
+      - normalizacion
 
   # T-33/T-34/T-35: primer contenedor Python/FastAPI. Postgres propio (a
   # diferencia de validacion-humana): normalizacion sí mantiene estado

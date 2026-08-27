@@ -36,6 +36,13 @@ private class VerificadorDePermisosEnMemoria(private val permitido: Boolean) : V
     override fun tienePermiso(identidadId: String, accion: String, tipoRecurso: String): Boolean = permitido
 }
 
+private class ConfirmadorDeLimitesEnMemoria : ConfirmadorDeLimites {
+    val confirmaciones = mutableListOf<Triple<String, String, Instant>>()
+    override fun confirmar(unidadId: String, actor: String, fecha: Instant) {
+        confirmaciones.add(Triple(unidadId, actor, fecha))
+    }
+}
+
 // RF-VH-001/002 · Agregación de sugerencias en colas de revisión, orden por confianza
 class ColaDeRevisionTest {
 
@@ -184,5 +191,33 @@ class AprobacionMasivaTest {
             )
         }
         assertTrue(registrador.decisionesMaterializadas.isEmpty())
+    }
+}
+
+// RF-VH-005/007 · Confirmación (o corrección) de límites de documento en Normalización
+class GestionDeLimitesTest {
+
+    private val fecha = Instant.parse("2026-08-27T10:00:00Z")
+
+    @Test
+    fun `dada una sugerencia de limites pendiente, cuando un actor autorizado la confirma, Normalizacion recibe la confirmacion con actor y fecha`() {
+        val confirmador = ConfirmadorDeLimitesEnMemoria()
+        val gestion = GestionDeLimites(confirmador, VerificadorDePermisosEnMemoria(permitido = true))
+
+        gestion.confirmar(identidadId = "id-1", unidadId = "unidad-1", actor = "archivista-1", fecha = fecha)
+
+        assertEquals(1, confirmador.confirmaciones.size)
+        assertEquals(Triple("unidad-1", "archivista-1", fecha), confirmador.confirmaciones[0])
+    }
+
+    @Test
+    fun `dado un actor sin permiso sobre el recurso, cuando intenta confirmar limites, se deniega y Normalizacion no recibe nada`() {
+        val confirmador = ConfirmadorDeLimitesEnMemoria()
+        val gestion = GestionDeLimites(confirmador, VerificadorDePermisosEnMemoria(permitido = false))
+
+        assertFailsWith<AccesoDenegadoException> {
+            gestion.confirmar(identidadId = "id-sin-permiso", unidadId = "unidad-1", actor = "archivista-1", fecha = fecha)
+        }
+        assertTrue(confirmador.confirmaciones.isEmpty())
     }
 }

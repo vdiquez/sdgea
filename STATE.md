@@ -1199,15 +1199,78 @@ plano (sin `src/`), `pytest`, dataclasses `frozen=True` para value objects,
   Humana) como hallazgos de la misma revisión acumulada — ninguno de los dos
   es VETO bloqueante ni ha sido priorizado todavía por Victor.
 
-Siguiente paso: con V-01 y V-02 cerrados, la revisión acumulada de Codex
-queda sin VETO pendiente. Cinco de los nueve bounded contexts están
-implementados; cuatro conectados entre sí de verdad (Normalización todavía
-se prueba aislada — RF-NO-001 no tiene una fuente real de Captura/Ingesta, y
-RF-VH-005/T-38 sigue sin que Validación Humana llame al endpoint de
-confirmación de límites que Normalización ya expone, aunque ambos lados
-existen desde hoy). Quedan 4 contextos probabilísticos sin implementar
-(Extracción, Clasificación, Enriquecimiento, Indexación y Búsqueda) — todos
-seguirían el mismo patrón Python/FastAPI que Normalización estableció.
-Opciones abiertas para Victor: T-38 (cerrar RF-VH-005), T-39 (completar las
-colas de Validación Humana), otro contexto probabilístico, la brecha de
-autorización en captura-ingesta/records-custodia, diseño de UI/UX, o F4.
+- [x] T-38 (decisión de Victor, 2026-08-27: "Cierra el ciclo RF-VH-005") —
+  Validación Humana confirma límites de documento en Normalización.
+  `ConfirmadorDeLimites` (puerto) + `GestionDeLimites` (dominio: verifica
+  permiso `confirmar`/`documento` antes de reenviar, mismo criterio que
+  `GestionDeDecisiones`; nunca confirma nada por su cuenta, P-01) +
+  `ConfirmadorDeLimitesHttp` (adaptador HTTP real contra `POST
+  /unidades/{id}/confirmacion-limites` de Normalización — primer consumidor
+  real de ese endpoint desde T-33/T-34) + `LimitesController` (nuevo endpoint
+  simétrico `POST /unidades/{unidadId}/confirmacion-limites` en Validación
+  Humana). Normalización no distingue "confirmar" de "corregir" como
+  operaciones separadas (`confirmar_limites` admite límites "idénticos,
+  ajustados o re-trazados" en una sola llamada, RF-NO-004), así que el puerto
+  no inventa una operación de corrección que Normalización no tiene.
+  TDD: 2 tests de dominio (`GestionDeLimitesTest`), 2 de integración
+  (`IntegracionHttpTest`, `MockRestServiceServer` contra
+  `ConfirmadorDeLimitesHttp`), 2 HTTP (`ValidacionHumanaHttpTest`) — 23/23
+  tests del módulo en verde, `./test.sh` completo del repo en verde.
+  **Bug real encontrado y corregido, invisible a `MockRestServiceServer`**
+  (que intercepta antes de abrir cualquier socket real): el `RestTemplate`
+  compartido de Validación Humana (`ClienteHttpConfig`) no fijaba una fábrica
+  de peticiones HTTP explícita, así que Spring Boot 3.5 elegía por defecto
+  `JdkClientHttpRequestFactory` (`java.net.http.HttpClient`, sin Apache
+  HttpComponents/Jetty en el classpath). Ese cliente intenta, salvo que se
+  fije la versión explícitamente, un *upgrade* h2c en texto plano en su
+  primera petición HTTP/1.1: Tomcat (records-custodia, seguridad-acceso) lo
+  ignora sin problema; `uvicorn` (Normalización, el primer backend no-Java de
+  este proyecto) lo rechaza como petición inválida y responde `400` sin
+  siquiera enrutarla a FastAPI. Diagnosticado reproduciendo contra el stack
+  Docker real con `LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB=DEBUG`: el log de
+  Validación Humana mostraba `Response 400 BAD_REQUEST` seguido de
+  `ServicioNoDisponibleException`, y el de Normalización, `WARNING:
+  Unsupported upgrade request.` / `WARNING: Invalid HTTP request received.`
+  sin ninguna línea de acceso — la petición nunca llegó a la capa de
+  aplicación. Confirmado con un contenedor de depuración aislado y una
+  petición `curl` directa entre contenedores (que sí funcionaba, aislando el
+  problema al `HttpClient` de Java, no a la red). Corregido fijando
+  `HttpClient.Version.HTTP_1_1` explícito en el `HttpClient` que respalda al
+  `JdkClientHttpRequestFactory`; los timeouts se configuran directamente
+  sobre ese `HttpClient`/factory, no con `RestTemplateBuilder.connectTimeout/
+  readTimeout` (dependen de reflexión contra una lista fija de fábricas
+  conocidas que no incluye `JdkClientHttpRequestFactory` — segundo error real
+  encontrado al intentar el primer fix, "does not have a suitable
+  setConnectTimeout method"). Relevante para los cuatro contextos Python
+  restantes (Extracción, Clasificación, Enriquecimiento, Indexación y
+  Búsqueda): cualquier futuro cliente HTTP Kotlin→Python heredará este mismo
+  riesgo si no fija HTTP/1.1 explícito.
+  Colección Postman: rol de la carpeta 4 (T-32) ampliado con el permiso
+  `confirmar`/`documento`; carpeta nueva "6. Cierre RF-VH-005" (peticiones
+  43-45, **segundo flujo end-to-end real del proyecto**, esta vez entre
+  Validación Humana y Normalización) — recibe una unidad no trivial en
+  Normalización, la confirma desde Validación Humana reutilizando la
+  identidad/rol de la carpeta 4, y verifica en Normalización que quedó
+  `LIMITES_CONFIRMADOS` atribuida al actor de Validación Humana. Revalidada
+  con los cinco servicios corriendo a la vez — la primera corrida encontró el
+  bug de arriba (502 Bad Gateway), corregido y confirmado con dos corridas
+  seguidas limpias después: 46/46 peticiones, 87/87 aserciones.
+  `specs/spec-infra-servicios.md` §6 actualizada (contrato + diagnóstico
+  completo del bug) y §9/§10 (RF-VH-005 ya no aparece como brecha abierta).
+
+Siguiente paso: con V-01, V-02 y ahora RF-VH-005/T-38 cerrados, la revisión
+acumulada de Codex solo deja pendiente T-39 (no priorizado por Victor
+todavía). Cinco de los nueve bounded contexts están implementados; ahora con
+**dos** integraciones cruzadas reales (Records/Custodia↔Seguridad y
+Acceso↔Validación Humana desde T-32, y Validación Humana↔Normalización desde
+T-38) — Normalización sigue siendo el único sin una fuente real de
+Captura/Ingesta (RF-NO-001 asume que `lote_id`/`item_ingesta_id`/`procedencia`
+ya llegan en la petición). Quedan 4 contextos probabilísticos sin
+implementar (Extracción, Clasificación, Enriquecimiento, Indexación y
+Búsqueda) — todos seguirían el mismo patrón Python/FastAPI/uvicorn que
+Normalización estableció, y ahora con la lección de T-38 ya documentada
+(fijar HTTP/1.1 explícito en cualquier cliente RestTemplate hacia ellos).
+Opciones abiertas para Victor: T-39 (completar las colas de Validación
+Humana para Normalización/Extracción/Enriquecimiento), otro contexto
+probabilístico, la brecha de autorización en captura-ingesta/records-custodia,
+diseño de UI/UX, o F4.

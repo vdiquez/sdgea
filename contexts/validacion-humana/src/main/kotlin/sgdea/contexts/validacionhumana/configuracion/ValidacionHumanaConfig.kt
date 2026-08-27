@@ -3,8 +3,10 @@ package sgdea.contexts.validacionhumana.configuracion
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import sgdea.contexts.validacionhumana.ColaDeRevision
+import sgdea.contexts.validacionhumana.ConfirmadorDeLimites
 import sgdea.contexts.validacionhumana.FuenteDeSugerencias
 import sgdea.contexts.validacionhumana.GestionDeDecisiones
+import sgdea.contexts.validacionhumana.GestionDeLimites
 import sgdea.contexts.validacionhumana.RegistradorDeDecisiones
 import sgdea.contexts.validacionhumana.VerificadorDePermisos
 
@@ -21,4 +23,8 @@ class ValidacionHumanaConfig {
     @Bean
     fun gestionDeDecisiones(registrador: RegistradorDeDecisiones, permisos: VerificadorDePermisos): GestionDeDecisiones =
         GestionDeDecisiones(registrador, permisos)
+
+    @Bean
+    fun gestionDeLimites(confirmador: ConfirmadorDeLimites, permisos: VerificadorDePermisos): GestionDeLimites =
+        GestionDeLimites(confirmador, permisos)
 }

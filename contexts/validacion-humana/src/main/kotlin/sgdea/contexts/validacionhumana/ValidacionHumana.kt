@@ -58,6 +58,16 @@ interface VerificadorDePermisos {
     fun tienePermiso(identidadId: String, accion: String, tipoRecurso: String): Boolean
 }
 
+// RF-VH-005: confirmación (o corrección) de límites de documento pendiente en
+// Normalización. Normalización no distingue "confirmar" de "corregir" como
+// operaciones separadas — `confirmar_limites` (dominio.py) admite límites
+// "idénticos, ajustados o re-trazados" bajo una única llamada (RF-NO-004) —
+// este puerto refleja exactamente esa misma unificación, no inventa una
+// operación de corrección aparte que Normalización no tiene.
+interface ConfirmadorDeLimites {
+    fun confirmar(unidadId: String, actor: String, fecha: Instant)
+}
+
 class AccesoDenegadoException(mensaje: String) : RuntimeException(mensaje)
 
 // RF-VH-001/002: agrega las sugerencias pendientes de Records/Custodia y las
@@ -150,5 +160,25 @@ class GestionDeDecisiones(
             clasificacionResultante = clasificacionResultante,
             tipo = tipo,
         )
+    }
+}
+
+// RF-VH-005/007: cierra el ciclo que spec-infra-servicios.md §9 dejó abierto
+// — un actor autorizado confirma (o corrige) los límites de una unidad
+// documental candidata de Normalización desde Validación Humana, verificando
+// permiso antes de reenviar la confirmación (mismo criterio que
+// GestionDeDecisiones: nunca confirma nada por su cuenta, P-01 — es
+// Normalización quien de verdad transiciona el estado y anexa el evento de
+// auditoría con actor y fecha, T-37).
+class GestionDeLimites(
+    private val confirmador: ConfirmadorDeLimites,
+    private val permisos: VerificadorDePermisos,
+) {
+
+    fun confirmar(identidadId: String, unidadId: String, actor: String, fecha: Instant) {
+        if (!permisos.tienePermiso(identidadId, "confirmar", "documento")) {
+            throw AccesoDenegadoException("La identidad '$identidadId' no tiene permiso para confirmar límites de este recurso.")
+        }
+        confirmador.confirmar(unidadId, actor, fecha)
     }
 }

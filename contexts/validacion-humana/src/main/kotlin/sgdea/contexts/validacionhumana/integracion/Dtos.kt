@@ -42,3 +42,10 @@ data class AutorizarRequestDto(
 data class AutorizarResponseDto(
     val resultado: String,
 )
+
+// Cuerpo de POST /unidades/{id}/confirmacion-limites en normalizacion
+// (spec-infra-servicios.md §7, RF-NO-004).
+data class ConfirmacionDeLimitesRequestDto(
+    val actor: String,
+    val fecha: Instant,
+)

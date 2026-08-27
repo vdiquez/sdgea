@@ -43,6 +43,9 @@ class IntegracionHttpTest {
     @Autowired
     private lateinit var verificadorDePermisos: VerificadorDePermisosHttp
 
+    @Autowired
+    private lateinit var confirmadorDeLimites: ConfirmadorDeLimitesHttp
+
     private val fecha = Instant.parse("2026-08-26T10:00:00Z")
 
     @Test
@@ -121,5 +124,27 @@ class IntegracionHttpTest {
 
         assertFalse(verificadorDePermisos.tienePermiso("id-1", "leer", "documento"))
         servidor2.verify()
+    }
+
+    // RF-VH-005: primer consumidor real de POST /unidades/{id}/confirmacion-limites en normalizacion
+    @Test
+    fun `confirmar envia actor y fecha al endpoint de confirmacion-limites de normalizacion`() {
+        val servidor = MockRestServiceServer.createServer(restTemplate)
+        servidor.expect(requestTo("http://localhost:8085/unidades/unidad-1/confirmacion-limites"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+            .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON))
+
+        confirmadorDeLimites.confirmar("unidad-1", "archivista-1", fecha)
+
+        servidor.verify()
+    }
+
+    @Test
+    fun `confirmar lanza ServicioNoDisponibleException si normalizacion falla`() {
+        val servidor = MockRestServiceServer.createServer(restTemplate)
+        servidor.expect(requestTo("http://localhost:8085/unidades/unidad-1/confirmacion-limites")).andRespond(withServerError())
+
+        assertFailsWith<ServicioNoDisponibleException> { confirmadorDeLimites.confirmar("unidad-1", "archivista-1", fecha) }
     }
 }

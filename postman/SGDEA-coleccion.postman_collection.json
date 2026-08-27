@@ -1111,10 +1111,10 @@
                 "roles"
               ]
             },
-            "description": "Primer paso del flujo end-to-end de T-32: un rol que puede leer y decidir sobre documentos.",
+            "description": "Primer paso del flujo end-to-end de T-32 (ampliado en T-38 con el permiso confirmar/documento, RF-VH-005): un rol que puede leer, decidir y confirmar sobre documentos.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"nombre\": \"{{rol_vh}}\",\n  \"permisos\": [\n    { \"accion\": \"decidir\", \"tipoRecurso\": \"documento\", \"nivelClasificacionMaximo\": \"PUBLICA\" },\n    { \"accion\": \"leer\", \"tipoRecurso\": \"documento\", \"nivelClasificacionMaximo\": \"PUBLICA\" }\n  ]\n}",
+              "raw": "{\n  \"nombre\": \"{{rol_vh}}\",\n  \"permisos\": [\n    { \"accion\": \"decidir\", \"tipoRecurso\": \"documento\", \"nivelClasificacionMaximo\": \"PUBLICA\" },\n    { \"accion\": \"leer\", \"tipoRecurso\": \"documento\", \"nivelClasificacionMaximo\": \"PUBLICA\" },\n    { \"accion\": \"confirmar\", \"tipoRecurso\": \"documento\", \"nivelClasificacionMaximo\": \"PUBLICA\" }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1857,6 +1857,147 @@
                   "    pm.expect(e.actor).to.be.a(\"string\").and.not.be.empty;",
                   "    pm.expect(e.fecha).to.be.a(\"string\").and.not.be.empty;",
                   "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "6. Cierre RF-VH-005 (Validacion Humana confirma limites en Normalizacion)",
+      "item": [
+        {
+          "name": "43 [RF-VH-005] Recibir un item no trivial en Normalizacion para el flujo de Validacion Humana",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades"
+              ]
+            },
+            "description": "Reutiliza la identidad/rol del flujo E2E de la carpeta 4, ya ampliado en T-38 con el permiso confirmar/documento.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{unidad_id_vh_no}}\",\n  \"lote_id\": \"{{lote_id_vh_no}}\",\n  \"item_ingesta_id\": \"item-vh-no-postman\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-27T12:00:00Z\",\n    \"disparador\": \"carga_por_lote\",\n    \"lote_o_flujo_id\": \"{{lote_id_vh_no}}\"\n  },\n  \"es_caso_trivial\": false,\n  \"actor\": \"sistema-normalizacion\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"unidad_id_vh_no\", \"unidad-vh-no-postman-\" + Date.now());",
+                  "pm.environment.set(\"lote_id_vh_no\", \"lote-vh-no-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"queda pendiente de limites\", () => pm.expect(pm.response.json().estado).to.eql(\"PENDIENTE_DE_LIMITES\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "44 [RF-VH-005] Confirmar limites desde Validacion Humana",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{validacion_humana_base_url}}/unidades/{{unidad_id_vh_no}}/confirmacion-limites",
+              "host": [
+                "{{validacion_humana_base_url}}"
+              ],
+              "path": [
+                "unidades",
+                "{{unidad_id_vh_no}}",
+                "confirmacion-limites"
+              ]
+            },
+            "description": "Primer consumidor real de esta ruta en Normalizacion, orquestado desde Validacion Humana (GestionDeLimites + ConfirmadorDeLimitesHttp, T-38). Verifica permiso confirmar/documento contra seguridad-acceso antes de reenviar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"identidadId\": \"{{identidad_id_vh}}\",\n  \"actor\": \"{{actor_vh}}\",\n  \"fecha\": \"2026-08-27T12:05:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"confirma la unidad y el actor de Validacion Humana\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.unidadId).to.eql(pm.environment.get(\"unidad_id_vh_no\"));",
+                  "  pm.expect(body.actor).to.eql(pm.environment.get(\"actor_vh\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "45 [RF-VH-005] Normalizacion confirma que la unidad quedo con limites confirmados, atribuidos al actor de Validacion Humana",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{normalizacion_base_url}}/unidades/{{unidad_id_vh_no}}",
+              "host": [
+                "{{normalizacion_base_url}}"
+              ],
+              "path": [
+                "unidades",
+                "{{unidad_id_vh_no}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"limites confirmados por el actor de Validacion Humana, con fecha\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.estado).to.eql(\"LIMITES_CONFIRMADOS\");",
+                  "  pm.expect(body.confirmacion_limites.actor).to.eql(pm.environment.get(\"actor_vh\"));",
+                  "  pm.expect(body.confirmacion_limites.fecha).to.be.a(\"string\").and.not.be.empty;",
                   "});"
                 ]
               }

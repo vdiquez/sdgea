@@ -270,9 +270,36 @@
       `/eventos-auditoria`; revalidada con los cinco servicios corriendo a la
       vez — 43/43 peticiones, 81/81 aserciones, dos corridas seguidas sin
       fallos. `specs/spec-infra-servicios.md` §7 actualizada.
-- [ ] T-38 RF-VH-005 / RF-NO-004 — implementar en Validación Humana el puerto
-      `ConfirmadorDeLimites`, su adaptador HTTP real a Normalización y los tests
-      de contrato/servicio que demuestren actor y fecha en la confirmación.
+- [x] T-38 RF-VH-005 / RF-NO-004 (cierra el ciclo RF-VH-005, decisión de
+      Victor 2026-08-27) — nuevo puerto `ConfirmadorDeLimites` +
+      `GestionDeLimites` (verifica permiso `confirmar`/`documento`) en el
+      dominio de Validación Humana; adaptador HTTP real
+      `ConfirmadorDeLimitesHttp` contra `POST /unidades/{id}/confirmacion-
+      limites` de Normalización (primer consumidor real de ese endpoint);
+      nuevo endpoint simétrico `POST /unidades/{unidadId}/confirmacion-
+      limites` en Validación Humana (`LimitesController`). 23/23 tests
+      Kotlin del módulo (2 dominio + 2 integración + 2 HTTP nuevos),
+      `./test.sh` completo verde.
+      **Bug real encontrado y corregido, no cubierto por
+      `MockRestServiceServer`** (que nunca abre un socket real): el
+      `RestTemplate` de Validación Humana usaba por defecto
+      `JdkClientHttpRequestFactory` (Spring Boot 3.5, sin Apache
+      HttpComponents/Jetty en el classpath), cuyo `HttpClient` intenta un
+      upgrade h2c en texto plano que Tomcat ignora pero que `uvicorn`
+      (Normalización) rechaza como petición inválida (`400`, sin enrutarla
+      siquiera a FastAPI) — reproducido contra el stack Docker real con
+      logging DEBUG. Corregido fijando `HttpClient.Version.HTTP_1_1`
+      explícito; ver `specs/spec-infra-servicios.md` §6 para el diagnóstico
+      completo (relevante para los cuatro contextos Python restantes).
+      Colección Postman: rol de la carpeta 4 (T-32) ampliado con el permiso
+      `confirmar`/`documento`; carpeta nueva "6. Cierre RF-VH-005" (peticiones
+      43-45) — segundo flujo end-to-end real del proyecto, esta vez entre
+      Validación Humana y Normalización. Revalidada con los cinco servicios
+      corriendo a la vez — la primera corrida encontró el bug de arriba;
+      corregido y confirmado con dos corridas seguidas limpias después:
+      46/46 peticiones, 87/87 aserciones.
+      `specs/spec-infra-servicios.md` §6 y §9/§10 actualizadas (RF-VH-005 ya
+      no aparece como brecha abierta).
 - [ ] T-39 RF-VH-001 / RF-VH-009 — completar las colas de Validación Humana
       para las fuentes de Normalización, Extracción y Enriquecimiento, y exponer
       las correcciones como candidatas a re-revisión sin incorporarlas en crudo

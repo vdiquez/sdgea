@@ -1,12 +1,16 @@
 package sgdea.contexts.validacionhumana.integracion
 
+import java.net.http.HttpClient
 import java.time.Duration
+import java.util.function.Supplier
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.web.client.RestTemplateBuilder
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.client.JdkClientHttpRequestFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestTemplate
+import sgdea.contexts.validacionhumana.ConfirmadorDeLimites
 import sgdea.contexts.validacionhumana.DecisionDeClasificacion
 import sgdea.contexts.validacionhumana.FuenteDeSugerencias
 import sgdea.contexts.validacionhumana.RegistradorDeDecisiones
@@ -17,16 +21,33 @@ import sgdea.contexts.validacionhumana.VerificadorDePermisos
 // cada contexto se probaba de forma aislada (Postman contra uno a la vez).
 // Validación Humana no tiene datos propios (specs/007-validacion-humana/spec.md
 // §3), así que sus puertos de dominio los implementa un cliente HTTP real
-// contra records-custodia y seguridad-acceso — no un adaptador ficticio, porque
-// ambos servicios son deterministas y ya están construidos y probados.
+// contra records-custodia, seguridad-acceso y normalizacion — no un adaptador
+// ficticio, porque los tres son deterministas/ya están construidos y probados.
 @Configuration
 class ClienteHttpConfig {
+    // Hallazgo real de T-38: el `java.net.http.HttpClient` que Spring Boot 3.5
+    // elige por defecto (`JdkClientHttpRequestFactory`, sin Apache
+    // HttpComponents/Jetty en el classpath) intenta un upgrade h2c en texto
+    // plano si no se fija la versión. Tomcat (records-custodia,
+    // seguridad-acceso) lo ignora; uvicorn (normalizacion, primer backend no
+    // Java de este proyecto) lo rechaza como petición HTTP inválida (400) —
+    // se reprodujo con `LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB=DEBUG` contra el
+    // stack real. Fijar HTTP/1.1 explícito evita el intento de upgrade.
+    // Los timeouts se fijan sobre el propio `HttpClient`/`JdkClientHttpRequestFactory`
+    // en vez de con `RestTemplateBuilder.connectTimeout/readTimeout`: esos dos
+    // métodos configuran el factory por reflexión contra una lista fija de
+    // fábricas conocidas y `JdkClientHttpRequestFactory` no calza ahí
+    // ("does not have a suitable setConnectTimeout method").
     @Bean
-    fun restTemplate(builder: RestTemplateBuilder): RestTemplate =
-        builder
+    fun restTemplate(builder: RestTemplateBuilder): RestTemplate {
+        val httpClient = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(Duration.ofSeconds(5))
-            .readTimeout(Duration.ofSeconds(5))
             .build()
+        val requestFactory = JdkClientHttpRequestFactory(httpClient)
+        requestFactory.setReadTimeout(Duration.ofSeconds(5))
+        return builder.requestFactory(Supplier { requestFactory }).build()
+    }
 }
 
 class ServicioNoDisponibleException(mensaje: String, causa: Throwable) : RuntimeException(mensaje, causa)
@@ -89,5 +110,27 @@ class VerificadorDePermisosHttp(
             throw ServicioNoDisponibleException("seguridad-acceso no respondió al verificar el permiso.", ex)
         }
         return respuesta?.resultado == "PERMITIDO"
+    }
+}
+
+// RF-VH-005: cierra el ciclo que spec-infra-servicios.md §9 dejó abierto —
+// Normalización ya expone POST /unidades/{id}/confirmacion-limites desde
+// T-33/T-34; este es el primer consumidor real de ese endpoint.
+@Component
+class ConfirmadorDeLimitesHttp(
+    private val restTemplate: RestTemplate,
+    @Value("\${normalizacion.base-url}") private val baseUrl: String,
+) : ConfirmadorDeLimites {
+
+    override fun confirmar(unidadId: String, actor: String, fecha: java.time.Instant) {
+        try {
+            restTemplate.postForEntity(
+                "$baseUrl/unidades/$unidadId/confirmacion-limites",
+                ConfirmacionDeLimitesRequestDto(actor = actor, fecha = fecha),
+                Map::class.java,
+            )
+        } catch (ex: Exception) {
+            throw ServicioNoDisponibleException("normalizacion no respondió al confirmar los límites.", ex)
+        }
     }
 }

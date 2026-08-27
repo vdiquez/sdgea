@@ -159,15 +159,17 @@ a `POST /autorizacion` antes de responder) — sigue sin implementarse; ver §9
 ## 6. Contrato mínimo — `validacion-humana`
 
 Traduce las funciones de
-`contexts/validacion-humana/.../ValidacionHumana.kt` (T-29): `ColaDeRevision`
-y `GestionDeDecisiones`. A diferencia de los otros tres contextos, este
-**no tiene persistencia propia** (`specs/007-validacion-humana/spec.md` §3):
-sus tres puertos de dominio (`FuenteDeSugerencias`, `RegistradorDeDecisiones`,
-`VerificadorDePermisos`) los implementan adaptadores HTTP reales
-(`integracion/IntegracionHttp.kt`, T-30) contra `records-custodia` y
-`seguridad-acceso` — la **primera integración HTTP real entre servicios** de
-este proyecto; hasta T-29/T-30 cada contexto solo se había probado de forma
-aislada (Postman contra uno a la vez).
+`contexts/validacion-humana/.../ValidacionHumana.kt` (T-29, ampliado en
+T-38): `ColaDeRevision`, `GestionDeDecisiones` y `GestionDeLimites`. A
+diferencia de los otros tres contextos, este **no tiene persistencia
+propia** (`specs/007-validacion-humana/spec.md` §3): sus cuatro puertos de
+dominio (`FuenteDeSugerencias`, `RegistradorDeDecisiones`,
+`VerificadorDePermisos`, `ConfirmadorDeLimites`) los implementan adaptadores
+HTTP reales (`integracion/IntegracionHttp.kt`, T-30/T-38) contra
+`records-custodia`, `seguridad-acceso` y `normalizacion` — la **primera
+integración HTTP real entre servicios** de este proyecto; hasta T-29/T-30
+cada contexto solo se había probado de forma aislada (Postman contra uno a
+la vez).
 
 | Método y ruta | Dominio que invoca | RF |
 |---|---|---|
@@ -176,18 +178,56 @@ aislada (Postman contra uno a la vez).
 | `GET /colas/clasificacion/estado` | `ColaDeRevision.volumenYAntiguedadDeLaCola()` | RF-VH-010 |
 | `POST /decisiones` | `GestionDeDecisiones.decidir(...)` | RF-VH-003, RF-VH-006, RF-VH-007, RF-VH-008 |
 | `POST /decisiones/masivo` | `GestionDeDecisiones.aprobarEnBloque(...)` | RF-VH-004, RF-VH-006, RF-VH-007 |
+| `POST /unidades/{unidadId}/confirmacion-limites` | `GestionDeLimites.confirmar(...)` | RF-VH-005, RF-VH-007 |
 
-Variables de entorno: `RECORDS_CUSTODIA_BASE_URL`, `SEGURIDAD_ACCESO_BASE_URL`
-(mismo patrón que `DB_HOST`/`DB_PORT` en los otros contextos — parametrizar
-por entorno para que el mismo código base sirva a SaaS y on-premise, P-02).
+Variables de entorno: `RECORDS_CUSTODIA_BASE_URL`, `SEGURIDAD_ACCESO_BASE_URL`,
+`NORMALIZACION_BASE_URL` (T-38; mismo patrón que `DB_HOST`/`DB_PORT` en los
+otros contextos — parametrizar por entorno para que el mismo código base
+sirva a SaaS y on-premise, P-02).
 
 Sin mapeo de persistencia: no hay tablas propias de este contexto.
 
-RF-VH-005 (confirmación/corrección de límites de documento) no se construyó
-en T-29/T-30 porque Normalización no existía todavía como servicio — ver §7
-(nueva) para su contrato ahora que sí existe. Cerrarlo en Validación Humana
-(nuevo puerto `ConfirmadorDeLimites` + adaptador HTTP real) queda como tarea
-explícita, no incluida en el alcance original de T-29/T-30.
+**RF-VH-005 (T-38, cierra el hallazgo homónimo de la revisión acumulada de
+Codex, `65c3c43..HEAD`, `TODO.md`)**: confirmación/corrección de límites de
+documento. No se construyó en T-29/T-30 porque Normalización no existía
+todavía como servicio (§7). `GestionDeLimites.confirmar(identidadId,
+unidadId, actor, fecha)` verifica permiso (`accion="confirmar",
+tipoRecurso="documento"`, mismo criterio uniforme que el resto de este
+contexto) y reenvía a `POST /unidades/{id}/confirmacion-limites` en
+Normalización vía `ConfirmadorDeLimitesHttp` — primer consumidor real de ese
+endpoint (T-33/T-34). Normalización no distingue "confirmar" de "corregir"
+como operaciones separadas (`confirmar_limites` admite límites "idénticos,
+ajustados o re-trazados" bajo una única llamada, RF-NO-004), así que este
+puerto no inventa una operación de corrección aparte que Normalización no
+tiene. El endpoint HTTP de este contexto usa el mismo path que Normalización
+(`POST /unidades/{id}/confirmacion-limites`) para que ambos contratos sean
+simétricos.
+
+**Bug real encontrado y corregido en T-38, no cubierto por los tests con
+`MockRestServiceServer`** (que interceptan antes de abrir un socket real, así
+que nunca lo habrían detectado): el `RestTemplate` compartido de este
+contexto (`ClienteHttpConfig`) no fijaba una fábrica de peticiones HTTP
+explícita, así que Spring Boot 3.5 elegía por defecto
+`JdkClientHttpRequestFactory` (basado en `java.net.http.HttpClient`, sin
+Apache HttpComponents/Jetty en el classpath). Ese cliente intenta, salvo que
+se fije la versión explícitamente, un *upgrade* h2c en texto plano en su
+primera petición HTTP/1.1. Tomcat (`records-custodia`, `seguridad-acceso`) lo
+ignora sin problema; `uvicorn` (`normalizacion`, el primer backend no-Java de
+este proyecto) lo rechaza como petición HTTP inválida y responde `400` sin
+siquiera enrutarla a FastAPI — reproducido de punta a punta contra el stack
+Docker real (`LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB=DEBUG` confirmó
+`Response 400 BAD_REQUEST` seguido de `ServicioNoDisponibleException`, y los
+logs de `normalizacion` mostraban `WARNING: Unsupported upgrade request.` /
+`WARNING: Invalid HTTP request received.` sin ninguna línea de acceso — la
+petición nunca llegó a la capa de aplicación). Corregido fijando
+`HttpClient.Version.HTTP_1_1` explícito en el `HttpClient` que respalda al
+`JdkClientHttpRequestFactory`; los timeouts se configuran directamente sobre
+ese `HttpClient`/factory (no con `RestTemplateBuilder.connectTimeout/
+readTimeout`, que dependen de reflexión contra una lista fija de fábricas
+conocidas y no reconocen `JdkClientHttpRequestFactory`). Esto es relevante
+para cualquier futuro cliente HTTP Kotlin→Python de este proyecto (los
+cuatro contextos probabilísticos restantes seguirán el mismo patrón
+Python/FastAPI/uvicorn que Normalización).
 
 ## 7. Contrato mínimo — `normalizacion`
 
@@ -273,6 +313,7 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
 | Postgres por contexto, sin esquema compartido | Decisión de Victor, 2026-08-21; P-02 (mismo código base, ambos modos de despliegue) |
 | Cada endpoint traduce un método de dominio ya probado | P-06 (spec antes de código); TDD ya aplicado en T-01..T-11, T-23, T-29, T-33 |
 | validacion-humana como orquestador HTTP real, sin persistencia propia | Decisión de Victor, 2026-08-26; specs/007-validacion-humana/spec.md §3 |
+| RF-VH-005 cerrado (Validación Humana confirma límites vía Normalización) | Decisión de Victor, 2026-08-27 ("Cierra el ciclo RF-VH-005"), TODO.md T-38 |
 
 ## 10. Decisiones pendientes / preguntas abiertas
 
@@ -286,11 +327,10 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
   primer consumidor real de `/autorizacion`. Hasta que captura-ingesta y
   records-custodia hagan lo mismo, ambos siguen sin deber exponerse fuera de
   una red de confianza (docker-compose interno).
-- **[CLARIFICAR]** RF-VH-005 (confirmación/corrección de límites de
-  documento): Normalización ya existe como servicio (T-33/T-34, §7) y ya
-  expone `POST /unidades/{id}/confirmacion-limites`, pero Validación Humana
-  todavía no lo llama — mismo tipo de brecha que autenticación/autorización
-  arriba, no cerrada en esta tarea.
+- ~~RF-VH-005 (confirmación/corrección de límites de documento)~~ — **cerrado
+  en T-38**: `GestionDeLimites` + `ConfirmadorDeLimitesHttp` en Validación
+  Humana ya llaman a `POST /unidades/{id}/confirmacion-limites` en
+  Normalización (§6).
 - **[CLARIFICAR]** Recepción real de ítems desde Captura/Ingesta en
   Normalización (RF-NO-001): Captura/Ingesta no expone todavía un mecanismo
   para que Normalización descubra qué ítems están listos para recibir, ni
