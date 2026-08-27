@@ -1,10 +1,10 @@
 # Overlay SOLO para desarrollo local (probar con Postman/curl desde el host).
-# NO cambia la decisión de specs/spec-infra-servicios.md §7 ("sin el contexto
-# Seguridad y Acceso, estos servicios no deben exponerse fuera de la red
-# interna de docker-compose") — esa decisión sigue intacta en
-# docker-compose.saas.yml/onprem.yml. Esto es un mapeo de puerto a localhost
-# de tu propia máquina para pruebas, no una exposición pública; se usa
-# explícito con -f, nunca implícito.
+# NO cambia la decisión de specs/spec-infra-servicios.md §10 ("sin que
+# captura-ingesta/records-custodia llamen de verdad a /autorizacion, no deben
+# exponerse fuera de la red interna de docker-compose") — esa decisión sigue
+# intacta en docker-compose.saas.yml/onprem.yml. Esto es un mapeo de puerto a
+# localhost de tu propia máquina para pruebas, no una exposición pública; se
+# usa explícito con -f, nunca implícito.
 #
 # Uso: docker compose -f deploy/docker-compose.saas.yml -f deploy/docker-compose.local-ports.yml up -d --build
 services:
@@ -23,3 +23,7 @@ services:
   validacion-humana:
     ports:
       - "8084:8084"
+
+  normalizacion:
+    ports:
+      - "8085:8085"

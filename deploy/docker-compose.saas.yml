@@ -4,13 +4,15 @@
 # IMPLEMENTACIÓN detrás de cada interfaz de P-03 (almacenamiento de objetos, OCR,
 # embeddings, inferencia LLM, índice vectorial, índice léxico), nunca el código de
 # orquestación. Dockerfiles reales ya wireados para captura-ingesta,
-# records-custodia (T-18), seguridad-acceso (T-26) y validacion-humana (T-31,
-# specs/spec-infra-servicios.md); el resto de contextos los suma cuando tengan
-# código. validacion-humana no tiene Postgres propio (T-30: orquestador HTTP
-# sobre records-custodia y seguridad-acceso, sin persistencia propia).
+# records-custodia (T-18), seguridad-acceso (T-26), validacion-humana (T-31)
+# y normalizacion (T-35, specs/spec-infra-servicios.md); el resto de
+# contextos los suma cuando tengan código. validacion-humana no tiene
+# Postgres propio (T-30: orquestador HTTP sobre records-custodia y
+# seguridad-acceso, sin persistencia propia). normalizacion es el primer
+# contenedor Python/FastAPI (build en dos etapas con `uv`, mismo patrón que
+# los Dockerfiles Kotlin pero con `uv sync --no-dev` en vez de `-x test`).
 #
 # TODO por contexto, cuando exista su Dockerfile:
-#   - contexts/normalizacion       (Python/FastAPI)
 #   - contexts/extraccion          (Python/FastAPI)
 #   - contexts/clasificacion       (Python/FastAPI)
 #   - contexts/enriquecimiento     (Python/FastAPI)
@@ -99,6 +101,24 @@ services:
     depends_on:
       - records-custodia
       - seguridad-acceso
+
+  # T-33/T-34/T-35: primer contenedor Python/FastAPI. Postgres propio (a
+  # diferencia de validacion-humana): normalizacion sí mantiene estado
+  # propio (unidades documentales candidatas), spec §3 de este contexto no
+  # dice lo mismo que dice specs/007-validacion-humana/spec.md §3.
+  normalizacion:
+    build:
+      context: ..
+      dockerfile: contexts/normalizacion/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+      SERVER_PORT: "8085"
+    depends_on:
+      - postgres
 
 volumes:
   postgres-data:

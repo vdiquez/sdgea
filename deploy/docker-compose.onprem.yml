@@ -4,15 +4,17 @@
 # externa debe ser autoalojada — el appliance debe operar sin conectividad
 # saliente, incluso en entornos aislados (P-10). Dockerfiles reales ya
 # wireados para captura-ingesta, records-custodia (T-18), seguridad-acceso
-# (T-26) y validacion-humana (T-31, specs/spec-infra-servicios.md) — son los
-# mismos que en modo SaaS (P-02: un solo código base); ninguno de los dos
-# últimos tiene una capacidad externa de P-03 que abstraer (seguridad-acceso
-# es autoalojado por diseño desde T-23; validacion-humana no tiene Postgres
-# propio ni depende de nada fuera de la red interna del appliance, T-30).
+# (T-26), validacion-humana (T-31) y normalizacion (T-35,
+# specs/spec-infra-servicios.md) — son los mismos que en modo SaaS (P-02: un
+# solo código base); ninguno tiene todavía una capacidad externa de P-03 que
+# abstraer (seguridad-acceso es autoalojado por diseño desde T-23;
+# validacion-humana no tiene Postgres propio, T-30; normalizacion solo usa
+# Postgres, sin ningún componente probabilístico real detrás de
+# `recibir_sugerencia_de_limites` — es FICTICIO, T-33).
 #
-# TODO por contexto, cuando exista su Dockerfile: los cinco restantes de
-# docker-compose.saas.yml (normalizacion, extraccion, clasificacion,
-# enriquecimiento, indexacion-busqueda).
+# TODO por contexto, cuando exista su Dockerfile: los cuatro restantes de
+# docker-compose.saas.yml (extraccion, clasificacion, enriquecimiento,
+# indexacion-busqueda).
 #
 # TODO — implementaciones self-hosted de las seis capacidades de P-03, cada una
 # como contenedor local (candidatas a evaluar, no decididas todavía):
@@ -95,6 +97,20 @@ services:
     depends_on:
       - records-custodia
       - seguridad-acceso
+
+  normalizacion:
+    build:
+      context: ..
+      dockerfile: contexts/normalizacion/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+      SERVER_PORT: "8085"
+    depends_on:
+      - postgres
 
 volumes:
   postgres-data:

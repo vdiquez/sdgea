@@ -237,4 +237,10 @@
       RF-VH-005 sigue sin cerrarse: Normalización ya expone el endpoint,
       Validación Humana todavía no lo llama. TDD: 14 tests HTTP nuevos, 30
       en el módulo, verdes. `./test.sh` en verde.
+- [x] T-35 Dockerfile real de normalizacion — primer contenedor Python
+      (ver STATE.md para el detalle completo). **Verificado con un flujo de
+      punta a punta real de los cinco servicios a la vez** (recibir ítem →
+      sugerencia de límites → confirmación → normalizar → entregar →
+      conteo), primer intento sin fallos. Wiring en docker-compose (puerto
+      8085, con Postgres propio).
 

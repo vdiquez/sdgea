@@ -1085,3 +1085,21 @@ plano (sin `src/`), `pytest`, dataclasses `frozen=True` para value objects,
   todavía no lo llama — brecha explícita, no cerrada en esta tarea.
   TDD: 14 tests HTTP nuevos, verdes junto con los 16 de dominio (30 en el
   módulo). `./test.sh` en verde para todo el repo.
+- [x] T-35 Dockerfile real de normalizacion — **primer contenedor Python de
+  este proyecto**: build en dos etapas con `uv sync --directory
+  contexts/normalizacion --no-dev --frozen` (equivalente Python de `-x test`
+  en los Dockerfiles Kotlin: excluye pytest/httpx, que solo hacen falta para
+  tests que `./test.sh` ya corrió). El build necesita el repo completo
+  (`COPY . .`), igual que los Dockerfiles Kotlin necesitan la raíz para
+  `:platform-kotlin` — aquí es el `uv.lock` compartido del workspace.
+  Verificado en dos pasos: (1) contenedor standalone sin Postgres —
+  `/docs` y `/openapi.json` responden 200, confirmando que FastAPI arranca
+  sin fallar aunque la conexión a la base de datos es perezosa (solo se abre
+  en el primer request que la toca); (2) **flujo de punta a punta real
+  contra los cinco servicios a la vez** (`docker compose up -d --build`):
+  recibir ítem no trivial → sugerencia de límites (EMISOR FICTICIO) →
+  confirmación humana → normalizar → entregar a Extracción → conteo por
+  lote (`sin_perdida_silenciosa: true`) — primer intento sin fallos.
+  Wiring en `docker-compose.{saas,onprem}.yml` (con Postgres propio, a
+  diferencia de validacion-humana — este contexto sí mantiene estado) y en
+  `docker-compose.local-ports.yml` (puerto 8085).
