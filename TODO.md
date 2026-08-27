@@ -251,3 +251,15 @@
       peticiones, 79/79 aserciones tras la corrección. **Con esto,
       Normalización queda completa de punta a punta (T-33..T-36).**
 
+# Hallazgos de revisión acumulada `65c3c43..HEAD` (2026-08-27)
+- [ ] T-37 RF-NO-008 / P-08 — incorporar en Normalización una bitácora de
+      auditoría append-only con actor, fecha, tipo, estado anterior y posterior
+      para cada transición; persistir la unidad y su evento en una única
+      transacción SQLAlchemy y probar rollback real si falla el anexado.
+- [ ] T-38 RF-VH-005 / RF-NO-004 — implementar en Validación Humana el puerto
+      `ConfirmadorDeLimites`, su adaptador HTTP real a Normalización y los tests
+      de contrato/servicio que demuestren actor y fecha en la confirmación.
+- [ ] T-39 RF-VH-001 / RF-VH-009 — completar las colas de Validación Humana
+      para las fuentes de Normalización, Extracción y Enriquecimiento, y exponer
+      las correcciones como candidatas a re-revisión sin incorporarlas en crudo
+      al set patrón.
