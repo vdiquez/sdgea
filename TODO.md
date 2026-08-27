@@ -401,6 +401,10 @@ repetirse aquí (ver STATE.md para el detalle completo de cada una):
       para cero pérdida silenciosa (RF-EX-008). Cada función de transición
       devuelve `(TextoExtraido, EventoAuditoria)` desde el primer commit —
       P-08 no es un fix posterior aquí, ver nota de la sección arriba.
+      IMPORTANTE: agrega la línea `uv run --directory contexts/extraccion
+      pytest` a `test.sh` en este mismo commit (mismo tratamiento que T-33
+      le dio a Normalización) — sin esto, `./test.sh` (el árbitro del loop)
+      nunca ejecuta los tests nuevos de este contexto.
 - [ ] T-41 RF-EX-001..010 — Servicio HTTP (FastAPI) + persistencia
       (SQLAlchemy + Postgres) para Extracción, mismo patrón que T-34
       (Normalización): cada endpoint traduce un método de dominio ya
