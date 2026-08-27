@@ -6,8 +6,8 @@ from dominio import (
     ErrorDeDominio,
     EstadoTextoExtraido,
     ProcedenciaHeredada,
-    ResultadoOcr,
     Soporte,
+    SugerenciaOcr,
     TextoExtraido,
     candidatas_a_revision_por_baja_confianza,
     confirmar_extraccion,
@@ -16,7 +16,7 @@ from dominio import (
     entregar,
     extraer_texto_born_digital,
     marcar_cuarentena_o_rechazo,
-    recibir_resultado_ocr,
+    recibir_sugerencia_ocr,
     recibir_unidad,
 )
 
@@ -51,9 +51,11 @@ def _texto_escaneo() -> TextoExtraido:
     return texto
 
 
-def _texto_con_ocr_pendiente(calidad: float = 0.73) -> TextoExtraido:
-    resultado = ResultadoOcr(modelo_id="ocr-ficticio-v0", contenido="texto reconocido", calidad=calidad, fecha=PROCEDENCIA.fecha)
-    texto, _ = recibir_resultado_ocr(_texto_escaneo(), resultado)
+def _texto_con_sugerencia_ocr_pendiente(calidad: float = 0.73) -> TextoExtraido:
+    sugerencia = SugerenciaOcr(
+        modelo_id="ocr-ficticio-v0", contenido="texto reconocido", calidad=calidad, evidencia=["pagina-1"], fecha=PROCEDENCIA.fecha
+    )
+    texto, _ = recibir_sugerencia_ocr(_texto_escaneo(), sugerencia)
     return texto
 
 
@@ -83,6 +85,8 @@ class TestDeterminacionDeSoporte:
         assert actualizado.soporte == Soporte.BORN_DIGITAL
         assert actualizado.estado == EstadoTextoExtraido.PENDIENTE_DE_EXTRACCION
         assert evento.tipo == "SOPORTE_DETERMINADO"
+        assert evento.estado_anterior == "PENDIENTE_DE_EXTRACCION"
+        assert evento.estado_posterior == "PENDIENTE_DE_EXTRACCION"
 
     def test_una_unidad_queda_marcada_escaneo_antes_de_extraer(self):
         actualizado, _ = determinar_soporte(_texto_pendiente(), Soporte.ESCANEO, actor="sistema-extraccion", fecha=PROCEDENCIA.fecha)
@@ -118,35 +122,38 @@ class TestExtraccionBornDigital:
 
 
 # RF-EX-004 · Extracción probabilística de texto vía OCR (escaneo) — componente FICTICIO
-class TestExtraccionViaOcr:
-    def test_dado_un_soporte_de_escaneo_cuando_se_recibe_el_resultado_de_ocr_no_se_materializa_solo(self):
-        # VETO real de Codex sobre la primera versión de este archivo (P-01,
-        # ver QUESTIONS.md): un resultado de OCR es probabilístico y no puede
-        # materializar el estado por sí solo, solo queda adjunto.
-        resultado = ResultadoOcr(modelo_id="ocr-ficticio-v0", contenido="texto reconocido", calidad=0.73, fecha=PROCEDENCIA.fecha)
+class TestSugerenciaOcr:
+    def test_dado_un_soporte_de_escaneo_cuando_se_recibe_la_sugerencia_de_ocr_no_se_materializa_sola(self):
+        # Dos VETOs reales de Codex sobre versiones anteriores de este archivo
+        # (P-01, ver QUESTIONS.md): una sugerencia de OCR es probabilística y
+        # no puede materializar el estado por sí sola; debe cruzar como una
+        # Sugerencia (con evidencia), no como un resultado ya terminado.
+        sugerencia = SugerenciaOcr(
+            modelo_id="ocr-ficticio-v0", contenido="texto reconocido", calidad=0.73, evidencia=["pagina-1"], fecha=PROCEDENCIA.fecha
+        )
 
-        actualizado, evento = recibir_resultado_ocr(_texto_escaneo(), resultado)
+        actualizado, evento = recibir_sugerencia_ocr(_texto_escaneo(), sugerencia)
 
         assert actualizado.estado == EstadoTextoExtraido.PENDIENTE_DE_EXTRACCION
         assert actualizado.contenido is None
-        assert actualizado.resultado_ocr == resultado
+        assert actualizado.sugerencia_ocr == sugerencia
         assert evento.actor == "ocr-ficticio-v0"
-        assert evento.estado_anterior is None
-        assert evento.estado_posterior == "RESULTADO_OCR_RECIBIDO"
+        assert evento.estado_anterior == "PENDIENTE_DE_EXTRACCION"
+        assert evento.estado_posterior == "PENDIENTE_DE_EXTRACCION"
 
-    def test_no_se_puede_recibir_resultado_de_ocr_para_un_texto_marcado_como_born_digital(self):
-        resultado = ResultadoOcr(modelo_id="ocr-ficticio-v0", contenido="x", calidad=0.5, fecha=PROCEDENCIA.fecha)
+    def test_no_se_puede_recibir_sugerencia_de_ocr_para_un_texto_marcado_como_born_digital(self):
+        sugerencia = SugerenciaOcr(modelo_id="ocr-ficticio-v0", contenido="x", calidad=0.5, evidencia=[], fecha=PROCEDENCIA.fecha)
 
         with pytest.raises(ErrorDeDominio):
-            recibir_resultado_ocr(_texto_born_digital(), resultado)
+            recibir_sugerencia_ocr(_texto_born_digital(), sugerencia)
 
 
 # RF-EX-011 (decisión de Victor, 2026-08-27, ver QUESTIONS.md) · Confirmación
-# humana de la extracción vía OCR — corrige el VETO de Codex sobre commit
-# dd97fb4: nada probabilístico escribe estado por sí solo (P-01).
+# humana de la extracción vía OCR — corrige los VETOs de Codex sobre commits
+# dd97fb4 y e623ad6: nada probabilístico escribe estado por sí solo (P-01).
 class TestConfirmacionDeExtraccion:
-    def test_dado_un_resultado_de_ocr_pendiente_cuando_un_humano_lo_confirma_queda_extraido_con_actor_y_fecha(self):
-        pendiente = _texto_con_ocr_pendiente(calidad=0.73)
+    def test_dada_una_sugerencia_de_ocr_pendiente_cuando_un_humano_la_confirma_queda_extraido_con_actor_y_fecha(self):
+        pendiente = _texto_con_sugerencia_ocr_pendiente(calidad=0.73)
 
         confirmado, evento = confirmar_extraccion(pendiente, actor="archivista-1", fecha=PROCEDENCIA.fecha)
 
@@ -157,12 +164,12 @@ class TestConfirmacionDeExtraccion:
         assert evento.estado_anterior == "PENDIENTE_DE_EXTRACCION"
         assert evento.estado_posterior == "EXTRAIDO"
 
-    def test_no_se_puede_confirmar_una_extraccion_sin_resultado_de_ocr_pendiente(self):
+    def test_no_se_puede_confirmar_una_extraccion_sin_sugerencia_de_ocr_pendiente(self):
         with pytest.raises(ErrorDeDominio):
             confirmar_extraccion(_texto_escaneo(), actor="archivista-1", fecha=PROCEDENCIA.fecha)
 
     def test_no_se_puede_confirmar_una_extraccion_dos_veces(self):
-        pendiente = _texto_con_ocr_pendiente()
+        pendiente = _texto_con_sugerencia_ocr_pendiente()
         confirmado, _ = confirmar_extraccion(pendiente, actor="archivista-1", fecha=PROCEDENCIA.fecha)
 
         with pytest.raises(ErrorDeDominio):
@@ -178,7 +185,7 @@ class TestEstratificacionDeCalidad:
         assert extraido.soporte == Soporte.BORN_DIGITAL
 
     def test_un_texto_extraido_expone_su_calidad_y_soporte_de_origen_escaneo(self):
-        pendiente = _texto_con_ocr_pendiente(calidad=0.6)
+        pendiente = _texto_con_sugerencia_ocr_pendiente(calidad=0.6)
 
         extraido, _ = confirmar_extraccion(pendiente, actor="archivista-1", fecha=PROCEDENCIA.fecha)
 
@@ -189,19 +196,19 @@ class TestEstratificacionDeCalidad:
 # RF-EX-006 · Enrutamiento de baja confianza a revisión humana
 class TestRevisionPorBajaConfianza:
     def test_un_texto_bajo_el_umbral_aparece_como_candidato_a_revision(self):
-        extraido, _ = confirmar_extraccion(_texto_con_ocr_pendiente(calidad=0.3), actor="archivista-1", fecha=PROCEDENCIA.fecha)
+        extraido, _ = confirmar_extraccion(_texto_con_sugerencia_ocr_pendiente(calidad=0.3), actor="archivista-1", fecha=PROCEDENCIA.fecha)
 
         candidatas = candidatas_a_revision_por_baja_confianza([extraido], umbral=0.5)
 
         assert candidatas == [extraido]
 
     def test_un_texto_sobre_el_umbral_no_aparece_como_candidato(self):
-        extraido, _ = confirmar_extraccion(_texto_con_ocr_pendiente(calidad=0.9), actor="archivista-1", fecha=PROCEDENCIA.fecha)
+        extraido, _ = confirmar_extraccion(_texto_con_sugerencia_ocr_pendiente(calidad=0.9), actor="archivista-1", fecha=PROCEDENCIA.fecha)
 
         assert candidatas_a_revision_por_baja_confianza([extraido], umbral=0.5) == []
 
     def test_un_texto_de_baja_confianza_conserva_su_marca_al_entregarse(self):
-        extraido, _ = confirmar_extraccion(_texto_con_ocr_pendiente(calidad=0.2), actor="archivista-1", fecha=PROCEDENCIA.fecha)
+        extraido, _ = confirmar_extraccion(_texto_con_sugerencia_ocr_pendiente(calidad=0.2), actor="archivista-1", fecha=PROCEDENCIA.fecha)
 
         entregado = entregar(extraido)
 
@@ -278,6 +285,8 @@ class TestEntrega:
 # P-08 · toda transición produce un evento de auditoría atribuible, fechado y con
 # estado anterior/posterior — desde el primer commit de este contexto (lección de
 # T-37/V-01 en normalizacion: no se repite el error de agregarlo como fix posterior).
+# estado_anterior/posterior deben ser valores reales de EstadoTextoExtraido, nunca
+# un sentinel inventado (hallazgo real de Codex sobre commit e623ad6).
 class TestAuditoriaDeTransiciones:
     def test_recibir_unidad_produce_un_evento_sin_estado_anterior(self):
         _, evento = recibir_unidad(
@@ -292,12 +301,14 @@ class TestAuditoriaDeTransiciones:
         assert evento.estado_anterior is None
         assert evento.fecha == PROCEDENCIA.fecha
 
-    def test_recibir_resultado_ocr_usa_el_modelo_como_actor_del_evento(self):
-        resultado = ResultadoOcr(modelo_id="ocr-ficticio-v0", contenido="x", calidad=0.5, fecha=PROCEDENCIA.fecha)
+    def test_recibir_sugerencia_ocr_usa_el_modelo_como_actor_del_evento_con_estado_real(self):
+        sugerencia = SugerenciaOcr(modelo_id="ocr-ficticio-v0", contenido="x", calidad=0.5, evidencia=[], fecha=PROCEDENCIA.fecha)
 
-        _, evento = recibir_resultado_ocr(_texto_escaneo(), resultado)
+        _, evento = recibir_sugerencia_ocr(_texto_escaneo(), sugerencia)
 
         assert evento.actor == "ocr-ficticio-v0"
+        assert evento.estado_anterior == "PENDIENTE_DE_EXTRACCION"
+        assert evento.estado_posterior == "PENDIENTE_DE_EXTRACCION"
 
     def test_marcar_cuarentena_o_rechazo_conserva_el_estado_anterior_pendiente(self):
         _, evento = marcar_cuarentena_o_rechazo(_texto_pendiente(), CondicionDeExtraccion.CORRUPTO, actor="sistema-extraccion", fecha=PROCEDENCIA.fecha)

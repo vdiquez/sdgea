@@ -53,14 +53,23 @@ class ProcedenciaHeredada:
 
 
 # RF-EX-004: componente FICTICIO (constitución, disciplina de alcance) — esta clase
-# solo transporta un resultado de OCR YA CALCULADO por el llamador; ningún código de
-# este contexto ejecuta un motor de OCR real, mismo criterio que SugerenciaDeLimites
-# en normalizacion y Sugerencia en records-custodia.
+# solo transporta una SUGERENCIA de OCR YA CALCULADA por el llamador; ningún código
+# de este contexto ejecuta un motor de OCR real. VETO real de Codex sobre la
+# segunda versión de este archivo (commit e623ad6, ver REVIEW.md/QUESTIONS.md):
+# un `ResultadoOcr` sin `evidencia` no cruzaba la capa anticorrupción "como
+# Sugerencia" (P-01) — aplazar la materialización con `confirmar_extraccion` no
+# bastaba si lo que se adjuntaba al agregado seguía sin la forma de una
+# Sugerencia. Renombrado y con `evidencia` para calzar exactamente el mismo
+# shape que `SugerenciaDeLimites` en normalizacion y `Sugerencia` en
+# records-custodia — la única diferencia real es que esta sugerencia también
+# porta el `contenido` propuesto (el texto que el OCR leyó), inevitable porque
+# eso es justamente lo que OCR sugiere.
 @dataclass(frozen=True)
-class ResultadoOcr:
+class SugerenciaOcr:
     modelo_id: str
     contenido: str
     calidad: float
+    evidencia: list[str]
     fecha: datetime
 
 
@@ -74,7 +83,7 @@ class TextoExtraido:
     contenido: str | None = None
     calidad: float | None = None
     razon: str | None = None
-    resultado_ocr: ResultadoOcr | None = None
+    sugerencia_ocr: SugerenciaOcr | None = None
 
 
 # P-08 desde el primer commit de este contexto (lección de T-37/V-01: en
@@ -115,9 +124,11 @@ def recibir_unidad(
 
 
 # RF-EX-002/invariante 2: determina el mecanismo de extracción antes de aplicarlo.
-# No cambia el estado del texto (sigue Pendiente de extracción); solo lo marca, mismo
-# patrón que recibir_sugerencia_de_limites en normalizacion (sentinel en
-# estado_posterior porque no hay transición de estado real).
+# No cambia el estado del texto (sigue Pendiente de extracción); solo lo marca.
+# P-08 (hallazgo real de Codex sobre commit e623ad6): estado_anterior/posterior
+# deben representar honestamente el estado del agregado, nunca un sentinel que
+# no es un valor real de `EstadoTextoExtraido` — aquí ambos son el mismo valor
+# porque esta transición no cambia el estado.
 def determinar_soporte(
     texto: TextoExtraido, soporte: Soporte, actor: str, fecha: datetime
 ) -> tuple[TextoExtraido, EventoAuditoria]:
@@ -128,8 +139,8 @@ def determinar_soporte(
         actor=actor,
         fecha=fecha,
         tipo="SOPORTE_DETERMINADO",
-        estado_anterior=None,
-        estado_posterior="SOPORTE_DETERMINADO",
+        estado_anterior=texto.estado.value,
+        estado_posterior=actualizado.estado.value,
     )
     return actualizado, evento
 
@@ -158,59 +169,62 @@ def extraer_texto_born_digital(
     return actualizado, evento
 
 
-# RF-EX-004: componente FICTICIO — recibe un resultado de OCR YA CALCULADO por el
-# llamador. VETO real de Codex sobre la primera versión de este archivo (commit
-# dd97fb4, ver REVIEW.md/QUESTIONS.md): un resultado de OCR es probabilístico y
-# NO puede materializar el estado por sí solo (P-01) — a diferencia de
-# extraer_texto_born_digital (determinístico, sin componente probabilístico de
-# por medio, P-01 no aplica ahí). Este resultado solo queda ADJUNTO al texto
-# extraído, que permanece Pendiente de extracción hasta que `confirmar_extraccion`
-# lo confirma explícitamente — mismo patrón de dos pasos que
-# recibir_sugerencia_de_limites/confirmar_limites en normalizacion (RF-NO-002/004).
-# Decisión de Victor, 2026-08-27 (QUESTIONS.md): esta confirmación humana es
-# obligatoria para TODO resultado de OCR, no solo los de baja confianza — el
-# enrutamiento por calidad (RF-EX-006/candidatas_a_revision_por_baja_confianza)
-# es un control adicional posterior a la confirmación, no un sustituto de ella.
-def recibir_resultado_ocr(
-    texto: TextoExtraido, resultado: ResultadoOcr
+# RF-EX-004: componente FICTICIO — recibe una SUGERENCIA de OCR YA CALCULADA por
+# el llamador. Dos VETOs reales de Codex sobre versiones anteriores de este
+# archivo (ver REVIEW.md/QUESTIONS.md): (1, commit dd97fb4) un resultado
+# probabilístico NO puede materializar el estado por sí solo (P-01) — a
+# diferencia de extraer_texto_born_digital (determinístico, P-01 no aplica
+# ahí); (2, commit e623ad6) aplazar la materialización no basta si lo que se
+# adjunta al agregado no tiene forma de Sugerencia (sin evidencia, sin cruzar
+# una capa anticorrupción real). Esta función solo ADJUNTA la sugerencia al
+# agregado — no cambia su estado — hasta que `confirmar_extraccion` la
+# confirma explícitamente: mismo patrón de dos pasos que
+# recibir_sugerencia_de_limites/confirmar_limites en normalizacion
+# (RF-NO-002/004). Decisión de Victor, 2026-08-27 (QUESTIONS.md): esta
+# confirmación humana es obligatoria para TODA sugerencia de OCR, no solo las
+# de baja confianza — el enrutamiento por calidad
+# (RF-EX-006/candidatas_a_revision_por_baja_confianza) es un control adicional
+# posterior a la confirmación, no un sustituto de ella.
+def recibir_sugerencia_ocr(
+    texto: TextoExtraido, sugerencia: SugerenciaOcr
 ) -> tuple[TextoExtraido, EventoAuditoria]:
     if texto.soporte != Soporte.ESCANEO:
         raise ErrorDeDominio(f"El texto extraído '{texto.id}' no está marcado como escaneo.")
     if texto.estado != EstadoTextoExtraido.PENDIENTE_DE_EXTRACCION:
         raise ErrorDeDominio(f"El texto extraído '{texto.id}' no está pendiente de extracción.")
-    actualizado = replace(texto, resultado_ocr=resultado)
+    actualizado = replace(texto, sugerencia_ocr=sugerencia)
     evento = EventoAuditoria(
-        actor=resultado.modelo_id,
-        fecha=resultado.fecha,
-        tipo="RESULTADO_OCR_RECIBIDO",
-        estado_anterior=None,
-        estado_posterior="RESULTADO_OCR_RECIBIDO",
+        actor=sugerencia.modelo_id,
+        fecha=sugerencia.fecha,
+        tipo="SUGERENCIA_OCR_RECIBIDA",
+        estado_anterior=texto.estado.value,
+        estado_posterior=actualizado.estado.value,
     )
     return actualizado, evento
 
 
 # RF-EX-011 (decisión de Victor, 2026-08-27, ver QUESTIONS.md — corrige el VETO
-# de Codex sobre commit dd97fb4): única función que puede materializar un texto
-# extraído a partir de un resultado de OCR — mismo criterio que
-# confirmar_limites en normalizacion (RF-NO-004) y materializar en
-# records-custodia (RF-RC-004): nada probabilístico escribe estado por sí
-# solo (P-01). No admite corregir el contenido aquí (solo confirmar el
-# resultado adjunto tal cual): si un texto de baja confianza necesita
+# de Codex sobre commit dd97fb4, ampliado en e623ad6): única función que puede
+# materializar un texto extraído a partir de una sugerencia de OCR — mismo
+# criterio que confirmar_limites en normalizacion (RF-NO-004) y materializar
+# en records-custodia (RF-RC-004): nada probabilístico escribe estado por sí
+# solo (P-01). No admite corregir el contenido aquí (solo confirmar la
+# sugerencia adjunta tal cual): si un texto de baja confianza necesita
 # corrección humana del contenido, ese mecanismo sigue [CLARIFICAR] en
 # specs/002-extraccion/spec.md §8, no se inventa uno aquí.
 def confirmar_extraccion(
     texto: TextoExtraido, actor: str, fecha: datetime
 ) -> tuple[TextoExtraido, EventoAuditoria]:
-    if texto.resultado_ocr is None:
-        raise ErrorDeDominio(f"El texto extraído '{texto.id}' no tiene un resultado de OCR pendiente de confirmar.")
+    if texto.sugerencia_ocr is None:
+        raise ErrorDeDominio(f"El texto extraído '{texto.id}' no tiene una sugerencia de OCR pendiente de confirmar.")
     if texto.estado != EstadoTextoExtraido.PENDIENTE_DE_EXTRACCION:
         raise ErrorDeDominio(f"El texto extraído '{texto.id}' no está pendiente de extracción.")
     estado_anterior = texto.estado.value
     actualizado = replace(
         texto,
         estado=EstadoTextoExtraido.EXTRAIDO,
-        contenido=texto.resultado_ocr.contenido,
-        calidad=texto.resultado_ocr.calidad,
+        contenido=texto.sugerencia_ocr.contenido,
+        calidad=texto.sugerencia_ocr.calidad,
     )
     evento = EventoAuditoria(
         actor=actor,

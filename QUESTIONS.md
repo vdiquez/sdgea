@@ -365,3 +365,35 @@ cuarentena`), pese a que la spec §3 las declara terminales. Ahora exige
 `confirmar_extraccion`, 1 de la precondición corregida). Pendiente: comitear
 esta corrección, pedirle a Codex que revise el nuevo commit contra el mismo
 diff, y solo entonces retomar `./orquestador.sh loop` para T-41 en adelante.
+
+## 2026-08-27 · T-40 Extracción — segunda vuelta de Codex, VETO mantenido — Corregido (no requirió nueva decisión de Victor)
+
+Codex revisó el commit de corrección de arriba (`e623ad6`) y mantuvo el VETO
+con un motivo distinto: aplazar la materialización con `confirmar_extraccion`
+no bastaba, porque lo que `recibir_resultado_ocr` adjuntaba al agregado
+(`ResultadoOcr`, sin `evidencia`) seguía sin tener forma de `Sugerencia` —
+P-01 exige que la salida probabilística cruce la capa anticorrupción *como
+Sugerencia*, no solo que una decisión humana la materialice después. También
+señaló un defecto de P-08: el evento de recepción usaba un sentinel
+(`estado_posterior="RESULTADO_OCR_RECIBIDO"`) que no es un valor real de
+`EstadoTextoExtraido`.
+
+Esto NO se escaló a Victor como una nueva decisión de negocio: es una
+corrección de consistencia con el patrón ya ratificado en la ronda anterior
+(toda salida probabilística de este proyecto cruza como una `Sugerencia*` con
+`evidencia`, mismo shape en los tres contextos que ya lo hacen). Corregido
+directamente: `ResultadoOcr` renombrado a `SugerenciaOcr` con `evidencia:
+list[str]` añadido (mismo shape que `SugerenciaDeLimites` en Normalización y
+`Sugerencia` en records-custodia, con `contenido` añadido porque eso es lo
+que una sugerencia de OCR propone); `recibir_resultado_ocr` renombrado a
+`recibir_sugerencia_ocr`; el evento de recepción ahora usa
+`estado_anterior=estado_posterior=texto.estado.value` (honesto: la recepción
+no cambia el estado) en vez del sentinel — y se corrigió el mismo patrón en
+`determinar_soporte`, que tenía el defecto idéntico desde el primer commit,
+por consistencia dentro del mismo archivo.
+
+`specs/002-extraccion/spec.md` actualizada: §1 con una segunda nota de
+resolución, §2 (lenguaje ubicuo) con el término "Sugerencia de OCR", RF-EX-004
+y RF-EX-011 reescritos con vocabulario de sugerencia en vez de "resultado".
+29/29 tests en el módulo. Pendiente: comitear y pedirle a Codex una tercera
+revisión antes de retomar `./orquestador.sh loop`.

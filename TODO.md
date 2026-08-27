@@ -416,7 +416,22 @@ repetirse aquí (ver STATE.md para el detalle completo de cada una):
       exige `Pendiente de extracción` como precondición (no admitía
       transiciones desde un estado ya terminal). 29/29 tests en el módulo tras
       el fix. `specs/002-extraccion/spec.md` actualizada (§1, RF-EX-004,
-      RF-EX-011 nueva, §7). Ver commit siguiente para el detalle completo.
+      RF-EX-011 nueva, §7).
+      **Segunda vuelta de Codex sobre ese mismo fix (commit `e623ad6`): VETO
+      mantenido** — aplazar la materialización no bastaba; lo adjunto al
+      agregado (`ResultadoOcr`, sin `evidencia`) seguía sin forma de
+      `Sugerencia` (P-01 exige cruzar la capa anticorrupción *como
+      Sugerencia*, no solo diferir la decisión). También señaló un defecto de
+      P-08: el evento de recepción usaba un sentinel que no es un valor real
+      de `EstadoTextoExtraido`. No requirió nueva decisión de Victor — es
+      consistencia con el patrón ya ratificado. Corregido: `ResultadoOcr` →
+      `SugerenciaOcr` con `evidencia: list[str]` (mismo shape que
+      `SugerenciaDeLimites`/`Sugerencia`); `recibir_resultado_ocr` →
+      `recibir_sugerencia_ocr`; eventos de `recibir_sugerencia_ocr` y
+      `determinar_soporte` (mismo defecto, corregido por consistencia) ahora
+      usan `estado_anterior=estado_posterior=texto.estado.value` en vez de un
+      sentinel inventado. 29/29 tests tras el segundo fix. Ver commit
+      siguiente para el detalle completo.
 - [ ] T-41 RF-EX-001..011 — Servicio HTTP (FastAPI) + persistencia
       (SQLAlchemy + Postgres) para Extracción, mismo patrón que T-34
       (Normalización): cada endpoint traduce un método de dominio ya

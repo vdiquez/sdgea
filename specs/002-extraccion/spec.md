@@ -63,6 +63,18 @@ controles complementarios, no alternativos. El enrutamiento por calidad
 (revisión reforzada de extracciones ya confirmadas pero de baja calidad), no
 un sustituto de ella.
 
+**Segunda vuelta (Codex, commit `e623ad6`) — aplazar la materialización no
+basta; también debe cruzar como Sugerencia:** la primera corrección del
+párrafo anterior movió el momento de la confirmación humana, pero seguía
+adjuntando al agregado un `ResultadoOcr` sin `evidencia`, sin la forma de una
+`Sugerencia`. Codex mantuvo el veto: P-01 exige que la salida probabilística
+cruce la capa anticorrupción *como Sugerencia*, no solo que una decisión
+humana la materialice después. Corregido: la sugerencia de OCR
+(`SugerenciaOcr` en `dominio.py`) ahora porta `evidencia` y tiene exactamente
+el mismo shape que `SugerenciaDeLimites` (Normalización) y `Sugerencia`
+(records-custodia) — con `contenido` añadido porque eso es, precisamente, lo
+que una sugerencia de OCR propone.
+
 ---
 
 ## 2. Lenguaje ubicuo
@@ -79,6 +91,12 @@ un sustituto de ella.
   confianza (P-09).
 - **Cola de revisión de baja confianza** — el conjunto de extracciones cuya calidad
   cae bajo un umbral, pendientes de que un humano las inspeccione o corrija.
+- **Sugerencia de OCR** — la propuesta que produce el componente probabilístico
+  de OCR (modelo, contenido propuesto, calidad estimada, evidencia); no
+  materializa el texto extraído por sí sola (RF-EX-004) — solo una
+  confirmación humana lo hace (RF-EX-011). Mismo estatus que `Sugerencia`
+  (records-custodia) y `SugerenciaDeLimites` (Normalización): una propuesta,
+  no un hecho consumado.
 
 ---
 
@@ -167,25 +185,28 @@ forma determinística, sin invocar el componente probabilístico.
 
 **RF-EX-004 · Extracción probabilística de texto vía OCR (escaneo)**
 Para un soporte de escaneo, el contexto invoca el componente probabilístico de OCR
-(gobernado por EDD, ver `specs/eval/edd-harness.md` §2 y §4), que produce un
-resultado con su calidad estimada. Ese resultado no materializa el texto
-extraído por sí solo (P-01; resuelto 2026-08-27, ver §1 y RF-EX-011) — queda
-adjunto, pendiente de la confirmación humana que exige RF-EX-011.
-- Dada una unidad documental candidata de `escaneo`, Cuando se recibe el
-  resultado de su extracción vía OCR, Entonces el resultado (contenido y
-  calidad estimada) queda adjunto al texto extraído, que permanece `Pendiente
-  de extracción`.
+(gobernado por EDD, ver `specs/eval/edd-harness.md` §2 y §4), que produce una
+**sugerencia de extracción** (modelo, contenido propuesto, calidad estimada y
+evidencia) — no un resultado ya terminado. Esa sugerencia cruza como tal la
+capa anticorrupción del contexto y no materializa el texto extraído por sí
+sola (P-01; resuelto 2026-08-27, ver §1 y RF-EX-011) — queda adjunta,
+pendiente de la confirmación humana que exige RF-EX-011.
+- Dada una unidad documental candidata de `escaneo`, Cuando se recibe la
+  sugerencia de su extracción vía OCR, Entonces la sugerencia (contenido
+  propuesto, calidad estimada y evidencia) queda adjunta al texto extraído,
+  que permanece `Pendiente de extracción`.
 
 **RF-EX-011 · Confirmación humana de la extracción vía OCR**
-Un resultado de OCR nunca materializa el texto extraído por sí solo; solo una
-confirmación humana explícita lo hace, mismo criterio que RF-RC-004
+Una sugerencia de OCR nunca materializa el texto extraído por sí sola; solo
+una confirmación humana explícita lo hace, mismo criterio que RF-RC-004
 (records-custodia) y RF-NO-004 (Normalización) — resuelto 2026-08-27 (Victor,
-ver `QUESTIONS.md`), corrige el VETO de Codex sobre la primera implementación
-del dominio de este contexto (T-40, commit `dd97fb4`).
-- Dado un resultado de OCR adjunto a un texto extraído `Pendiente de
-  extracción`, Cuando un actor autorizado lo confirma, Entonces el texto
-  extraído queda `Extraído` con el contenido y la calidad del resultado
-  confirmado, y con el actor y la fecha de la confirmación registrados.
+ver `QUESTIONS.md`), corrige los VETOs de Codex sobre las dos primeras
+implementaciones del dominio de este contexto (T-40, commits `dd97fb4` y
+`e623ad6`).
+- Dada una sugerencia de OCR adjunta a un texto extraído `Pendiente de
+  extracción`, Cuando un actor autorizado la confirma, Entonces el texto
+  extraído queda `Extraído` con el contenido y la calidad de la sugerencia
+  confirmada, y con el actor y la fecha de la confirmación registrados.
 
 **RF-EX-005 · Estratificación de calidad de la extracción**
 Todo texto extraído conserva una medida de calidad/confianza, sin importar su

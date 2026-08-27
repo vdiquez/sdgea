@@ -1,62 +1,80 @@
-VETO: P-01 incumplido: el resultado probabilístico de OCR materializa directamente el estado `EXTRAIDO`, sin pasar por una Sugerencia ni una decisión humana.
+VETO: P-01 incumplido: el resultado probabilístico de OCR se persiste directamente en `TextoExtraido`, sin cruzar la capa anticorrupción como `Sugerencia`.
 
-# Revisión de `dd97fb4` — T-40, Extracción
+# Revisión de `e623ad6c` — T-40 Extracción
 
-Revisados `AGENTS.md`, `.specify/memory/constitution.md`, `STATE.md`, el diff de
-`HEAD` y `specs/002-extraccion/spec.md`.
+Revisados `AGENTS.md`, `.specify/memory/constitution.md`, `STATE.md`,
+`QUESTIONS.md`, la spec del contexto `specs/002-extraccion/spec.md` y el diff
+completo de `HEAD` contra su padre. La decisión explícita de Victor del
+2026-08-27 exige confirmación humana para todo OCR; se tuvo en cuenta.
 
-## V-01 · P-01
+## Veto
 
-`ResultadoOcr` es explícitamente el resultado de un componente probabilístico
-(OCR). Sin embargo, `recibir_resultado_ocr` en
-`contexts/extraccion/dominio.py:164` recibe ese resultado y en la línea 172
-sobrescribe directamente el agregado `TextoExtraido` con estado `EXTRAIDO`, su
-contenido y su calidad. No hay objeto `Sugerencia`, capa anticorrupción ni
-decisión humana que materialice ese resultado.
+La corrección sí elimina la mutación terminal directa que motivó el veto de
+`dd97fb4`: `recibir_resultado_ocr` deja `estado=PENDIENTE_DE_EXTRACCION` y
+`confirmar_extraccion(..., actor, fecha)` es quien pasa a `EXTRAIDO`.
 
-El test `TestExtraccionViaOcr` (`tests/test_dominio.py:115`) codifica y exige
-esa misma materialización automática. Por ello no es una prueba de que la
-frontera de P-01 se conserve, sino una prueba que afianza la violación. El
-comentario de la spec que exceptúa el texto extraído no prevalece sobre la
-constitución ni sobre el criterio expreso de esta revisión: nada probabilístico
-escribe estado; debe cruzar la capa anticorrupción como Sugerencia y sólo una
-decisión humana puede materializarlo.
+Pero P-01 no exige solamente aplazar esa transición: exige que toda salida
+probabilística cruce la capa anticorrupción **como Sugerencia**. Aquí
+`recibir_resultado_ocr` recibe un `ResultadoOcr` y lo instala directamente en
+el agregado mediante `replace(texto, resultado_ocr=resultado)`. No existe una
+`Sugerencia`/propuesta separada ni una capa anticorrupción que traduzca la
+salida del OCR antes de almacenarla. Por tanto el dato probabilístico aún entra
+directamente al estado persistible del núcleo; la posterior confirmación humana
+no repara esa frontera física ausente. RF-EX-004 y RF-EX-011 repiten la misma
+excepción al decir “queda adjunto al texto extraído”.
 
-## Hallazgo de especificación y tests
+La corrección requerida es modelar la recepción como una sugerencia de OCR
+separada, con modelo, evidencia, confianza y fecha, recibida por una capa
+anticorrupción; la decisión humana debe referenciar esa sugerencia y ser la
+única operación que materialice contenido/calidad en `TextoExtraido`.
 
-- `marcar_cuarentena_o_rechazo` (`dominio.py:188`) admite cualquier estado de
-  origen. Puede cambiar un texto ya `EXTRAIDO`, `RECHAZADO` o
-  `EN_CUARENTENA`, pese a que §3 de la spec declara esas tres ramas como
-  terminales y sólo permite `Pendiente de extracción` → terminal. No hay test
-  que intente esas transiciones inválidas; los de RF-EX-009 sólo usan el estado
-  pendiente. Debe rechazarlas y probarse el rechazo.
+## P-08
 
-## Chequeos requeridos
+Hay además un defecto en el nuevo evento de recepción. La función no cambia el
+campo `estado` (permanece `PENDIENTE_DE_EXTRACCION`), pero emite
+`estado_anterior=None` y `estado_posterior="RESULTADO_OCR_RECIBIDO"`. Este
+último no es un estado del agregado. P-08 exige evento atribuible, fechado y
+con estado anterior y posterior de la transición; el test nuevo fija esos
+valores ficticios y por ello no detecta la discrepancia. Al incorporar la
+sugerencia debe auditarse su recepción con una representación verdadera y
+coherente de antes/después, y la futura persistencia T-41 debe conservarla en
+la bitácora append-only y en la misma transacción.
 
-- **P-03:** sin infracción en este commit. No se invoca un OCR ni otra
-  capacidad externa real; `ResultadoOcr` es sólo un transporte ficticio. Al
-  conectar un motor real en T-41 deberá existir el puerto propio exigido por
-  RNF-EX-002, con implementaciones gestionada y autoalojada.
-- **P-08:** en el dominio, las transiciones de estado implementadas
-  (`recibir_unidad`, extracción born-digital, recepción OCR y cuarentena/rechazo)
-  devuelven un `EventoAuditoria` con actor, fecha y estados anterior/posterior.
-  La bitácora append-only y la persistencia atómica no existen todavía, pero
-  están correctamente fuera del corte T-40 y asignadas a T-41; no se marca un
-  segundo veto por ello. `determinar_soporte` cambia un atributo, no el estado,
-  aunque su evento usa el centinela `SOPORTE_DETERMINADO` en vez de estados.
-- **Honestidad de tests:** los 25 tests llaman al dominio de producción y sí
-  cubren las ramas Dado/Cuando/Entonces principales; no hay dobles que
-  preconfiguren resultados. Son insuficientes para detectar V-01 porque esperan
-  el comportamiento prohibido, y omiten el rechazo de transiciones desde
-  estados terminales señalado arriba.
-- **Referencias y umbrales en specs:** el commit no modifica ningún archivo
-  bajo `specs/`; por tanto no aplica el chequeo adicional de referencias
-  normativas ni umbrales nuevos en specs. No se detectó una nueva cita normativa
-  en los archivos modificados.
+## P-03
 
-## Verificación
+Pasa para este commit: el OCR sigue siendo FICTICIO y `ResultadoOcr` es un dato
+ya calculado por el llamador; no hay invocación directa de motor OCR ni otra
+capacidad externa. La spec mantiene la exigencia de interfaz propia y dos
+implementaciones para cuando se integre un motor real.
 
-`uv run --directory contexts/extraccion pytest`: **25 passed**. Se usó una
-caché temporal dentro del workspace porque la caché global de `uv` no es
-accesible en este entorno; pytest emitió un warning no funcional por no poder
-escribir `.pytest_cache`.
+## Honestidad de los tests
+
+Los cuatro tests añadidos ejercitan funciones reales y no usan dobles que
+predeterminen el resultado. Sin embargo, el test de RF-EX-004 está amañado en
+el sentido relevante para esta revisión: sólo comprueba que no cambie el enum
+`estado` y que el `ResultadoOcr` quede directamente adjunto; no comprueba el
+criterio constitucional de que la salida probabilística sea una `Sugerencia`
+tras la capa anticorrupción. El test de confirmación tampoco puede demostrar
+que el actor sea autorizado: la producción acepta cualquier `str` y no tiene
+puerto/verificación de autorización. No acredita íntegramente el “actor
+autorizado” de RF-EX-011.
+
+## Specs, referencias y umbrales
+
+El commit modifica `specs/002-extraccion/spec.md`. No introduce Acuerdo, Ley,
+Decreto, ISO ni umbral numérico nuevos. RF-EX-011 sólo referencia P-01 y los
+RF internos RF-RC-004/RF-NO-004; la tabla la deja correctamente como `N/A`.
+No hay veto normativo/por umbral independiente.
+
+## Verificación ejecutable
+
+`git diff --check HEAD^ HEAD` no informó errores de espacios. Intenté
+`bash ./test.sh`, pero Gradle no pudo crear su lock bajo `C:\.gradle` por las
+restricciones del entorno, antes de ejecutar la suite; por ello no se afirma
+un resultado local verde.
+
+## Resultado
+
+El commit permanece vetado hasta corregir P-01 y P-08 indicados arriba. No se
+añadieron tareas a `TODO.md`: la corrección se deriva del propio T-40/RF-EX-004
+y RF-EX-011 ya existentes y debe hacerse como corrección del commit vetado.
