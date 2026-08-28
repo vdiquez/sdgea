@@ -393,6 +393,7 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
 | RF-VH-005 cerrado (Validación Humana confirma límites vía Normalización) | Decisión de Victor, 2026-08-27 ("Cierra el ciclo RF-VH-005"), TODO.md T-38 |
 | RF-VH-001/002/010/009 ampliados (cola de límites; correcciones pendientes de re-revisión) | Decisión de Victor, 2026-08-27 ("Si, sigamos con T-39"), TODO.md T-39 |
 | RF-EX-011 exige verificar autorización real (`VerificadorDeAutorizacion` + `POST /autorizacion`) | VETO real de Codex sobre commit `cf93d84`, ver `REVIEW.md` y `QUESTIONS.md` 2026-08-27; P-01, P-03 |
+| `clasificacion` como orquestador HTTP sin persistencia propia, Python/FastAPI | Decisión de Victor, 2026-08-28 ("Sigamos con Clasificación"); `specs/003-clasificacion/spec.md` §3, TODO.md T-45 |
 
 ## 10. Decisiones pendientes / preguntas abiertas
 
@@ -506,5 +507,75 @@ Fuera de alcance de esta spec: recepción real de unidades desde Normalización
 (RF-EX-001 asume que la unidad ya llega en la petición, mismo tipo de brecha
 que Normalización tiene con Captura/Ingesta); entrega real a Clasificación,
 Enriquecimiento e Indexación y Búsqueda (`entregar()` es una validación de
-lectura, no una integración HTTP real — esos tres contextos no existen
-todavía).
+lectura, no una integración HTTP real — Clasificación ya existe como servicio
+desde T-45 (§12), pero Extracción todavía no la llama; Enriquecimiento e
+Indexación y Búsqueda siguen sin existir).
+
+## 12. Contrato mínimo — `clasificacion`
+
+Traduce las funciones puras de `contexts/clasificacion/dominio.py` (T-44):
+`recibir_texto_extraido`, `clasificar`, `ordenar_por_confianza`, `agrupar`,
+`marcar_no_clasificable`, `a_sugerencia_saliente_de_clasificacion`,
+`a_sugerencia_saliente_de_agrupamiento`. A diferencia de `extraccion`/
+`normalizacion` (persistencia propia con `guardar_con_evento`) y como
+`validacion-humana` (Kotlin), este contexto **no tiene persistencia propia**
+(`specs/003-clasificacion/spec.md` §3: "no mantiene estado propio de sus
+sugerencias después de entregarlas") — es el primer orquestador HTTP sin
+tablas propias en Python: cada endpoint compone funciones puras de dominio y
+reenvía el resultado a `records-custodia` vía `POST /sugerencias`
+(`integracion.py`, `EnviadorDeSugerenciasHttp`, cliente `httpx` real).
+
+| Método y ruta | Dominio que invoca | RF |
+|---|---|---|
+| `POST /clasificaciones` | `recibir_texto_extraido(...)` + `clasificar(...)` (una vez por candidata) + `ordenar_por_confianza(...)` + reenvío a `POST /sugerencias` (`tipo="clasificacion"`) por cada una, en orden | RF-CL-001, RF-CL-002, RF-CL-003, RF-CL-004, RF-CL-008, RF-CL-009 |
+| `POST /agrupamientos` | `recibir_texto_extraido(...)` + `agrupar(...)` + reenvío a `POST /sugerencias` (`tipo="agrupamiento"`) | RF-CL-001, RF-CL-005, RF-CL-006, RF-CL-008 |
+| `POST /no-clasificables` | `recibir_texto_extraido(...)` + `marcar_no_clasificable(...)` | RF-CL-010 |
+
+`POST /clasificaciones` acepta una o más candidatas en un solo cuerpo (una
+petición, un texto, N candidatas de serie/subserie ya calculadas por el
+llamador FICTICIO) porque RF-CL-003 exige que, "cuando existe más de una
+candidata razonable", las sugerencias se expongan ordenadas por confianza
+descendente — ranking que solo tiene sentido sobre un conjunto conocido en el
+momento de la petición, no acumulado entre peticiones (este contexto no
+guarda estado). `POST /agrupamientos` acepta una sola candidata por petición:
+ningún RF exige ranking de expedientes candidatos, a diferencia de
+RF-CL-003 para series/subseries.
+
+`POST /no-clasificables` no reenvía nada a `records-custodia`: la tabla de
+salidas de la spec (§4) nombra su destino como "Operador" (reporte), no
+Records/Custodia — sin persistencia propia, la respuesta HTTP síncrona con la
+`MarcaNoClasificable` es ese reporte; no se inventa un almacén ni un canal de
+notificación adicional que la spec no pide.
+
+Cuerpo de `POST /sugerencias` que construye `EnviadorDeSugerenciasHttp`
+(`documentoId`/`tipo`/`contenidoPropuesto`/`modeloId`/`evidencia`/
+`confianza`/`fecha` en camelCase, mismo criterio que
+`VerificadorDeAutorizacionHttp` en extraccion, T-41b, porque Spring/Jackson
+serializa así del lado de records-custodia) — ver §4 y
+`http/Dtos.kt::RecibirSugerenciaRequest` para el contrato exacto que expone
+records-custodia.
+
+Sin mapeo de persistencia: no hay tablas propias de este contexto (mismo
+criterio que `validacion-humana`, §6).
+
+Variables de entorno: `RECORDS_CUSTODIA_BASE_URL` (default
+`http://localhost:8082`, mismo patrón que en `validacion-humana`/`extraccion`).
+
+Manejo de errores: `dominio.ErrorDeDominio` (texto no recibido en `Extraído`)
+→ 409; `ServicioNoDisponibleError` (`records-custodia` no responde o responde
+error) → 502, mismo criterio que `ServicioNoDisponibleException` en
+`validacion-humana` (§6, Kotlin) — aquí sin envolver una excepción Spring,
+`EnviadorDeSugerenciasHttp.enviar` atrapa `httpx.HTTPError` (fallos de
+transporte y respuestas no-2xx vía `raise_for_status()`) y la traduce.
+
+Prueba de integración honesta (T-45, para no repetir la brecha real que dejó
+`extraccion`/T-41b — ver nota en §11: `VerificadorDeAutorizacionHttp` nunca
+tuvo un test que verificara la forma exacta de su petición saliente, solo un
+doble en la capa de API): `tests/test_integracion.py` inyecta un
+`httpx.Client(transport=httpx.MockTransport(...))` en
+`EnviadorDeSugerenciasHttp` y verifica método, URL y cuerpo JSON exactos de la
+petición que construye, mismo criterio de honestidad que `IntegracionHttpTest`
+en `validacion-humana` (Kotlin, T-30) con `MockRestServiceServer`.
+`tests/test_api.py` sigue el patrón de dependency-injection con un doble
+(`_EnviadorDePrueba`) para probar la composición HTTP↔dominio sin red, mismo
+criterio que el resto de los contextos Python.

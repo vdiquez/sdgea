@@ -3,7 +3,14 @@ name = "clasificacion"
 version = "0.1.0"
 description = "Bounded context Clasificación (specs/003-clasificacion/spec.md)"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    # T-45: cliente HTTP real de EnviadorDeSugerenciasHttp (integracion.py)
+    # contra POST /sugerencias en records-custodia — sin persistencia propia,
+    # es la única dependencia externa de este contexto además de FastAPI.
+    "httpx>=0.28",
+]
 
 [dependency-groups]
 dev = [

@@ -597,25 +597,37 @@ re-descubrirlo o inventar persistencia que la spec no pide):
       `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL;
       pytest: eval-harness 4, normalizacion 40, extraccion 55,
       clasificacion 14).
-- [ ] T-45 RF-CL-001..010 — Servicio HTTP (FastAPI) para Clasificación, SIN
-      persistencia propia (ver nota arquitectónica arriba) — mismo patrón
-      que Validación Humana (T-29/T-30) pero en Python: cada endpoint
-      traduce un método de dominio y reenvía la sugerencia resultante a
-      records-custodia vía `POST /sugerencias` (cliente HTTP real,
-      `httpx`/`requests` como dependencia real, no dev). Endpoints mínimos:
-      recibir texto extraído + sugerencia de clasificación (FICTICIA) →
-      reenviar con `tipo="clasificacion"`; recibir sugerencia de
-      agrupamiento (FICTICIA) → reenviar con `tipo="agrupamiento"`; marcar
-      no clasificable (RF-CL-010). Variables de entorno:
-      `RECORDS_CUSTODIA_BASE_URL` (mismo patrón que
-      `NORMALIZACION_BASE_URL` en Validación Humana, T-38) y
-      `SERVER_PORT` (puerto siguiente disponible, 8087). Prueba de
-      integración con `MockRestServiceServer`-equivalente en Python
-      (`httpx.MockTransport` o `respx`) contra el POST real a
-      records-custodia, mismo criterio de honestidad que
-      `IntegracionHttpTest` en Validación Humana (T-30): no un doble que
-      nunca abre una conexión, sino algo que verifica la forma exacta de la
-      petición HTTP saliente.
+- [x] T-45 RF-CL-001..010 — Servicio HTTP (FastAPI) para Clasificación, SIN
+      persistencia propia (ver nota arquitectónica arriba), implementado
+      contra `specs/spec-infra-servicios.md` §12 (nueva). Tres endpoints:
+      `POST /clasificaciones` (acepta una o más candidatas de serie/subserie
+      en un solo cuerpo — necesario para que RF-CL-003 pueda ordenar por
+      confianza descendente sobre un conjunto conocido, ya que el contexto no
+      guarda estado entre peticiones), `POST /agrupamientos` (una sola
+      candidata, ningún RF exige ranking de expedientes) y
+      `POST /no-clasificables` (RF-CL-010, no reenvía nada — su destino es
+      "Operador"/reporte, no Records/Custodia, según la tabla de salidas §4
+      de la spec). Cada endpoint compone las funciones puras de
+      `dominio.py` (T-44: `recibir_texto_extraido`, `clasificar`,
+      `ordenar_por_confianza`, `agrupar`, `marcar_no_clasificable`,
+      `a_sugerencia_saliente_de_*`) y reenvía con `EnviadorDeSugerenciasHttp`
+      (`integracion.py`, cliente `httpx` real) contra `POST /sugerencias` de
+      records-custodia, con el cuerpo camelCase exacto que espera
+      (`RecibirSugerenciaRequest`). Variable de entorno:
+      `RECORDS_CUSTODIA_BASE_URL`. Manejo de errores: `ErrorDeDominio` → 409,
+      `ServicioNoDisponibleError` (records-custodia no responde) → 502,
+      mismo criterio que `validacion-humana`.
+      TDD: 3 tests nuevos de integración (`tests/test_integracion.py`, con
+      `httpx.MockTransport` — verifica método/URL/cuerpo JSON exactos de la
+      petición saliente, no un doble que nunca abre conexión, cerrando la
+      brecha real que dejó `extraccion`/T-41b sin este tipo de prueba) + 7
+      tests nuevos de API (`tests/test_api.py`, con doble vía
+      `dependency_overrides`), 24 en el módulo junto con los 14 de dominio
+      (T-44). Confirmado en rojo quitando la llamada a `enviador.enviar` en
+      `POST /clasificaciones` (3 tests fallan) antes de restaurarla en verde.
+      `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL;
+      pytest: eval-harness 4, normalizacion 40, extraccion 55,
+      clasificacion 24).
 - [ ] T-46 Dockerfile real de clasificacion + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón Python
       que T-35/T-42 pero SIN Postgres propio (mismo criterio que

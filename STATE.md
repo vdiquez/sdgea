@@ -1,9 +1,9 @@
 # STATE
 Fase: F3 — seis bounded contexts completos de punta a punta (captura-ingesta,
 records-custodia, seguridad-acceso, validación humana, normalización,
-extracción); Clasificación en curso: T-44 (dominio) completa, T-45..T-47
-(servicio HTTP, Docker, Postman) son las próximas tareas `- [ ]` abiertas en
-TODO.md. Ver plan-ejecucion-agentica.md.
+extracción); Clasificación en curso: T-44 (dominio) y T-45 (servicio HTTP)
+completas, T-46..T-47 (Docker, Postman) son las próximas tareas `- [ ]`
+abiertas en TODO.md. Ver plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -1761,3 +1761,88 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   persistencia propia, reenviando sugerencias a records-custodia vía
   `POST /sugerencias` con un cliente HTTP real) es la próxima tarea abierta
   en TODO.md.
+
+- [x] T-45 RF-CL-001..010 — Servicio HTTP (FastAPI) para Clasificación, SIN
+  persistencia propia, contra `specs/spec-infra-servicios.md` §12 (nueva).
+  Mismo criterio arquitectónico que Validación Humana (Kotlin, T-30) pero en
+  Python: sin `persistencia.py`, cada endpoint compone las funciones puras de
+  `dominio.py` (T-44) y reenvía el resultado a records-custodia con un
+  cliente HTTP real (`httpx`), nunca guarda nada localmente.
+  Diseño de los tres endpoints (`contexts/clasificacion/api.py`):
+  - `POST /clasificaciones` (RF-CL-001/002/003/004/008/009): acepta un texto
+    y una lista de candidatas de serie/subserie en un solo cuerpo — decisión
+    deliberada, no un capricho de diseño: RF-CL-003 exige que, "cuando existe
+    más de una candidata razonable", las sugerencias se expongan ordenadas
+    por confianza descendente, y como este contexto no guarda estado entre
+    peticiones (T-44), el único momento en que puede ordenar un conjunto de
+    candidatas es dentro de la misma petición que las recibe. El endpoint
+    llama `recibir_texto_extraido` una vez, `clasificar` una vez por
+    candidata, `ordenar_por_confianza` sobre el resultado, y reenvía cada
+    `SugerenciaSaliente` ya ordenada a records-custodia en ese mismo orden —
+    tanto la respuesta HTTP como las llamadas salientes preservan el orden
+    descendente.
+  - `POST /agrupamientos` (RF-CL-001/005/006/008): una sola candidata por
+    petición — a diferencia de RF-CL-003, ningún RF de agrupamiento exige
+    ranking de expedientes candidatos, así que no se replicó el diseño de
+    lista+orden del endpoint anterior sin que un RF lo pidiera.
+  - `POST /no-clasificables` (RF-CL-010): no reenvía nada a records-custodia.
+    La tabla de salidas de la spec (§4) nombra el destino de esta marca como
+    "Operador" (reporte), no Records/Custodia; sin persistencia propia, la
+    respuesta HTTP síncrona con la `MarcaNoClasificable` es ese reporte — no
+    se inventó un almacén ni un canal de notificación que la spec no pide.
+  `integracion.py` (`EnviadorDeSugerenciasHttp`): construye el cuerpo
+  camelCase exacto que espera `POST /sugerencias` de records-custodia
+  (`documentoId`/`tipo`/`contenidoPropuesto`/`modeloId`/`evidencia`/
+  `confianza`/`fecha`, ver `http/Dtos.kt::RecibirSugerenciaRequest`) — mismo
+  criterio que `VerificadorDeAutorizacionHttp` en extraccion (T-41b) porque
+  Spring/Jackson serializa así del lado receptor. Variable de entorno:
+  `RECORDS_CUSTODIA_BASE_URL` (default `http://localhost:8082`). Cualquier
+  fallo de transporte o respuesta no-2xx (`httpx.HTTPError`, incluido
+  `raise_for_status()`) se traduce a `ServicioNoDisponibleError`, mapeado a
+  502 en `api.py` — mismo criterio que `ServicioNoDisponibleException` en
+  validacion-humana (Kotlin, T-30/§6). `dominio.ErrorDeDominio` (texto no
+  recibido en `Extraído`) sigue mapeando a 409, mismo patrón que el resto de
+  contextos Python.
+  **Decisión deliberada para no repetir una brecha real de T-41b**: el
+  `TODO.md` de esta tarea señalaba explícitamente que `extraccion`
+  (`VerificadorDeAutorizacionHttp`) nunca tuvo un test que verificara la
+  forma exacta de su petición HTTP saliente — sus tests de API solo
+  sustituían el cliente por un doble vía `dependency_overrides`, sin que
+  ningún test ejercitara jamás el cliente HTTP real. Aquí
+  `EnviadorDeSugerenciasHttp` acepta un `httpx.Client` inyectable (parámetro
+  de constructor opcional, default `httpx.Client()` real) precisamente para
+  poder sustituir su transporte en pruebas sin tocar la lógica de producción
+  — `tests/test_integracion.py` inyecta
+  `httpx.Client(transport=httpx.MockTransport(...))` y verifica método, URL
+  y cuerpo JSON exactos de la petición que el cliente real construye, mismo
+  criterio de honestidad que `IntegracionHttpTest` en validacion-humana con
+  `MockRestServiceServer`. No se añadió `respx` como dependencia nueva:
+  `httpx.MockTransport` (parte de `httpx`, ya dependencia real desde T-44)
+  alcanza para este nivel de verificación sin inventar una dependencia
+  adicional.
+  No se definió un puerto/ABC `EnviadorDeSugerencias` en `dominio.py` (a
+  diferencia de `VerificadorDeAutorizacion` en extraccion): ese puerto existe
+  ahí porque una función de dominio (`confirmar_extraccion`) invoca el
+  verificador como parte de una regla de negocio (P-01/P-03). Aquí ninguna
+  función de `dominio.py` invoca el envío — es puramente orquestación de la
+  capa HTTP (`api.py` llama a las funciones puras de dominio y luego, por
+  separado, al enviador) — añadir una abstracción en el dominio para algo que
+  el dominio nunca usa habría sido una capa sin propósito.
+  TDD: 3 tests nuevos de integración (`tests/test_integracion.py`, forma
+  exacta de la petición + dos casos de fallo: respuesta 500 y error de
+  conexión) + 7 tests nuevos de API (`tests/test_api.py`, con
+  `_EnviadorDePrueba`/`_EnviadorQueFalla` vía `dependency_overrides`, mismo
+  patrón que `_VerificadorDePrueba` en extraccion) cubriendo los tres
+  endpoints y el orden descendente de RF-CL-003 extremo a extremo (petición →
+  respuesta → orden de las llamadas salientes) — 24 tests en el módulo junto
+  con los 14 de dominio (T-44), todos verdes en el primer intento. Verificado
+  el poder discriminante de los tests nuevos: se quitó temporalmente la
+  llamada a `enviador.enviar(...)` dentro de `POST /clasificaciones` y 3
+  tests fallaron correctamente (confirmando que si el reenvío no ocurriera,
+  los tests lo detectarían) antes de restaurar el código y confirmar verde de
+  nuevo. `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL, 25
+  tareas up-to-date; pytest: eval-harness 4, normalizacion 40, extraccion 55,
+  clasificacion 24, todos passed).
+  Siguiente paso: T-46 (Dockerfile real de clasificacion + wiring en
+  docker-compose, SIN Postgres propio) es la próxima tarea abierta en
+  TODO.md.
