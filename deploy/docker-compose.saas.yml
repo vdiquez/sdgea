@@ -5,15 +5,16 @@
 # embeddings, inferencia LLM, índice vectorial, índice léxico), nunca el código de
 # orquestación. Dockerfiles reales ya wireados para captura-ingesta,
 # records-custodia (T-18), seguridad-acceso (T-26), validacion-humana (T-31),
-# normalizacion (T-35) y extraccion (T-42, specs/spec-infra-servicios.md); el
-# resto de contextos los suma cuando tengan código. validacion-humana no tiene
-# Postgres propio (T-30: orquestador HTTP sobre records-custodia y
-# seguridad-acceso, sin persistencia propia). normalizacion y extraccion son
-# contenedores Python/FastAPI (build en dos etapas con `uv`, mismo patrón que
-# los Dockerfiles Kotlin pero con `uv sync --no-dev` en vez de `-x test`).
+# normalizacion (T-35), extraccion (T-42) y clasificacion (T-46,
+# specs/spec-infra-servicios.md); el resto de contextos los suma cuando tengan
+# código. validacion-humana y clasificacion no tienen Postgres propio (T-30:
+# orquestador HTTP sobre records-custodia y seguridad-acceso; T-46: orquestador
+# HTTP sobre records-custodia — ninguno mantiene persistencia propia).
+# normalizacion, extraccion y clasificacion son contenedores Python/FastAPI
+# (build en dos etapas con `uv`, mismo patrón que los Dockerfiles Kotlin pero
+# con `uv sync --no-dev` en vez de `-x test`).
 #
 # TODO por contexto, cuando exista su Dockerfile:
-#   - contexts/clasificacion       (Python/FastAPI)
 #   - contexts/enriquecimiento     (Python/FastAPI)
 #   - contexts/indexacion-busqueda (Python/FastAPI)
 #
@@ -143,6 +144,19 @@ services:
     depends_on:
       - postgres
       - seguridad-acceso
+
+  # T-44/T-45: tercer contenedor Python/FastAPI. Sin Postgres propio (mismo
+  # criterio que validacion-humana): orquestador HTTP puro que reenvía cada
+  # sugerencia a POST /sugerencias de records-custodia.
+  clasificacion:
+    build:
+      context: ..
+      dockerfile: contexts/clasificacion/Dockerfile
+    environment:
+      RECORDS_CUSTODIA_BASE_URL: http://records-custodia:8082
+      SERVER_PORT: "8087"
+    depends_on:
+      - records-custodia
 
 volumes:
   postgres-data:

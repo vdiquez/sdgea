@@ -31,3 +31,7 @@ services:
   extraccion:
     ports:
       - "8086:8086"
+
+  clasificacion:
+    ports:
+      - "8087:8087"

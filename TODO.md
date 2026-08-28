@@ -647,12 +647,41 @@ re-descubrirlo o inventar persistencia que la spec no pide):
       `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL;
       pytest: eval-harness 4, normalizacion 40, extraccion 55,
       clasificacion 27).
-- [ ] T-46 Dockerfile real de clasificacion + wiring en
+- [x] T-46 Dockerfile real de clasificacion + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón Python
       que T-35/T-42 pero SIN Postgres propio (mismo criterio que
       validacion-humana, T-31, sin `DB_HOST`/etc. — solo
       `RECORDS_CUSTODIA_BASE_URL` y `depends_on: records-custodia`); puerto
-      siguiente disponible (8087) en `docker-compose.local-ports.yml`.
+      8087 en `docker-compose.local-ports.yml`.
+      **Hallazgo real antes de escribir el Dockerfile**: `main.py` seguía
+      siendo el stub sin tocar de la etapa 0 (`print("Hello from
+      clasificacion!")`) — T-44/T-45 nunca lo tocaron porque los tests usan
+      `TestClient`/`MockTransport` importando `api.app` directo, sin pasar
+      nunca por `main.py`. Sin corregirlo, el `ENTRYPOINT` del contenedor
+      habría impreso un saludo y salido, sin servir HTTP. Corregido al mismo
+      patrón que `contexts/normalizacion/main.py` y
+      `contexts/extraccion/main.py`: `uvicorn.run(app, ...,
+      port=int(os.environ.get("SERVER_PORT", "8087")))`.
+      `contexts/clasificacion/Dockerfile`: build en dos etapas con `uv sync
+      --no-dev --frozen` (mismo patrón que normalizacion/extraccion), pero
+      sin `persistencia.py` en la etapa final — este contexto no tiene tabla
+      propia (specs/003-clasificacion/spec.md §3). Wiring en
+      `docker-compose.{saas,onprem}.yml`: sin `DB_HOST`/Postgres, solo
+      `RECORDS_CUSTODIA_BASE_URL` y `depends_on: [records-custodia]` — mismo
+      criterio que `validacion-humana` (T-31).
+      T-46 es infraestructura de empaquetado (como T-18/T-35/T-42), no un RF
+      con Dado/Cuando/Entonces propio. Verificación de honestidad: `./test.sh`
+      completo en verde tras el cambio (Gradle 25 tareas BUILD SUCCESSFUL;
+      pytest: eval-harness 4, normalizacion 40, extraccion 55, clasificacion
+      27, todos passed) confirma que el fix de `main.py` y el Dockerfile no
+      rompieron nada existente; los tres `docker-compose*.yml` se revisaron
+      línea por línea contra la indentación/estructura ya usada por los otros
+      seis servicios (no se pudo correr un parser YAML automatizado ni
+      `docker compose config` en esta sesión — `python`/`python3` sueltos y
+      `docker` quedan fuera del conjunto de comandos permitido; mismo límite
+      real que T-16..T-18/T-35/T-42 documentaron para Docker). Falta la
+      verificación de punta a punta con Docker/Postman real (junto con T-47)
+      cuando alguien la corra en un entorno con Docker disponible.
 - [ ] T-47 Colección Postman con el ciclo completo de Clasificación,
       mismo patrón que T-36/T-43: custodiar un documento en records-custodia
       → enviar una sugerencia de clasificación FICTICIA vía Clasificación →

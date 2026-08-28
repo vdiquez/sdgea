@@ -1,9 +1,9 @@
 # STATE
 Fase: F3 — seis bounded contexts completos de punta a punta (captura-ingesta,
 records-custodia, seguridad-acceso, validación humana, normalización,
-extracción); Clasificación en curso: T-44 (dominio) y T-45 (servicio HTTP)
-completas, T-46..T-47 (Docker, Postman) son las próximas tareas `- [ ]`
-abiertas en TODO.md. Ver plan-ejecucion-agentica.md.
+extracción); Clasificación en curso: T-44 (dominio), T-45 (servicio HTTP) y
+T-46 (Dockerfile + wiring en docker-compose) completas, T-47 (Postman) es la
+próxima tarea `- [ ]` abierta en TODO.md. Ver plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -1925,3 +1925,53 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   el "OK" final. T-45 (con su corrección) queda cerrada.
   Siguiente paso: T-46 (Dockerfile real de clasificacion + wiring en
   docker-compose, SIN Postgres propio).
+
+- 2026-08-28 — T-46: Dockerfile real de clasificacion + wiring en
+  `deploy/docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón Python
+  en dos etapas que `contexts/normalizacion/Dockerfile` y
+  `contexts/extraccion/Dockerfile` (`uv sync --directory contexts/clasificacion
+  --no-dev --frozen`), pero sin `persistencia.py` en la etapa final — este
+  contexto no tiene tabla propia (specs/003-clasificacion/spec.md §3, ver nota
+  arquitectónica al principio de la sección "Clasificación" en TODO.md).
+  **Hallazgo real antes de escribir el Dockerfile**: `contexts/clasificacion/
+  main.py` seguía siendo el stub sin tocar de la etapa 0
+  (`print("Hello from clasificacion!")`). T-44 (dominio) y T-45 (servicio
+  HTTP) nunca lo tocaron porque sus tests importan `api.app`/`dominio`/
+  `integracion` directo (`TestClient`, `httpx.MockTransport`), sin pasar
+  nunca por `main.py` — nada en la suite ejercitaba el punto de entrada real.
+  Sin corregirlo, el `ENTRYPOINT` del contenedor habría impreso un saludo y
+  salido inmediatamente, sin servir ningún endpoint HTTP: el Dockerfile
+  habría sido "real" en apariencia pero el contenedor no habría funcionado.
+  Corregido al mismo patrón que `normalizacion`/`extraccion`:
+  `uvicorn.run(app, host="0.0.0.0",
+  port=int(os.environ.get("SERVER_PORT", "8087")))`, importando `app` desde
+  `api.py`.
+  Wiring en `docker-compose.{saas,onprem}.yml`: servicio `clasificacion` sin
+  `DB_HOST`/Postgres — solo `RECORDS_CUSTODIA_BASE_URL:
+  http://records-custodia:8082` y `SERVER_PORT: "8087"`, `depends_on:
+  [records-custodia]`, mismo criterio "sin base de datos propia" que
+  `validacion-humana` (T-31). Puerto 8087 (siguiente disponible tras
+  8081..8086) mapeado en `docker-compose.local-ports.yml`. Sin `ports:` en
+  saas/onprem, mismo criterio de red interna que los otros seis servicios.
+  Cabeceras de los tres `docker-compose*.yml` actualizadas para no dejar
+  `clasificacion` en la lista de "TODO por contexto".
+  T-46 es infraestructura de empaquetado (como T-18/T-35/T-42), no un RF con
+  Dado/Cuando/Entonces propio — verificación por honestidad en su lugar:
+  `./test.sh` completo en verde tras el cambio (Gradle 25 tareas BUILD
+  SUCCESSFUL; pytest: eval-harness 4, normalizacion 40, extraccion 55,
+  clasificacion 27, todos passed) confirma que el fix de `main.py` y el
+  Dockerfile nuevo no rompieron nada existente. **Límite real de esta
+  verificación, documentado explícitamente**: a diferencia de T-18 (que sí
+  pudo parsear los `docker-compose*.yml` con PyYAML), en esta sesión
+  invocar `python`/`python3` sueltos (fuera de `./test.sh`) y `docker`
+  requieren aprobación que no está disponible en este modo — se verificó la
+  sintaxis y el wiring de los tres YAML por inspección línea por línea contra
+  la indentación y estructura ya usada por los otros seis servicios, no con
+  un parser automatizado. Ni la imagen ni `docker compose up` reales se
+  construyeron ni se corrieron aquí (mismo límite que T-16..T-18/T-35/T-42
+  documentaron para Docker). Falta esa verificación de punta a punta, junto
+  con T-47 (colección Postman), cuando alguien la corra en un entorno con
+  Docker disponible.
+  Siguiente paso: T-47 (colección Postman con el ciclo completo de
+  Clasificación, verificado con Docker/Newman reales) es la próxima tarea
+  abierta en TODO.md.

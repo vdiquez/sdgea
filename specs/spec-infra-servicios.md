@@ -394,6 +394,7 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
 | RF-VH-001/002/010/009 ampliados (cola de límites; correcciones pendientes de re-revisión) | Decisión de Victor, 2026-08-27 ("Si, sigamos con T-39"), TODO.md T-39 |
 | RF-EX-011 exige verificar autorización real (`VerificadorDeAutorizacion` + `POST /autorizacion`) | VETO real de Codex sobre commit `cf93d84`, ver `REVIEW.md` y `QUESTIONS.md` 2026-08-27; P-01, P-03 |
 | `clasificacion` como orquestador HTTP sin persistencia propia, Python/FastAPI | Decisión de Victor, 2026-08-28 ("Sigamos con Clasificación"); `specs/003-clasificacion/spec.md` §3, TODO.md T-45 |
+| Dockerfile real de `clasificacion` + wiring en docker-compose, sin Postgres propio, puerto 8087 | TODO.md T-46; mismo criterio que `validacion-humana` (T-31) para el empaquetado sin base de datos propia |
 
 ## 10. Decisiones pendientes / preguntas abiertas
 
@@ -559,7 +560,8 @@ Sin mapeo de persistencia: no hay tablas propias de este contexto (mismo
 criterio que `validacion-humana`, §6).
 
 Variables de entorno: `RECORDS_CUSTODIA_BASE_URL` (default
-`http://localhost:8082`, mismo patrón que en `validacion-humana`/`extraccion`).
+`http://localhost:8082`, mismo patrón que en `validacion-humana`/`extraccion`);
+`SERVER_PORT` (default `8087`, siguiente puerto disponible tras `extraccion`).
 
 Manejo de errores: `dominio.ErrorDeDominio` (texto no recibido en `Extraído`)
 → 409; `ServicioNoDisponibleError` (`records-custodia` no responde o responde
@@ -579,3 +581,12 @@ en `validacion-humana` (Kotlin, T-30) con `MockRestServiceServer`.
 `tests/test_api.py` sigue el patrón de dependency-injection con un doble
 (`_EnviadorDePrueba`) para probar la composición HTTP↔dominio sin red, mismo
 criterio que el resto de los contextos Python.
+
+Dockerfile (T-46): tercer contenedor Python/FastAPI del proyecto, mismo build
+en dos etapas con `uv` que `normalizacion`/`extraccion` — sin `persistencia.py`
+ni Postgres, mismo criterio "sin base de datos propia" que
+`contexts/validacion-humana/Dockerfile`. Wireado en
+`deploy/docker-compose.{saas,onprem}.yml` (variables `RECORDS_CUSTODIA_BASE_URL`,
+`SERVER_PORT`, `depends_on: records-custodia`, sin `ports:`) y en
+`deploy/docker-compose.local-ports.yml` (`8087:8087`, solo para Postman/curl
+desde el host).
