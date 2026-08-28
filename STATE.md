@@ -2075,3 +2075,25 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   aprobación ad-hoc, debe levantar el stack real y correr `npx newman run`
   dos veces seguidas sin fallos sobre la colección ya redactada antes de
   comitear T-47.
+
+- 2026-08-28 — T-47: cuarta sesión, mismo resultado. `docker compose version`
+  y `npx --version` devuelven "This command requires approval" de forma
+  inmediata (probado uno a la vez, sin encadenar con `&&`, para descartar que
+  el bloqueo fuera un artefacto de comando compuesto — no lo era: el intento
+  suelto de `docker compose version` también se rechaza igual). Confirmado
+  contra `.claude/settings.local.json`: `permissions.allow` sigue sin ningún
+  patrón `docker compose`/`npx`, solo `Bash(docker --version)` y
+  `Bash(docker pull *)` — sin humano presente en esta sesión headless para
+  concederlo ad-hoc. Un intento de cada variante, sin reintentar tras la
+  negativa. Único trabajo real disponible sin Docker: un `REVIEW.md` de Codex
+  sobre el commit `5b89fc1` (OK, sin VETO) que quedó sin comitear — comiteado
+  ahora (`231c463`), mismo patrón que `abc9d9d`/`4d11854`/`457595c`. No se
+  volvió a correr `./test.sh` porque no se tocó ningún archivo de código ni de
+  test. Los cambios de Postman de T-47 (carpeta "8. Clasificacion", peticiones
+  68-74) siguen sin comitear a propósito. `TODO.md` T-47 permanece `- [ ]` sin
+  cambios de fondo — sigue siendo una limitación de permisos de herramienta,
+  no una ambigüedad de negocio/legal.
+  Siguiente paso: sin cambios — sigue esperando una sesión con `docker
+  compose`/`npx` aprobados (por allowlist o por un humano presente) para
+  levantar el stack real y correr `npx newman run` dos veces seguidas sin
+  fallos sobre la colección ya redactada antes de comitear T-47.
