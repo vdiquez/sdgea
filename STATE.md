@@ -2042,3 +2042,36 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   cambios de fondo.
   Siguiente paso: sin cambios — sigue esperando una sesión con `docker
   compose`/`npx` aprobados para completar la verificación de punta a punta.
+
+- 2026-08-28 — T-47: tercera sesión, mismo resultado, con un dato nuevo.
+  `docker --version` y `docker ps` funcionan (el daemon responde, sin
+  contenedores corriendo); `docker compose version`, `docker-compose
+  --version` (binario standalone, variante distinta probada por primera vez)
+  y `npx --version` devuelven "This command requires approval" de forma
+  inmediata, sin humano presente para concederla — un intento de cada
+  variante, sin reintentar tras la negativa, según la instrucción de no
+  repetir la misma llamada ante una denegación. Dato nuevo que explica el
+  patrón: `.claude/settings.local.json` (`permissions.allow`) solo autoriza
+  `Bash(docker --version)` y `Bash(docker pull *)` para Docker — ningún
+  patrón cubre `docker compose`, `docker-compose` ni `npx`, así que el
+  bloqueo no es un artefacto puntual del entorno sino una restricción de
+  permisos explícita y estable entre sesiones; una sesión headless no tiene
+  forma de concederse esa aprobación a sí misma.
+  Único trabajo real disponible sin Docker: quedaba un `REVIEW.md` escrito
+  por Codex sobre el commit `65574aa` (OK, "T-47 sigue bloqueada") sin
+  comitear en el árbol de trabajo — comiteado ahora (`457595c`), mismo
+  patrón que `abc9d9d`/`4d11854`. Los cambios de Postman de T-47 (carpeta
+  "8. Clasificacion", peticiones 68-74, ya revisados línea por línea en la
+  entrada de 2026-08-28 anterior contra `specs/spec-infra-servicios.md` §12)
+  siguen sin comitear a propósito — no se ha corrido la verificación de
+  punta a punta que la propia tarea exige. `./test.sh` no se volvió a correr
+  en esta sesión porque no se tocó ningún archivo de código ni de test.
+  `TODO.md` T-47 permanece `- [ ]` sin cambios de fondo — sigue siendo una
+  limitación de permisos de herramienta, no una ambigüedad de negocio/legal,
+  así que no aplica `- [?]` ni `QUESTIONS.md`.
+  Siguiente paso: sin cambios de fondo — una sesión con `Bash(docker compose
+  *)` y `Bash(npx *)` (o equivalentes) añadidos a
+  `.claude/settings.local.json`, o con un humano presente para conceder la
+  aprobación ad-hoc, debe levantar el stack real y correr `npx newman run`
+  dos veces seguidas sin fallos sobre la colección ya redactada antes de
+  comitear T-47.
