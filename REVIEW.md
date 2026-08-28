@@ -1,55 +1,54 @@
-# Revisión de `1435d4b593275cb9f0af5034c787037a3a777ca7`
+# Revision of `2f3312ae25c0fbfe792e32c51a5ff7e9288556c5`
 
-## Resultado: OK (sin VETO)
+## Result: OK (no VETO)
 
-El commit modifica exclusivamente `STATE.md`: documenta la sexta sesión en la
-que T-47 no pudo usar `docker compose` ni `npx` y conserva la tarea abierta.
-No cambia código, pruebas, especificaciones ni comportamiento del producto.
+The commit completes T-47: it updates coordination documentation and adds the
+Postman collection for the Classification vertical slice. It changes neither
+`specs/` nor production code.
 
-## Contraste con la spec y la constitución
+## Contrast with `specs/003-clasificacion/spec.md`
 
-- **Contexto aplicable:** Clasificación, `specs/003-clasificacion/spec.md`,
-  en particular RF-CL-004, RF-CL-006 y RF-CL-010. `TODO.md` mantiene T-47
-  como `- [ ]` y exige Docker real y dos ejecuciones consecutivas de Newman
-  sin fallos antes de comitear la colección.
-- **P-01 — conforme.** No hay componente probabilístico ni escritura de
-  estado modificados. El registro conserva correctamente que las salidas de
-  Clasificación son sugerencias que cruzan la capa anticorrupción; su única
-  materialización corresponde a una decisión humana.
-- **P-03 — conforme.** El diff no incorpora ni modifica el consumo de una
-  capacidad externa, puertos, adaptadores o implementaciones concretas. Solo
-  registra la limitación local para ejecutar herramientas de verificación.
-- **P-08 — conforme.** No se añade ni se ejecuta una transición de estado.
-  Por tanto, no existe un evento de auditoría nuevo exigible. La spec asigna
-  el evento de recepción de una sugerencia a Records/Custodia, no a este
-  productor sin estado.
+- Folder 8 exercises RF-CL-001..006 and RF-CL-010: it custodizes a document,
+  posts two FICTITIOUS candidates, verifies descending ranking (RF-CL-003),
+  verifies their arrival at Records/Custodia as `Sugerencia`, groups it, and
+  verifies that `no-clasificable` does not forward a suggestion.
+- **P-01: compliant.** The collection reaches Records/Custodia solely through
+  `POST /sugerencias`. Classification depends on the `EnviadorDeSugerencias`
+  port; its HTTP adapter calls that endpoint. In Records/Custodia,
+  `CapaAnticorrupcionSugerencias.recibir` stores a `Sugerencia` without
+  modifying the document. Materialization remains the human-decision operation
+  of RF-RC-004. The candidates are explicitly supplied by the fictitious caller;
+  no real classifier is implemented.
+- **P-03: compliant.** The external Records/Custodia capability is behind the
+  project-owned `EnviadorDeSugerencias` protocol. `api.py` depends on that
+  interface and `EnviadorDeSugerenciasHttp` is an interchangeable adapter. The
+  commit adds no direct external consumption.
+- **P-08: compliant in the implementation.** Each suggestion reception goes
+  through the anti-corruption layer, which appends `SUGERENCIA_RECIBIDA` with
+  model actor, date, and before/after state; its transactional wrapper makes
+  that append atomic with storage. Classification has no state of its own to
+  audit. The new Postman flow does not yet assert those events, so T-48 was
+  added to make that end-to-end evidence explicit.
 
-## Specs, referencias y umbrales
+## Specs, references, and thresholds
 
-No se modifica ningún archivo bajo `specs/`; no aplica el control adicional
-de referencias normativas y umbrales. Los números añadidos son identificadores
-operativos existentes (T-47, hashes y peticiones 68–74), no valores de umbral
-ni referencias normativas nuevas.
+No file under `specs/` changed, so the additional normative-reference and
+threshold review is inapplicable. The diff introduces no Acuerdo, Ley, Decreto,
+ISO reference, or numeric threshold.
 
-## Tests y honestidad
+## Tests and honesty
 
-No cambian código ni pruebas, de modo que no hay tests nuevos que contrastar
-con criterios Dado/Cuando/Entonces. El registro es honesto: dice que
-`./test.sh` no se repitió, no presenta como hecha la comprobación end-to-end y
-mantiene la colección sin comitear hasta realizar las dos corridas reales de
-Newman. Esto coincide con T-47.
+The added test is an HTTP integration collection, not a self-asserting fake:
+it chains responses across both services and checks content, order, type, and
+counts. Its assertions are consistent with the covered Given/When/Then criteria;
+no passing condition is rigged. Its P-08 end-to-end coverage is incomplete, not
+misrepresented, and is tracked as T-48.
 
-## Verificación realizada
+## Verification performed
 
-- `git show HEAD`, `git diff-tree` y `git diff --check HEAD^ HEAD` confirman
-  que solo cambió `STATE.md` y no hay errores de espacio.
-- `TODO.md` exige Docker real y dos corridas consecutivas de Newman para T-47;
-  permite explícitamente dejar el trabajo sin comitear si el entorno no puede
-  usar Docker o `npx`.
-- La spec exige que clasificación y agrupamiento entren a Records/Custodia como
-  `Sugerencia` mediante la capa anticorrupción, sin materializar estado;
-  Records/Custodia emite la auditoría de recepción.
-- `.claude/settings.local.json` permite `docker --version` y `docker pull *`,
-  pero no `docker compose` ni `npx`, consistente con el bloqueo registrado.
-- Se preservaron los cambios no comiteados de Postman y la caché local, ajenos
-  al commit revisado.
+- Read `AGENTS.md`, the constitution, `STATE.md`, the full commit diff, and
+  the Classification spec.
+- `git diff --check HEAD^ HEAD` returned no whitespace errors.
+- Both modified Postman JSON files parse successfully with `ConvertFrom-Json`.
+- Local pytest execution was unavailable: this environment denied `python.exe`
+  and does not expose `pytest`. This has not been represented as a suite run.

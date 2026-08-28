@@ -702,3 +702,22 @@ re-descubrirlo o inventar persistencia que la spec no pide):
       records-custodia no cambia. Segundo flujo end-to-end real de solo dos
       servicios (Clasificación no tiene persistencia propia). `postman/
       README.md` actualizado (conteo de endpoints, carpeta 8, verificación).
+- [ ] T-48 P-08 — records-custodia todavía NO expone ningún endpoint para
+      consultar su propia bitácora de auditoría (a diferencia de
+      normalizacion/extraccion, que sí tienen `GET /eventos-auditoria` sobre
+      su propio contexto — verificado: no existe ningún `@GetMapping` de
+      eventos ni un método de lectura sobre `AlmacenDeEventosJpa` en
+      `contexts/records-custodia`). Codex propuso originalmente esta tarea
+      como "extender la colección Postman para consultar
+      `GET /eventos-auditoria`" asumiendo que ese endpoint ya existía en
+      records-custodia — no es así; corregido aquí el alcance real: (1)
+      añadir un método de consulta a `BitacoraAuditoria`/`AlmacenDeEventosJpa`
+      (2) nuevo endpoint HTTP `GET /eventos-auditoria` en records-custodia,
+      TDD contra un test de Gradle nuevo (3) extender la colección Postman
+      (carpeta 8, después de la petición 74) para verificar que los eventos
+      `SUGERENCIA_RECIBIDA` de clasificación/agrupamiento aparecen
+      atribuibles al `modeloId` ficticio correspondiente. Deriva de P-08 de
+      la constitución y de `specs/003-clasificacion/spec.md` §4 (la capa
+      anticorrupción ya emite el evento; falta poder leerlo). No bloquea
+      T-47 (ya cerrada y verificada) — es una tarea de records-custodia, no
+      de Clasificación.
