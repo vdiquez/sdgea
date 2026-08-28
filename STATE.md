@@ -1846,3 +1846,44 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Siguiente paso: T-46 (Dockerfile real de clasificacion + wiring en
   docker-compose, SIN Postgres propio) es la próxima tarea abierta en
   TODO.md.
+
+- 2026-08-28 — T-45-corrección: VETO real de Codex sobre el commit de T-45
+  (`17642a7`), detectado por el loop headless (`./orquestador.sh loop`,
+  segunda iteración tras relanzar para Clasificación) y corregido
+  interactivamente. Dos hallazgos bloqueantes:
+  1. P-03 — el razonamiento de T-45 (arriba, "No se definió un puerto/ABC
+     EnviadorDeSugerencias... el dominio nunca usa [el envío]") resultó
+     equivocado: P-03 no exige que el *dominio* invoque la capacidad externa,
+     exige que la capa de *orquestación* (aquí, `api.py`) nunca conozca la
+     implementación concreta. `obtener_enviador()` devolvía y los
+     `Depends(...)` tipaban contra la clase concreta `EnviadorDeSugerenciasHttp`
+     directamente — sin interfaz propia, sin implementación intercambiable
+     posible. Corregido: nuevo puerto `dominio.EnviadorDeSugerencias`
+     (`Protocol`), mismo criterio que `VerificadorDeAutorizacion` en
+     extraccion (T-41b) aunque aquí ninguna función de dominio lo invoque —
+     el puerto vive en `dominio.py` únicamente para que `api.py` pueda
+     tipar contra él sin importar la clase concreta de `integracion.py`.
+  2. RF-CL-010 — `ClasificarRequest.candidatas` aceptaba lista vacía;
+     `POST /clasificaciones` respondía 201 con `[]`, sin reenviar ninguna
+     `Sugerencia` ni devolver una `MarcaNoClasificable`: un texto recibido
+     quedaba sin salida explícita, violando literalmente "nunca se descarta
+     en silencio". Corregido con una función pura nueva,
+     `dominio.exigir_al_menos_una_candidata`, que rechaza la lista vacía con
+     `ErrorDeDominio` (409) — sin inventar el criterio de negocio de qué
+     hace que un texto sea "no clasificable" (eso sigue `[CLARIFICAR]` en
+     spec §8); solo cierra el hueco de la API.
+  No requirió nueva decisión de Victor (`AskUserQuestion`): ambos hallazgos
+  son correcciones de consistencia contra patrones (P-03, "cero pérdida
+  silenciosa") ya ratificados en el proyecto, mismo criterio que la segunda
+  vuelta de VETO en T-40 (Extracción, `SugerenciaOcr`/`evidencia`).
+  TDD: 2 tests de dominio + 1 de API, confirmados en rojo
+  (`AttributeError`/`201 != 409`) antes de implementar; 27/27 tests verdes
+  después. `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL;
+  pytest: eval-harness 4, normalizacion 40, extraccion 55, clasificacion 27).
+  Nota operativa: Codex reportó en REVIEW.md que no pudo correr la suite en
+  su propio sandbox (Gradle sin permiso para su lock bajo `C:\.gradle`, uv
+  sin permiso para su caché bajo `AppData\Local\uv\cache`) — limitación del
+  entorno del loop headless, no del código; verificado aquí de forma
+  interactiva sin ese problema.
+  Siguiente paso: T-46 (Dockerfile real de clasificacion + wiring en
+  docker-compose, SIN Postgres propio).

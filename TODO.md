@@ -628,6 +628,25 @@ re-descubrirlo o inventar persistencia que la spec no pide):
       `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL;
       pytest: eval-harness 4, normalizacion 40, extraccion 55,
       clasificacion 24).
+- [x] T-45-corrección RF-CL-010 / P-03 — VETO real de Codex sobre commit
+      `17642a7` (ver REVIEW.md), corregido interactivamente sin requerir
+      nueva decisión de Victor (consistencia con un patrón ya ratificado, no
+      un fork de negocio nuevo): (1) P-03 — nuevo puerto
+      `dominio.EnviadorDeSugencias` (`Protocol`, mismo criterio que
+      `VerificadorDeAutorizacion` en extraccion/T-41b);
+      `EnviadorDeSugerenciasHttp` (`integracion.py`) ahora lo implementa
+      explícitamente; `api.py` (`obtener_enviador`, ambos `Depends(...)`)
+      tipa contra el puerto, nunca contra la clase concreta. (2) RF-CL-010 —
+      nueva función pura `dominio.exigir_al_menos_una_candidata`: rechaza
+      con `ErrorDeDominio` (409) una lista de candidatas vacía en
+      `POST /clasificaciones`, en vez de responder 201 con `[]` sin ninguna
+      salida explícita; no inventa el criterio de negocio de qué es "no
+      clasificable" (spec §8, sigue `[CLARIFICAR]`), solo cierra el hueco de
+      la API. TDD: 3 tests nuevos (2 de dominio + 1 de API), confirmados en
+      rojo antes de implementar; 27/27 tests del módulo en verde.
+      `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL;
+      pytest: eval-harness 4, normalizacion 40, extraccion 55,
+      clasificacion 27).
 - [ ] T-46 Dockerfile real de clasificacion + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón Python
       que T-35/T-42 pero SIN Postgres propio (mismo criterio que

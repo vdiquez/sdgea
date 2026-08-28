@@ -199,3 +199,16 @@ class TestCeroPerdidaSilenciosa:
         assert marca == MarcaNoClasificable(
             documento_id="documento-1", razon="Texto extraído vacío.", actor="clasificador-ficticio-v1", fecha=FECHA
         )
+
+    # VETO real de Codex sobre commit 17642a7 (ver REVIEW.md): una lista de
+    # candidatas vacía no debe producir 201 con `[]` sin ninguna salida
+    # explícita — viola literalmente "nunca se descarta en silencio".
+    def test_exigir_al_menos_una_candidata_rechaza_lista_vacia(self):
+        with pytest.raises(ErrorDeDominio):
+            dominio.exigir_al_menos_una_candidata([])
+
+    def test_exigir_al_menos_una_candidata_devuelve_la_lista_intacta_si_no_esta_vacia(self):
+        texto = _texto_disponible()
+        sugerencia = clasificar(texto, 1, "Serie A", "Subserie A1", 0.8, ["e1"], "modelo-1", FECHA)
+
+        assert dominio.exigir_al_menos_una_candidata([sugerencia]) == [sugerencia]

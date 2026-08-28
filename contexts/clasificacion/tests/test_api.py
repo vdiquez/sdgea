@@ -78,6 +78,17 @@ class TestClasificar:
         assert response.json()["error"]
         assert enviador.enviadas == []
 
+    # VETO real de Codex sobre commit 17642a7 (ver REVIEW.md): RF-CL-010
+    # exige que todo texto recibido produzca al menos una sugerencia o quede
+    # marcado explícitamente "no clasificable" — nunca ninguna de las dos
+    # cosas en silencio; `candidatas=[]` no debe devolver 201 con `[]`.
+    def test_post_clasificaciones_con_candidatas_vacias_responde_409_y_no_reenvia_nada(self, client, enviador):
+        response = client.post("/clasificaciones", json={"texto": _texto(), "candidatas": []})
+
+        assert response.status_code == 409
+        assert response.json()["error"]
+        assert enviador.enviadas == []
+
     def test_post_clasificaciones_responde_502_si_records_custodia_no_esta_disponible(self):
         app.dependency_overrides[obtener_enviador] = lambda: _EnviadorQueFalla()
         cliente = TestClient(app)

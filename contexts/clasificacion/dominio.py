@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from typing import Protocol
 
 
 class ErrorDeDominio(Exception):
@@ -176,3 +177,33 @@ def a_sugerencia_saliente_de_agrupamiento(sugerencia: SugerenciaDeAgrupamiento) 
         confianza=sugerencia.confianza,
         fecha=sugerencia.fecha,
     )
+
+
+# RF-CL-004/RF-CL-006 / P-03 (VETO real de Codex sobre commit 17642a7, ver
+# REVIEW.md): la capa de orquestación (api.py) no debe conocer la
+# implementación concreta que reenvía la sugerencia a records-custodia —
+# mismo criterio que `VerificadorDeAutorizacion` en extraccion (T-41b) y
+# `VerificadorDePermisos` en validacion-humana (Kotlin, T-30). El dominio
+# solo declara el puerto; `integracion.py` aporta la única implementación
+# real (HTTP) y los tests de `api.py` inyectan un doble en memoria.
+class EnviadorDeSugerencias(Protocol):
+    def enviar(self, sugerencia: SugerenciaSaliente) -> None: ...
+
+
+# RF-CL-010 (VETO real de Codex sobre commit 17642a7, ver REVIEW.md): el
+# Dado/Cuando/Entonces de este RF exige que todo texto recibido produzca al
+# menos una sugerencia de clasificación o quede marcado explícitamente "no
+# clasificable" (`POST /no-clasificables`) — nunca ninguna de las dos cosas
+# en silencio. No se inventa aquí el criterio de negocio de qué hace que un
+# texto sea "no clasificable" (spec §8, [CLARIFICAR] pendiente); esto solo
+# cierra el hueco de la API que permitía `candidatas=[]` -> 201 con `[]` sin
+# ninguna salida explícita.
+def exigir_al_menos_una_candidata(
+    sugerencias: list[SugerenciaDeClasificacion],
+) -> list[SugerenciaDeClasificacion]:
+    if not sugerencias:
+        raise ErrorDeDominio(
+            "No se recibió ninguna candidata de clasificación; use POST /no-clasificables "
+            "para marcar el texto explícitamente."
+        )
+    return sugerencias

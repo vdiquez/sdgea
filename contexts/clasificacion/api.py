@@ -16,7 +16,13 @@ from integracion import EnviadorDeSugerenciasHttp, ServicioNoDisponibleError
 app = FastAPI(title="clasificacion")
 
 
-def obtener_enviador() -> EnviadorDeSugerenciasHttp:
+# P-03 (corrección tras VETO real de Codex sobre commit 17642a7, ver
+# REVIEW.md): la anotación de retorno y de los parámetros `Depends(...)` más
+# abajo usan el puerto `dominio.EnviadorDeSugerencias`, nunca la clase
+# concreta — mismo criterio que `dominio.VerificadorDeAutorizacion` en
+# extraccion (T-41b). Esta función sigue siendo el único lugar que construye
+# la implementación real.
+def obtener_enviador() -> dominio.EnviadorDeSugerencias:
     return EnviadorDeSugerenciasHttp()
 
 
@@ -87,7 +93,7 @@ def _texto_disponible(texto: TextoExtraidoDto) -> dominio.TextoDisponible:
 # records-custodia en ese orden (RF-CL-004).
 @app.post("/clasificaciones", status_code=201)
 def clasificar(
-    request: ClasificarRequest, enviador: EnviadorDeSugerenciasHttp = Depends(obtener_enviador)
+    request: ClasificarRequest, enviador: dominio.EnviadorDeSugerencias = Depends(obtener_enviador)
 ) -> list[dominio.SugerenciaSaliente]:
     texto = _texto_disponible(request.texto)
     sugerencias = [
@@ -103,6 +109,7 @@ def clasificar(
         )
         for candidata in request.candidatas
     ]
+    sugerencias = dominio.exigir_al_menos_una_candidata(sugerencias)
     ordenadas = dominio.ordenar_por_confianza(sugerencias)
     salientes = [dominio.a_sugerencia_saliente_de_clasificacion(sugerencia) for sugerencia in ordenadas]
     for saliente in salientes:
@@ -115,7 +122,7 @@ def clasificar(
 # de expedientes candidatos).
 @app.post("/agrupamientos", status_code=201)
 def agrupar(
-    request: AgruparRequest, enviador: EnviadorDeSugerenciasHttp = Depends(obtener_enviador)
+    request: AgruparRequest, enviador: dominio.EnviadorDeSugerencias = Depends(obtener_enviador)
 ) -> dominio.SugerenciaSaliente:
     texto = _texto_disponible(request.texto)
     sugerencia = dominio.agrupar(
