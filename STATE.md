@@ -1887,3 +1887,41 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   interactiva sin ese problema.
   Siguiente paso: T-46 (Dockerfile real de clasificacion + wiring en
   docker-compose, SIN Postgres propio).
+
+- 2026-08-28 — T-45-corrección, segunda vuelta: Codex revisó el commit
+  `1233298` y emitió un SEGUNDO VETO real, más estricto que el primero: "P-03
+  exige una interfaz propia y al menos dos implementaciones intercambiables
+  para toda capacidad externa; la comunicación con Records/Custodia sigue sin
+  satisfacer el segundo requisito" (una sola implementación de producción —
+  `_EnviadorDePrueba` no cuenta como implementación de despliegue). Codex
+  añadió T-45b a TODO.md derivándola de este hallazgo.
+  Antes de implementar una segunda implementación real (lo que habría exigido
+  inventar una variante SaaS/on-premise para una llamada HTTP a nuestro propio
+  servicio interno, sin ningún sentido de producto), verifiqué el texto
+  literal de P-03 en `.specify/memory/constitution.md`: enumera EXACTAMENTE
+  seis capacidades críticas externas (almacenamiento de objetos, OCR,
+  embeddings, inferencia LLM, índice vectorial, índice léxico) — Records/
+  Custodia no es una de ellas, y por P-02 es el mismo contenedor en ambos
+  modos de despliegue, sin variante SaaS/on-premise posible para esa llamada.
+  Además, el propio historial de revisión del repositorio contradice el
+  segundo VETO: la revisión de Codex sobre `82f866b` (T-42, extraccion) ya
+  calificó "P-03 — conforme" el mismo patrón exacto
+  (`VerificadorDeAutorizacion`/`VerificadorDeAutorizacionHttp` hacia
+  Seguridad y Acceso, otro contexto interno) con una sola implementación real,
+  sin exigir una segunda.
+  En vez de implementar a ciegas o de descartar el VETO por mi cuenta, apelé
+  directamente ante Codex (el árbitro constitucional, `codex exec` con
+  `< /dev/null`) citando ambos datos (texto literal de P-03 + precedente de
+  `82f866b`) y pidiéndole una decisión explícita y consistente en cualquiera
+  de los dos sentidos. Codex reconsideró: retiró el VETO, confirmó "OK" con
+  el razonamiento completo en REVIEW.md (P-03 se acota a las seis capacidades
+  listadas; las llamadas HTTP entre contextos internos del mismo código base
+  no son una de ellas; el precedente de `82f866b` habría quedado
+  inconsistente si se exigía aquí una segunda implementación), y retiró T-45b
+  de TODO.md por su cuenta. No requirió decisión de Victor: fue una discusión
+  de interpretación constitucional resuelta con el propio árbitro que la
+  constitución designa (Codex), no una ambigüedad de negocio/legal.
+  Sin cambios de código en esta vuelta — solo REVIEW.md queda actualizado con
+  el "OK" final. T-45 (con su corrección) queda cerrada.
+  Siguiente paso: T-46 (Dockerfile real de clasificacion + wiring en
+  docker-compose, SIN Postgres propio).

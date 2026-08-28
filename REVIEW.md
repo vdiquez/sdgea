@@ -1,27 +1,54 @@
-OK: commit `82f866b` conforme a la constitución y al contexto de Extracción.
+# Revisión de `1233298e03b359aa36a254f6cf5bec8f45e253e1` — corrección T-45
 
-## Alcance revisado
+## Resultado: OK
 
-- Commit: `82f866b` — marca T-42 completada en `TODO.md` y registra su evidencia en `STATE.md`.
-- Diff efectivo: solo `STATE.md` y `TODO.md`; no modifica código, pruebas, Docker/Compose ni archivos bajo `specs/`.
-- Contexto contrastado: `specs/002-extraccion/spec.md` (RF-EX-004 y RF-EX-011), `specs/spec-infra-servicios.md` §11 y la implementación de T-42 que este commit cierra (`959d07e`).
+Se retira el VETO anterior. `EnviadorDeSugerencias` cumple P-03 en el alcance
+que corresponde a este commit: existe un puerto propio y el endpoint depende de
+él, mientras `EnviadorDeSugerenciasHttp` es el adaptador de producción hacia
+Records/Custodia. No se exige una segunda implementación de despliegue para
+esa llamada HTTP interna.
 
-## Constitución
+## Decisión sobre P-03
 
-- **P-01 — conforme.** `HEAD` no introduce una vía probabilística de escritura. La implementación que T-42 registra conserva la salida OCR como `SugerenciaOcr`: `recibir_sugerencia_ocr` deja el agregado en `PENDIENTE_DE_EXTRACCION`; solo `confirmar_extraccion`, tras decisión humana explícita, lo materializa.
-- **P-03 — conforme.** El dominio depende del puerto `VerificadorDeAutorizacion`; `VerificadorDeAutorizacionHttp` es el adaptador hacia Seguridad y Acceso. El Compose solo configura su URL interna. No hay consumo directo de OCR real: sigue siendo ficticio.
-- **P-08 — conforme.** El commit no añade transiciones. Las transiciones ya implementadas devuelven `EventoAuditoria` y `guardar_con_evento` persiste agregado y evento en una única transacción; la prueba de persistencia fuerza una violación `NOT NULL` y verifica rollback de ambos, por lo que no es un doble amañado.
+P-03 está acotado a las seis capacidades críticas externas que enumera
+literalmente: almacenamiento de objetos, OCR, embeddings, inferencia LLM,
+índice vectorial e índice léxico. Para cada una exige una interfaz propia y
+dos implementaciones intercambiables (gestionada para SaaS y autoalojada para
+on-premise). La enumeración delimita el alcance de la obligación de dos
+implementaciones; no convierte toda comunicación HTTP entre contextos internos
+en una de esas capacidades ni crea una variante de despliegue adicional.
 
-## Specs, referencias y umbrales
+Records/Custodia y Seguridad/Acceso son contextos internos del mismo código
+base y se despliegan en ambos modos conforme a P-02. La llamada HTTP al servicio
+interno es la misma en SaaS y on-premise, por lo que `POST /sugerencias` no es
+una capacidad externa de la lista de P-03. El puerto sigue siendo un buen límite
+de acoplamiento y permite sustituir el adaptador en pruebas, pero P-03 no exige
+para este caso dos adaptadores de producción gestionado/autoalojado.
 
-- No hay cambios bajo `specs/`, por lo que el chequeo adicional de referencias normativas y umbrales nuevos no aplica.
-- El diff tampoco añade Acuerdos, Leyes, Decretos, ISO ni valores de umbral. No hay cita ni número inventado.
+Esta conclusión es consistente con el precedente ratificado en `82f866b` /
+`d1471fc`: `VerificadorDeAutorizacion` +
+`VerificadorDeAutorizacionHttp` hacia Seguridad/Acceso se revisó como P-03
+conforme con una única implementación HTTP de producción. Aplicar ahora la
+exigencia de una segunda implementación a `EnviadorDeSugerencias` habría sido
+una aplicación inconsistente de P-03. No corresponde abrir una tarea simétrica
+para Extracción.
 
-## Honestidad y verificación
+## Verificaciones
 
-- El commit no cambia pruebas. T-42 es infraestructura de empaquetado, no un RF nuevo con criterio Dado/Cuando/Entonces; no presenta tests como prueba de un comportamiento que no cubren.
-- Las pruebas relevantes sí ejercen los criterios de aceptación: la sugerencia OCR no materializa sola (RF-EX-004/P-01); un actor sin permiso no confirma ni muta el agregado (RF-EX-011/P-03); y todo evento de transición comprueba actor, fecha y estados antes/después (P-08).
-- Ejecutado: `uv run --directory contexts/extraccion pytest` con caché temporal — **55 passed**. `docker compose ... config --quiet` validó las composiciones SaaS y on-prem con el overlay local (solo emitió advertencias por no poder leer la configuración Docker del usuario).
-- Límite de esta revisión: la suite completa `bash ./test.sh` no pudo completarse porque el sandbox no permite descargar Gradle 9.7.0 tras aislar su caché temporal. No es un fallo del proyecto; la evidencia histórica de `./test.sh` en `STATE.md` no fue reproducible íntegramente en este entorno. Tampoco se construyó ni levantó la imagen/stack; esa comprobación de punta a punta sigue prevista en T-43.
+- **P-01:** Clasificación produce `SugerenciaSaliente` y la remite a
+  `POST /sugerencias`; no materializa directamente estado de documento o
+  expediente. La recepción permanece detrás de la capa anticorrupción de
+  Records/Custodia y de una decisión humana posterior.
+- **P-08:** Clasificación no mantiene estado propio. La transición de
+  recepción ocurre en Records/Custodia, donde ya se registra
+  `SUGERENCIA_RECIBIDA`.
+- **RF-CL-010:** Una lista vacía de candidatas recibe 409 explícito. Esto no
+  inventa el criterio pendiente de "no clasificable".
+- **Pruebas:** Los tres tests añadidos cubren el rechazo de lista vacía y la
+  ruta HTTP; `test_integracion.py` verifica método, URL y cuerpo. No se
+  aprecia un doble que oculte el comportamiento del adaptador.
+- **Specs, referencias y umbrales:** El commit no cambia `specs/`; no añade
+  referencias normativas ni umbrales.
 
-No se añadieron tareas a `TODO.md`: T-43 ya cubre la verificación pendiente con Docker real y Newman.
+La tarea T-45b se retira de `TODO.md`: derivaba exclusivamente del VETO de P-03
+que esta revisión deja sin efecto.
