@@ -79,8 +79,13 @@ run_claude() { # run_claude <prompt> <etiqueta>
   if [ "$CONTAINED" = "1" ]; then
     flags+=(--dangerously-skip-permissions)
   else
+    # Hallazgo operativo real (2026-08-27, T-41): sin el segundo patrón,
+    # Claude a veces invoca "bash ./test.sh" en vez de "./test.sh" (p. ej. en
+    # Windows/Git Bash) — eso NO calza con "Bash(./test.sh *)", queda
+    # denegado sin aviso claro, y la sesión headless puede terminar su turno
+    # sin comitear nada, preguntando algo que nadie puede responder.
     flags+=(--permission-mode acceptEdits
-            --allowedTools "Bash(git *),Bash($TEST_BIN *)${EXTRA_ALLOWED:+,$EXTRA_ALLOWED}")
+            --allowedTools "Bash(git *),Bash($TEST_BIN *),Bash(bash $TEST_BIN*)${EXTRA_ALLOWED:+,$EXTRA_ALLOWED}")
   fi
   while :; do
     attempt=$((attempt+1)); out="$LOG_DIR/claude-$tag-$attempt.json"
