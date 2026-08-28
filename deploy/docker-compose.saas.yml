@@ -4,16 +4,15 @@
 # IMPLEMENTACIÓN detrás de cada interfaz de P-03 (almacenamiento de objetos, OCR,
 # embeddings, inferencia LLM, índice vectorial, índice léxico), nunca el código de
 # orquestación. Dockerfiles reales ya wireados para captura-ingesta,
-# records-custodia (T-18), seguridad-acceso (T-26), validacion-humana (T-31)
-# y normalizacion (T-35, specs/spec-infra-servicios.md); el resto de
-# contextos los suma cuando tengan código. validacion-humana no tiene
+# records-custodia (T-18), seguridad-acceso (T-26), validacion-humana (T-31),
+# normalizacion (T-35) y extraccion (T-42, specs/spec-infra-servicios.md); el
+# resto de contextos los suma cuando tengan código. validacion-humana no tiene
 # Postgres propio (T-30: orquestador HTTP sobre records-custodia y
-# seguridad-acceso, sin persistencia propia). normalizacion es el primer
-# contenedor Python/FastAPI (build en dos etapas con `uv`, mismo patrón que
+# seguridad-acceso, sin persistencia propia). normalizacion y extraccion son
+# contenedores Python/FastAPI (build en dos etapas con `uv`, mismo patrón que
 # los Dockerfiles Kotlin pero con `uv sync --no-dev` en vez de `-x test`).
 #
 # TODO por contexto, cuando exista su Dockerfile:
-#   - contexts/extraccion          (Python/FastAPI)
 #   - contexts/clasificacion       (Python/FastAPI)
 #   - contexts/enriquecimiento     (Python/FastAPI)
 #   - contexts/indexacion-busqueda (Python/FastAPI)
@@ -123,6 +122,27 @@ services:
       SERVER_PORT: "8085"
     depends_on:
       - postgres
+
+  # T-40/T-41/T-41b: segundo contenedor Python/FastAPI. Postgres propio
+  # (mismo criterio que normalizacion: mantiene estado propio, textos
+  # extraídos). RF-EX-011/P-03: confirmar_extraccion verifica autorización
+  # real contra seguridad-acceso (POST /autorizacion), primer consumidor
+  # Python de ese endpoint.
+  extraccion:
+    build:
+      context: ..
+      dockerfile: contexts/extraccion/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+      SERVER_PORT: "8086"
+      SEGURIDAD_ACCESO_BASE_URL: http://seguridad-acceso:8083
+    depends_on:
+      - postgres
+      - seguridad-acceso
 
 volumes:
   postgres-data:

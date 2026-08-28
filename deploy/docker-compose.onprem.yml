@@ -4,16 +4,17 @@
 # externa debe ser autoalojada — el appliance debe operar sin conectividad
 # saliente, incluso en entornos aislados (P-10). Dockerfiles reales ya
 # wireados para captura-ingesta, records-custodia (T-18), seguridad-acceso
-# (T-26), validacion-humana (T-31) y normalizacion (T-35,
+# (T-26), validacion-humana (T-31), normalizacion (T-35) y extraccion (T-42,
 # specs/spec-infra-servicios.md) — son los mismos que en modo SaaS (P-02: un
 # solo código base); ninguno tiene todavía una capacidad externa de P-03 que
 # abstraer (seguridad-acceso es autoalojado por diseño desde T-23;
-# validacion-humana no tiene Postgres propio, T-30; normalizacion solo usa
-# Postgres, sin ningún componente probabilístico real detrás de
-# `recibir_sugerencia_de_limites` — es FICTICIO, T-33).
+# validacion-humana no tiene Postgres propio, T-30; normalizacion y
+# extraccion solo usan Postgres, sin ningún componente probabilístico real
+# detrás de `recibir_sugerencia_de_limites`/`recibir_sugerencia_ocr` — ambos
+# son FICTICIOS, T-33/T-40).
 #
-# TODO por contexto, cuando exista su Dockerfile: los cuatro restantes de
-# docker-compose.saas.yml (extraccion, clasificacion, enriquecimiento,
+# TODO por contexto, cuando exista su Dockerfile: los tres restantes de
+# docker-compose.saas.yml (clasificacion, enriquecimiento,
 # indexacion-busqueda).
 #
 # TODO — implementaciones self-hosted de las seis capacidades de P-03, cada una
@@ -115,6 +116,22 @@ services:
       SERVER_PORT: "8085"
     depends_on:
       - postgres
+
+  extraccion:
+    build:
+      context: ..
+      dockerfile: contexts/extraccion/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+      SERVER_PORT: "8086"
+      SEGURIDAD_ACCESO_BASE_URL: http://seguridad-acceso:8083
+    depends_on:
+      - postgres
+      - seguridad-acceso
 
 volumes:
   postgres-data:

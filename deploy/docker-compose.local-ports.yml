@@ -27,3 +27,7 @@ services:
   normalizacion:
     ports:
       - "8085:8085"
+
+  extraccion:
+    ports:
+      - "8086:8086"
