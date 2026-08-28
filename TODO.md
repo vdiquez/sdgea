@@ -520,3 +520,106 @@ repetirse aquí (ver STATE.md para el detalle completo de cada una):
       limpio desde la primera corrida (incluida la frontera de autorización
       403/200). `postman/README.md` actualizado con los conteos reales y el
       resultado de la verificación.
+
+# Clasificación
+
+Decisión de Victor, 2026-08-28 ("Sigamos con alguno de los contextos que nos
+hace falta" → confirmó Clasificación entre las tres opciones). Sigue
+`specs/003-clasificacion/spec.md` (RF-CL-001..010).
+
+**Hallazgo arquitectónico real, léelo antes de empezar T-44** (evita
+re-descubrirlo o inventar persistencia que la spec no pide):
+- §3 de la spec dice explícitamente "Este contexto **no mantiene estado
+  propio** de sus sugerencias después de entregarlas". A diferencia de
+  Normalización/Extracción (que SÍ tienen un agregado persistido con
+  máquina de estados), Clasificación es como Validación Humana: un
+  orquestador HTTP **sin Postgres propio**, que produce sugerencias
+  (componente FICTICIO) y las reenvía de verdad a records-custodia. No crees
+  `persistencia.py` ni una tabla — sería inventar estado que la spec dice
+  explícitamente que no existe.
+- Records-custodia YA expone `POST /sugerencias` (T-08) con forma genérica
+  (`documentoId, tipo, contenidoPropuesto, modeloId, evidencia, confianza,
+  fecha`) — `tipo` es un `String` libre, así que acepta tanto
+  `tipo="clasificacion"` (serie/subserie en `contenidoPropuesto`) como
+  `tipo="agrupamiento"` (expediente propuesto, o el marcador de "expediente
+  nuevo", en `contenidoPropuesto`) SIN ningún cambio en records-custodia. No
+  hace falta tocar Kotlin para esta tarea.
+- La spec (§8) señala una inconsistencia real: `spec-records-custodia.md`
+  RF-RC-008 (conformación del expediente electrónico) **no está
+  implementado en código** (`grep` sobre `contexts/records-custodia/src` no
+  encuentra ningún `Expediente`) — es una brecha preexistente, documentada,
+  no algo que esta tarea deba resolver. La sugerencia de agrupamiento se
+  envía igual (records-custodia ya la almacena como `Sugerencia` genérica),
+  solo que todavía no hay un agregado `Expediente` que la materialice.
+- La spec dice literalmente: "el evento de auditoría de la recepción de la
+  sugerencia ya lo emite Records/Custodia al recibirla — Clasificación no
+  duplica ese evento por su lado" (T-20 ya lo implementó ahí). Este contexto
+  **no necesita su propio P-08** — no hay estado propio que transicionar.
+- RF-CL-003 ordena por confianza **descendente** (mayor primero — la mejor
+  candidata primero), a diferencia de `ColaDeRevision`/`ColaDeLimites` en
+  Validación Humana, que ordenan ascendente (más incierto primero, para
+  revisión). No es un error si el orden sale al revés del patrón de VH —
+  es intencional, verifícalo contra el criterio Dado/Cuando/Entonces del RF,
+  no contra el código de VH.
+- Nunca inventar cuántas sugerencias top-N emitir por documento, ni qué
+  cuenta exactamente como "no clasificable" — ambos están `[CLARIFICAR]` en
+  `specs/003-clasificacion/spec.md` §8. El llamador declara explícitamente
+  si un texto es "no clasificable" (mismo criterio que
+  `CondicionDeExtraccion`/`CondicionDeNormalizacion`/`CondicionValidacion` en
+  los otros tres contextos), el dominio no lo detecta.
+- Como en Extracción (T-41b), OCR/clasificación son componentes FICTICIOS:
+  este contexto nunca calcula una clasificación ni un agrupamiento reales,
+  solo recibe un modelo_id/evidencia/confianza YA CALCULADOS por el llamador.
+
+- [ ] T-44 RF-CL-001..010 — dominio de Clasificación en Python
+      (`contexts/clasificacion/dominio.py`), TDD contra los criterios
+      Dado/Cuando/Entonces de cada RF. `SugerenciaDeClasificacion` y
+      `SugerenciaDeAgrupamiento` (componentes FICTICIOS, ambos con
+      modelo_id/evidencia/confianza/fecha — invariante 3 de la spec: nunca
+      se emite sin los tres); `MarcaNoClasificable` (RF-CL-010, razón
+      declarada por el llamador); `ordenar_por_confianza(sugerencias)`
+      DESCENDENTE (RF-CL-003, ver nota arriba); cada sugerencia referencia
+      la versión de TRD vigente al momento de generarse, inmutable después
+      (RF-CL-009 — no se recalcula si se publica una TRD nueva). Sin agregado
+      persistido, sin `EventoAuditoria` propio (ver nota arriba de por qué).
+      Agrega `uv run --directory contexts/clasificacion pytest` a `test.sh`
+      en este mismo commit (lección real de T-40: sin esto el árbitro del
+      loop nunca correría estos tests).
+- [ ] T-45 RF-CL-001..010 — Servicio HTTP (FastAPI) para Clasificación, SIN
+      persistencia propia (ver nota arquitectónica arriba) — mismo patrón
+      que Validación Humana (T-29/T-30) pero en Python: cada endpoint
+      traduce un método de dominio y reenvía la sugerencia resultante a
+      records-custodia vía `POST /sugerencias` (cliente HTTP real,
+      `httpx`/`requests` como dependencia real, no dev). Endpoints mínimos:
+      recibir texto extraído + sugerencia de clasificación (FICTICIA) →
+      reenviar con `tipo="clasificacion"`; recibir sugerencia de
+      agrupamiento (FICTICIA) → reenviar con `tipo="agrupamiento"`; marcar
+      no clasificable (RF-CL-010). Variables de entorno:
+      `RECORDS_CUSTODIA_BASE_URL` (mismo patrón que
+      `NORMALIZACION_BASE_URL` en Validación Humana, T-38) y
+      `SERVER_PORT` (puerto siguiente disponible, 8087). Prueba de
+      integración con `MockRestServiceServer`-equivalente en Python
+      (`httpx.MockTransport` o `respx`) contra el POST real a
+      records-custodia, mismo criterio de honestidad que
+      `IntegracionHttpTest` en Validación Humana (T-30): no un doble que
+      nunca abre una conexión, sino algo que verifica la forma exacta de la
+      petición HTTP saliente.
+- [ ] T-46 Dockerfile real de clasificacion + wiring en
+      `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón Python
+      que T-35/T-42 pero SIN Postgres propio (mismo criterio que
+      validacion-humana, T-31, sin `DB_HOST`/etc. — solo
+      `RECORDS_CUSTODIA_BASE_URL` y `depends_on: records-custodia`); puerto
+      siguiente disponible (8087) en `docker-compose.local-ports.yml`.
+- [ ] T-47 Colección Postman con el ciclo completo de Clasificación,
+      mismo patrón que T-36/T-43: custodiar un documento en records-custodia
+      → enviar una sugerencia de clasificación FICTICIA vía Clasificación →
+      verificar en records-custodia (`GET /documentos/{id}/sugerencias`)
+      que llegó como `Sugerencia` real → repetir para agrupamiento → un
+      texto marcado no clasificable. Segundo flujo end-to-end real de tres
+      servicios (records-custodia + Clasificación, mismo nivel que
+      Validación Humana↔Normalización en T-38). Verificar con Docker real y
+      dos corridas de Newman seguidas sin fallos — si el loop headless
+      llega hasta aquí sin poder tocar Docker/`npx` (mismo límite real que
+      T-43), es correcto que deje el trabajo sin comitear y explique por
+      qué, no que finja haberlo verificado; Victor o una sesión interactiva
+      lo retoma.
