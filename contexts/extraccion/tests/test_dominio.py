@@ -161,6 +161,7 @@ class TestConfirmacionDeExtraccion:
         assert confirmado.contenido == "texto reconocido"
         assert confirmado.calidad == 0.73
         assert evento.actor == "archivista-1"
+        assert evento.fecha == PROCEDENCIA.fecha
         assert evento.estado_anterior == "PENDIENTE_DE_EXTRACCION"
         assert evento.estado_posterior == "EXTRAIDO"
 

@@ -1430,3 +1430,64 @@ captura-ingesta/records-custodia, diseño de UI/UX, o F4.
   Siguiente paso: T-41 (servicio HTTP FastAPI + persistencia SQLAlchemy/
   Postgres para Extracción, contra una nueva sección de
   `specs/spec-infra-servicios.md`) es la próxima tarea abierta en TODO.md.
+
+- [x] Saga de VETOs de Codex sobre T-40, corregida en sesión interactiva
+  (2026-08-27). Victor pidió continuar con Extracción en modo agéntico vía
+  `./orquestador.sh loop`, esta vez con Codex revisando cada commit — el
+  loop funcionó exactamente como debía: se detuvo dos veces por VETO real, y
+  una tercera revisión confirmó "OK" antes de retomarlo.
+  1. **VETO 1 (P-01, commit `dd97fb4`, la implementación original de T-40)**:
+     `recibir_resultado_ocr` materializaba `Extraído` directo desde un
+     resultado probabilístico de OCR, sin Sugerencia ni decisión humana. La
+     propia spec (`specs/002-extraccion/spec.md` §1) argumentaba que el
+     texto extraído estaba exento de esa capa por no ser estado archivístico,
+     pero admitía que esa lectura "es razonable pero no está escrita... como
+     regla explícita" — no era una decisión ratificada. Se preguntó a Victor
+     (`AskUserQuestion`): exigir confirmación humana (mismo patrón que
+     RF-RC-004/RF-NO-004) o ratificar el diseño original de la spec. Decidió
+     exigir confirmación humana — primera vez que este patrón se extiende a
+     Extracción, con el costo real de que un humano interviene en cada
+     extracción vía OCR, no solo en las de baja confianza.
+  2. **VETO 2 (P-01/P-08, commit `e623ad6`, el primer fix)**: aplazar la
+     materialización con `confirmar_extraccion` no bastaba — lo que se
+     adjuntaba al agregado (`ResultadoOcr`, sin `evidencia`) seguía sin forma
+     de Sugerencia; P-01 exige que la salida probabilística cruce la capa
+     anticorrupción *como Sugerencia*, no solo que una decisión humana la
+     materialice después. También señaló un evento con un sentinel inválido
+     (P-08). Esto NO requirió una nueva decisión de Victor — es consistencia
+     con el patrón ya ratificado (`Sugerencia`/`SugerenciaDeLimites` en el
+     resto del proyecto). Corregido directamente (commit `383c6443`):
+     `ResultadoOcr` → `SugerenciaOcr` con `evidencia: list[str]` añadido
+     (mismo shape que `SugerenciaDeLimites`/`Sugerencia`, con `contenido`
+     añadido porque eso es lo que una sugerencia de OCR propone);
+     `recibir_resultado_ocr` → `recibir_sugerencia_ocr`; eventos de esa
+     función y de `determinar_soporte` (mismo defecto, corregido por
+     consistencia) ahora usan `estado_anterior=estado_posterior=
+     texto.estado.value` en vez de un sentinel inventado.
+  3. **Tercera revisión: "OK"** — Codex confirmó que `383c6443` resuelve
+     ambos VETOs, sin violaciones constitucionales ni referencias/umbrales
+     inventados. Sugirió una mejora de cobertura no bloqueante (el test de
+     RF-EX-011 no afirmaba `evento.fecha` explícitamente) — corregida de
+     inmediato, trivial.
+  4. **Hallazgo operativo real sobre `codex exec` en este entorno**: la
+     primera y tercera invocación manual de `codex exec` (mirroring
+     `orquestador.sh`'s `run_codex()`) se quedaron colgadas indefinidamente
+     en "Reading additional input from stdin..." — según `codex exec --help`,
+     cuando stdin llega "piped" (aunque no se piense estar canalizando nada),
+     Codex anexa su contenido como un bloque `<stdin>` y espera su EOF. En
+     este entorno (Bash tool en background sobre Git Bash/Windows), stdin
+     queda ocasionalmente como una tubería abierta sin cerrar, así que Codex
+     espera para siempre. Fix real: redirigir stdin explícitamente desde
+     `/dev/null` en toda invocación de `codex exec --json` (`... < /dev/null
+     > log 2>&1`) — con eso, la segunda y la tercera corrida (esta última ya
+     con el fix) completaron en 15-20 minutos sin colgarse. Relevante para
+     cualquier invocación futura de `codex exec` fuera de `orquestador.sh`
+     (que no tiene este problema porque no se ejecuta en background con este
+     mismo patrón de redirección).
+  29/29 tests en `contexts/extraccion` tras la corrección final. `./test.sh`
+  completo del repo en verde. `specs/002-extraccion/spec.md` actualizada tres
+  veces (§1 con las dos notas de resolución, §2 con el término "Sugerencia de
+  OCR", RF-EX-004/RF-EX-011 con vocabulario de sugerencia). Decisión y ambas
+  correcciones documentadas en `QUESTIONS.md` (entradas 2026-08-27).
+  Siguiente paso: retomar `./orquestador.sh loop` para T-41 en adelante —
+  Codex confirmó T-40 sin VETO pendiente.
