@@ -571,20 +571,32 @@ re-descubrirlo o inventar persistencia que la spec no pide):
   este contexto nunca calcula una clasificación ni un agrupamiento reales,
   solo recibe un modelo_id/evidencia/confianza YA CALCULADOS por el llamador.
 
-- [ ] T-44 RF-CL-001..010 — dominio de Clasificación en Python
-      (`contexts/clasificacion/dominio.py`), TDD contra los criterios
-      Dado/Cuando/Entonces de cada RF. `SugerenciaDeClasificacion` y
-      `SugerenciaDeAgrupamiento` (componentes FICTICIOS, ambos con
-      modelo_id/evidencia/confianza/fecha — invariante 3 de la spec: nunca
-      se emite sin los tres); `MarcaNoClasificable` (RF-CL-010, razón
-      declarada por el llamador); `ordenar_por_confianza(sugerencias)`
-      DESCENDENTE (RF-CL-003, ver nota arriba); cada sugerencia referencia
-      la versión de TRD vigente al momento de generarse, inmutable después
-      (RF-CL-009 — no se recalcula si se publica una TRD nueva). Sin agregado
-      persistido, sin `EventoAuditoria` propio (ver nota arriba de por qué).
-      Agrega `uv run --directory contexts/clasificacion pytest` a `test.sh`
-      en este mismo commit (lección real de T-40: sin esto el árbitro del
-      loop nunca correría estos tests).
+- [x] T-44 RF-CL-001..010 — dominio de Clasificación en Python
+      (`contexts/clasificacion/dominio.py`). `recibir_texto_extraido`
+      (RF-CL-001) es la única puerta de entrada — `clasificar`/`agrupar`/
+      `marcar_no_clasificable` solo aceptan el `TextoDisponible` que
+      devuelve. `SugerenciaDeClasificacion` y `SugerenciaDeAgrupamiento`
+      (componentes FICTICIOS, ambos con modelo_id/evidencia/confianza/fecha
+      obligatorios en el constructor — invariante 3 estructural, no
+      validada en runtime, mismo criterio que `Sugerencia` en
+      records-custodia); `MarcaNoClasificable` (RF-CL-010, razón declarada
+      por el llamador); `ordenar_por_confianza(sugerencias)` DESCENDENTE
+      (RF-CL-003, ver nota arriba); cada sugerencia referencia la versión de
+      TRD vigente al momento de generarse, inmutable después (RF-CL-009 —
+      dataclass frozen, no se recalcula si se publica una TRD nueva).
+      `a_sugerencia_saliente_de_clasificacion`/`_de_agrupamiento`
+      (RF-CL-004/006): traducción pura a la forma genérica que ya acepta
+      `POST /sugerencias` de records-custodia (`SugerenciaEntrante`, T-08) —
+      sin llamada HTTP, eso es T-45. Test estructural para RF-CL-007: el
+      módulo no expone ninguna operación de materialización/aprobación,
+      mismo criterio que T-09. Sin agregado persistido, sin
+      `EventoAuditoria` propio (ver nota arquitectónica arriba de por qué).
+      `uv run --directory contexts/clasificacion pytest` agregado a
+      `test.sh` en este mismo commit (lección real de T-40). TDD: 14 tests
+      nuevos (`tests/test_dominio.py`), verdes en el primer intento.
+      `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL;
+      pytest: eval-harness 4, normalizacion 40, extraccion 55,
+      clasificacion 14).
 - [ ] T-45 RF-CL-001..010 — Servicio HTTP (FastAPI) para Clasificación, SIN
       persistencia propia (ver nota arquitectónica arriba) — mismo patrón
       que Validación Humana (T-29/T-30) pero en Python: cada endpoint

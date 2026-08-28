@@ -1,9 +1,9 @@
 # STATE
-Fase: F2/F3 — T-01..T-22 completas (T-14 desglosada en T-15..T-18; T-19/T-20/T-21
-corrigen VETOs sucesivos de Codex sobre T-16/T-17/T-18; T-02 desbloqueada
-2026-08-23 por la taxonomía de Victor; T-22 cierra el riesgo de atomicidad
-anotado junto con T-21). No queda ninguna tarea `- [ ]` ni `- [?]` en TODO.md.
-Ver plan-ejecucion-agentica.md.
+Fase: F3 — seis bounded contexts completos de punta a punta (captura-ingesta,
+records-custodia, seguridad-acceso, validación humana, normalización,
+extracción); Clasificación en curso: T-44 (dominio) completa, T-45..T-47
+(servicio HTTP, Docker, Postman) son las próximas tareas `- [ ]` abiertas en
+TODO.md. Ver plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -1679,3 +1679,85 @@ captura-ingesta/records-custodia, diseño de UI/UX, o F4.
   cerrar alguna de las brechas ya documentadas (autorización real en
   captura-ingesta/records-custodia, RF-VH-001 para los contextos que aún no
   existen), diseño de UI/UX, o F4.
+
+# Clasificación (2026-08-28, modo agéntico)
+Decisión de Victor, 2026-08-28: continuar con Clasificación entre los tres
+contextos probabilísticos restantes (Clasificación, Enriquecimiento,
+Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
+(RF-CL-001..010).
+
+- [x] T-44 RF-CL-001..010 — dominio de Clasificación en Python
+  (`contexts/clasificacion/dominio.py`). Hallazgo arquitectónico real que
+  gobierna todo el diseño: la spec §3 dice explícitamente "este contexto no
+  mantiene estado propio de sus sugerencias después de entregarlas" — a
+  diferencia de Normalización/Extracción (agregado persistido con máquina de
+  estados), Clasificación no tiene agregado ni `EventoAuditoria` propio; el
+  evento de recepción de la sugerencia ya lo emite records-custodia
+  (`CapaAnticorrupcionSugerencias`, T-20). Por eso `dominio.py` de este
+  contexto es solo funciones puras sobre dataclasses inmutables, sin ningún
+  `guardar_con_evento`/`persistencia.py` (eso sería inventar estado que la
+  spec dice explícitamente que no existe).
+  Diseño:
+  - `recibir_texto_extraido` (RF-CL-001) es la única puerta de entrada:
+    valida que el texto llega en estado "Extraído" (precondición defensiva,
+    mismo criterio que el resto del proyecto) y devuelve `TextoDisponible`.
+    `clasificar`/`agrupar`/`marcar_no_clasificable` solo aceptan ese valor,
+    así que ningún texto puede producir una sugerencia sin pasar primero por
+    esta puerta.
+  - `clasificar`/`agrupar` (RF-CL-002/005): componentes FICTICIOS — reciben
+    serie/subserie/expediente/confianza/evidencia/modelo_id YA CALCULADOS
+    por el llamador, mismo criterio que `SugerenciaDeLimites`
+    (normalizacion) y `SugerenciaOcr` (extraccion). A diferencia de esos dos
+    contextos, aquí no hay un paso de "confirmación humana" que materialice
+    después — la propia sugerencia ES el producto final de este contexto
+    (P-01: la materialización real ocurre en records-custodia, RF-RC-004,
+    fuera de esta frontera). `SugerenciaDeClasificacion`/
+    `SugerenciaDeAgrupamiento` son dataclasses `frozen` con
+    modelo_id/evidencia/confianza obligatorios en el constructor —
+    invariante 3 de la spec ("nunca se emite sin los tres") es una garantía
+    estructural, no una validación en tiempo de ejecución, mismo criterio
+    que `Sugerencia` en records-custodia (T-08).
+  - `ordenar_por_confianza` (RF-CL-003): DESCENDENTE (mayor confianza
+    primero) — a propósito al revés del patrón ascendente de
+    `ColaDeRevision`/`ColaDeLimites` en Validación Humana (que ordenan para
+    revisar primero lo más incierto). No es un bug ni una inconsistencia:
+    se verificó contra el Dado/Cuando/Entonces literal de este RF, no contra
+    el código de otro contexto.
+  - `agrupar` con `expediente_propuesto=None` (RF-CL-005): la marca de
+    "expediente nuevo" que exige la spec §2 — sin inventar un sentinel de
+    cadena, `None` es el tipo natural de Python para "ausencia de
+    expediente existente".
+  - `marcar_no_clasificable` (RF-CL-010): razón declarada por el llamador
+    (mismo criterio que `CondicionDeExtraccion`/`CondicionDeNormalizacion`/
+    `CondicionValidacion` en los otros tres contextos) — cero pérdida
+    silenciosa.
+  - `a_sugerencia_saliente_de_clasificacion`/`_de_agrupamiento`
+    (RF-CL-004/006): traducción PURA (sin HTTP) a la forma genérica que ya
+    acepta `POST /sugerencias` de records-custodia (`SugerenciaEntrante` —
+    documentoId/tipo/contenidoPropuesto/modeloId/evidencia/confianza, T-08),
+    con `tipo="clasificacion"`/`tipo="agrupamiento"` (String libre en
+    Kotlin, sin necesidad de tocar records-custodia, ya señalado en la nota
+    arquitectónica de TODO.md). El envío HTTP real es T-45; esta función
+    solo prueba que la forma de salida es correcta.
+  - RF-CL-007 ("nunca materializa directamente") probado
+    estructuralmente: un test recorre `vars(dominio)` y confirma que no
+    existe ningún símbolo público `materializar`/`aprobar`/`decidir`/
+    `cambiar_clasificacion`/`cambiar_expediente`/`confirmar` — mismo
+    criterio que T-09 usó para probar la ausencia de una vía alterna de
+    mutación.
+  - RF-CL-009 (uso de TRD vigente, inmutable después) probado clasificando
+    el mismo texto dos veces con `trd_version` distinta y confirmando que la
+    primera sugerencia (ya `frozen`) conserva su propia versión.
+  `uv run --directory contexts/clasificacion pytest` agregado a `test.sh`
+  en este mismo commit (lección real de T-40: sin esto el árbitro del loop
+  nunca correría estos tests).
+  TDD: 14 tests nuevos (`tests/test_dominio.py`, un `class TestXxx` por RF,
+  mismo patrón que normalizacion/extraccion), verdes en el primer intento —
+  no hubo ningún VETO ni corrección sobre este commit. `./test.sh` completo
+  del repo en verde (Gradle BUILD SUCCESSFUL, 25 tareas up-to-date; pytest:
+  eval-harness 4, normalizacion 40, extraccion 55, clasificacion 14, todos
+  passed).
+  Siguiente paso: T-45 (servicio HTTP FastAPI para Clasificación, SIN
+  persistencia propia, reenviando sugerencias a records-custodia vía
+  `POST /sugerencias` con un cliente HTTP real) es la próxima tarea abierta
+  en TODO.md.
