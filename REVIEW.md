@@ -1,57 +1,60 @@
-VETO: RF-EX-011 incumplido: `confirmar_extraccion` acepta cualquier `str` como actor, sin verificar autorización mediante una interfaz, y su test no cubre el criterio «actor autorizado».
-
-# Revisión de `cf93d843fa8f34dbacd7277571e3abe695a307aa` — T-40 Extracción
+# Revisión de `d1471fca79ec2c40ed7405dc8860ca772a29f363` — T-41b
 
 Revisados `AGENTS.md`, `.specify/memory/constitution.md`, `STATE.md`, el plan
-vigente, `specs/002-extraccion/spec.md`, el diff completo de `HEAD` y el dominio
-y las pruebas de Extracción en `HEAD`.
+vigente, `specs/002-extraccion/spec.md`, `specs/spec-infra-servicios.md`, el
+diff completo de `HEAD` y las pruebas de Extracción.
 
-## Hallazgo bloqueante: RF-EX-011 y honestidad TDD
+## Resultado: OK
 
-El único cambio funcional del commit añade `assert evento.fecha ==
-PROCEDENCIA.fecha`. Es una aserción válida y mejora la cobertura de P-08, pero
-no completa el criterio Dado/Cuando/Entonces de RF-EX-011: «Cuando un **actor
-autorizado** la confirma». La implementación
-`confirmar_extraccion(texto, actor: str, fecha)` acepta cualquier cadena y no
-recibe ni consulta un verificador/autorizador. La prueba usa
-`"archivista-1"`, pero no demuestra que esté autorizado ni que un actor sin
-permiso sea rechazado.
-
-Por ello la prueba no está manipulada con dobles preconfigurados, pero sí es
-incompleta respecto del criterio de aceptación que dice probar. Mantenerla en
-verde no acredita la autorización ni materializa una decisión humana
-autorizada. Debe definirse e introducirse una interfaz propia de autorización
-(P-03), con una prueba de actor permitido y otra de rechazo para actor no
-autorizado; no se debe simular esa garantía con una cadena o una convención de
-nombre.
+El commit corrige el VETO anterior de RF-EX-011. No se detectó violación de la
+constitución, referencia normativa inventada, ni umbral numérico nuevo sin
+fuente o sin marcar como pendiente.
 
 ## Principios constitucionales
 
-- **P-01:** pasa en el dominio revisado. `SugerenciaOcr` porta modelo,
-  contenido, calidad, evidencia y fecha; `recibir_sugerencia_ocr` conserva
-  `PENDIENTE_DE_EXTRACCION`, y solamente `confirmar_extraccion` materializa
-  contenido, calidad y `EXTRAIDO`.
-- **P-03:** no hay consumo directo de OCR ni de otra capacidad externa en este
-  commit; el OCR permanece ficticio. El hallazgo bloqueante exige que la futura
-  comprobación de autorización se haga también tras una interfaz propia.
-- **P-08:** pasa para la transición de confirmación: el evento incluye actor,
-  fecha y los estados reales `PENDIENTE_DE_EXTRACCION` → `EXTRAIDO`; la nueva
-  aserción verifica explícitamente la fecha. Las demás transiciones del dominio
-  revisado emiten igualmente un `EventoAuditoria`.
+- **P-01 — pasa.** `SugerenciaOcr` conserva modelo, contenido, calidad,
+  evidencia y fecha; `recibir_sugerencia_ocr` deja el agregado en
+  `PENDIENTE_DE_EXTRACCION`. La única materialización hacia `EXTRAIDO` desde
+  esa salida probabilística es `confirmar_extraccion`, después de una decisión
+  humana autorizada. El OCR sigue siendo ficticio: no se implementa ni invoca
+  un componente probabilístico real.
+- **P-03 — pasa.** La verificación contra seguridad-acceso está detrás del
+  puerto propio `VerificadorDeAutorizacion`. El dominio y el endpoint dependen
+  del puerto; `VerificadorDeAutorizacionHttp` es el adaptador de producción
+  para `POST /autorizacion`, y los dobles de prueba son intercambiables sin
+  acoplar el dominio a HTTP.
+- **P-08 — pasa.** La confirmación autorizada devuelve `EventoAuditoria` con
+  actor, fecha y transición real `PENDIENTE_DE_EXTRACCION` → `EXTRAIDO`; el
+  endpoint la persiste junto con el agregado mediante `guardar_con_evento`.
+  La denegación ocurre antes de cualquier transición, por lo que no hay evento
+  de transición que emitir. Las demás transiciones ya existentes del contexto
+  siguen devolviendo evento de auditoría.
+
+## Honestidad de las pruebas
+
+Las pruebas cubren el criterio Dado/Cuando/Entonces de RF-EX-011, no solo su
+camino feliz: una sugerencia confirmada por el verificador permitido queda
+`EXTRAIDO`, conserva contenido y calidad, y registra actor, fecha y ambos
+estados; el verificador que deniega provoca `AccesoDenegadoError` antes de
+materializar. El test HTTP además comprueba el 403 del endpoint. Los dobles son
+inyecciones explícitas del puerto y representan las dos respuestas de la
+dependencia; no ocultan la regla de autorización ni una transición.
 
 ## Specs, referencias y umbrales
 
-`HEAD` modifica solamente `REVIEW.md`, `STATE.md` y una prueba; no toca ningún
-archivo bajo `specs/`. Por tanto no aplica el chequeo adicional de referencias
-normativas ni de umbrales en specs. No se introduce en el diff una cita
-normativa ni un umbral numérico nuevo.
+El commit modifica `specs/002-extraccion/spec.md` y
+`specs/spec-infra-servicios.md`. El chequeo de diff no encontró nuevas citas a
+Acuerdo, Ley, Decreto o ISO, ni nuevos umbrales de negocio. `POST
+/autorizacion`, el permiso `confirmar`/`documento`, el puerto 8083 y su URL
+base ya estaban definidos en `specs/spec-infra-servicios.md`; las adiciones
+solo documentan el consumidor de Extracción y la corrección de RF-EX-011.
 
 ## Verificación
 
 - `git diff --check HEAD^ HEAD`: sin errores.
-- `uv run --directory contexts/extraccion pytest -q`: **53 passed**. Hay dos
-  advertencias no bloqueantes del entorno (`StarletteDeprecationWarning` y falta
-  de permiso para escribir `.pytest_cache`).
+- `uv run --directory contexts/extraccion pytest -q`: **55 passed**.
+  Solo hubo advertencias no bloqueantes del entorno: deprecación de
+  `starlette.testclient` y falta de permiso para escribir `.pytest_cache`.
 
-No se añadieron tareas a `TODO.md`: la corrección requerida deriva directamente
-de RF-EX-011/T-40 ya existentes.
+No se añadieron tareas a `TODO.md`: no queda trabajo derivado de una spec
+existente a partir de esta revisión.
