@@ -2157,3 +2157,38 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   mismo `docker compose ... up -d --build` + `npx newman run` (dos veces
   seguidas sin fallos) en una sesión interactiva donde pueda conceder la
   aprobación en el momento, antes de comitear T-47.
+
+- 2026-08-28 — T-47: retomada interactivamente, mismo patrón que T-43. Nota
+  sobre las seis sesiones anteriores: ninguna fingió una verificación que no
+  pudo hacer y ninguna era una ambigüedad de negocio/legal — el
+  comportamiento fue correcto en cada una, pero el patrón de "comitear solo
+  el registro del bloqueo" reinicia el contador del watchdog en cada sesión,
+  permitiendo más iteraciones de las estrictamente necesarias antes de que
+  el loop se detenga solo (hallazgo operativo, no corregido en
+  `orquestador.sh` todavía — a diferencia del bug real de T-41, esto no
+  produjo ningún commit incorrecto, solo gastó iteraciones).
+  Revisado el borrador de la colección que las seis sesiones dejaron sin
+  comitear a propósito (carpeta "8. Clasificacion", peticiones 68-74):
+  correcto, mismo estilo que las carpetas 4/6/7 (IDs con timestamp para que
+  corridas repetidas no colisionen; verificación en records-custodia vía
+  `GET /documentos/{id}/sugerencias`, mismo endpoint que las carpetas 4/6/7).
+  Levantado el stack real de los siete servicios (`docker compose -f
+  deploy/docker-compose.saas.yml -f deploy/docker-compose.local-ports.yml up
+  -d --build`) — los siete contenedores arrancan limpio, incluido
+  `clasificacion` en el puerto 8087 (`GET /docs` responde 200). `npx newman
+  run` dos veces seguidas: 75/75 peticiones, 120/120 aserciones, sin fallos
+  desde la primera corrida — incluido el orden descendente por confianza
+  (RF-CL-003) y que `POST /no-clasificables` no agrega ninguna `Sugerencia`
+  nueva en records-custodia (RF-CL-010, verificado comparando el conteo de
+  sugerencias antes y después vía `sugerencias_count_cl`).
+  `postman/README.md` actualizado: 48/56 endpoints reales cubiertos, párrafo
+  de la carpeta 8, variables nuevas (`clasificacion_base_url`,
+  `documento_id_cl`, `sugerencias_count_cl`) documentadas, párrafo de
+  verificación con la corrida de hoy.
+  T-47 cerrada. Clasificación (T-44..T-47) queda completa — séptimo contexto
+  acotado del proyecto con su ciclo end-to-end verificado con Docker real y
+  Newman.
+  Siguiente paso: decisión de Victor — Enriquecimiento e Indexación y
+  Búsqueda son los dos contextos probabilísticos restantes del pipeline
+  (001 Normalización → 002 Extracción → 003 Clasificación → 004
+  Enriquecimiento → 005 Indexación y Búsqueda).

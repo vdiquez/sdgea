@@ -3003,6 +3003,311 @@
           ]
         }
       ]
+    },
+    {
+      "name": "8. Clasificacion (flujo end-to-end)",
+      "item": [
+        {
+          "name": "68 [Setup] Custodiar documento en records-custodia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos"
+              ]
+            },
+            "description": "T-47: ciclo completo de Clasificacion (T-44..T-46). Clasificacion no tiene persistencia propia (specs/003-clasificacion/spec.md §3), asi que el flujo empieza custodiando el documento destino en records-custodia, igual que las carpetas 4 y 6.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{documento_id_cl}}\",\n  \"bytesBase64\": \"SG9sYSBTR0RFQQ==\",\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-28T16:00:00Z\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-28T16:00:00Z\",\n    \"loteOFlujoId\": \"lote-cl-postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"documento_id_cl\", \"doc-cl-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "69 Clasificar -- dos candidatas, ordenadas por confianza descendente (RF-CL-001..004)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clasificacion_base_url}}/clasificaciones",
+              "host": [
+                "{{clasificacion_base_url}}"
+              ],
+              "path": [
+                "clasificaciones"
+              ]
+            },
+            "description": "RF-CL-002: candidatas FICTICIAS ya calculadas por el llamador. RF-CL-003: el Dado/Cuando/Entonces exige orden descendente por confianza (al reves que las colas de Validacion Humana) -- la de 0.91 debe volver primero.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": {\n    \"texto_extraido_id\": \"texto-cl-postman-1\",\n    \"documento_id\": \"{{documento_id_cl}}\",\n    \"contenido\": \"contenido extraido de prueba (postman)\",\n    \"estado\": \"EXTRAIDO\"\n  },\n  \"candidatas\": [\n    {\n      \"trd_version\": 1,\n      \"serie\": \"Serie Postman A\",\n      \"subserie\": \"Subserie Postman A1\",\n      \"confianza\": 0.55,\n      \"evidencia\": [\"heuristica-postman-baja\"],\n      \"modelo_id\": \"clasificador-ficticio-v1\",\n      \"fecha\": \"2026-08-28T16:01:00Z\"\n    },\n    {\n      \"trd_version\": 1,\n      \"serie\": \"Serie Postman B\",\n      \"subserie\": \"Subserie Postman B1\",\n      \"confianza\": 0.91,\n      \"evidencia\": [\"heuristica-postman-alta\"],\n      \"modelo_id\": \"clasificador-ficticio-v1\",\n      \"fecha\": \"2026-08-28T16:01:00Z\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created, ordenadas por confianza descendente (RF-CL-003)\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(body.length).to.eql(2);",
+                  "  pm.expect(body[0].confianza).to.eql(0.91);",
+                  "  pm.expect(body[0].contenido_propuesto).to.eql(\"Serie Postman B/Subserie Postman B1\");",
+                  "  pm.expect(body[1].confianza).to.eql(0.55);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "70 Verificar en records-custodia que las sugerencias de clasificacion llegaron (RF-CL-004)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id_cl}}/sugerencias",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id_cl}}",
+                "sugerencias"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, las dos sugerencias de clasificacion llegaron como Sugerencia real\", () => {",
+                  "  const sugerencias = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  const clasificacion = sugerencias.filter((s) => s.tipo === \"clasificacion\");",
+                  "  pm.expect(clasificacion.length).to.eql(2);",
+                  "  const confianzas = clasificacion.map((s) => s.confianza).sort((a, b) => b - a);",
+                  "  pm.expect(confianzas).to.eql([0.91, 0.55]);",
+                  "  pm.environment.set(\"sugerencias_count_cl\", sugerencias.length);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "71 Agrupar -- expediente propuesto (RF-CL-005/006)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clasificacion_base_url}}/agrupamientos",
+              "host": [
+                "{{clasificacion_base_url}}"
+              ],
+              "path": [
+                "agrupamientos"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": {\n    \"texto_extraido_id\": \"texto-cl-postman-1\",\n    \"documento_id\": \"{{documento_id_cl}}\",\n    \"contenido\": \"contenido extraido de prueba (postman)\",\n    \"estado\": \"EXTRAIDO\"\n  },\n  \"expediente_propuesto\": \"expediente-postman-1\",\n  \"confianza\": 0.77,\n  \"evidencia\": [\"similaridad-postman\"],\n  \"modelo_id\": \"agrupador-ficticio-v1\",\n  \"fecha\": \"2026-08-28T16:02:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created, tipo agrupamiento con el expediente propuesto\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(body.tipo).to.eql(\"agrupamiento\");",
+                  "  pm.expect(body.contenido_propuesto).to.eql(\"expediente-postman-1\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "72 Verificar en records-custodia que la sugerencia de agrupamiento llego (RF-CL-006)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id_cl}}/sugerencias",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id_cl}}",
+                "sugerencias"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, la sugerencia de agrupamiento llego como Sugerencia real\", () => {",
+                  "  const sugerencias = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  const agrupamiento = sugerencias.filter((s) => s.tipo === \"agrupamiento\");",
+                  "  pm.expect(agrupamiento.length).to.eql(1);",
+                  "  pm.expect(agrupamiento[0].contenidoPropuesto).to.eql(\"expediente-postman-1\");",
+                  "  pm.expect(sugerencias.length).to.eql(pm.environment.get(\"sugerencias_count_cl\") + 1);",
+                  "  pm.environment.set(\"sugerencias_count_cl\", sugerencias.length);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "73 Marcar texto no clasificable -- no reenvia nada a records-custodia (RF-CL-010)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{clasificacion_base_url}}/no-clasificables",
+              "host": [
+                "{{clasificacion_base_url}}"
+              ],
+              "path": [
+                "no-clasificables"
+              ]
+            },
+            "description": "RF-CL-010: la spec (§4) nombra el destino como 'Operador' (reporte), no Records/Custodia -- esta peticion no debe agregar ninguna Sugerencia nueva (verificado en la 74).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": {\n    \"texto_extraido_id\": \"texto-cl-postman-2\",\n    \"documento_id\": \"{{documento_id_cl}}\",\n    \"contenido\": \"\",\n    \"estado\": \"EXTRAIDO\"\n  },\n  \"razon\": \"contenido no evaluable (postman)\",\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-28T16:03:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, marca no clasificable devuelta\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.documento_id).to.eql(pm.environment.get(\"documento_id_cl\"));",
+                  "  pm.expect(body.razon).to.eql(\"contenido no evaluable (postman)\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "74 Verificar que no-clasificables no agrego ninguna sugerencia nueva (RF-CL-010)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id_cl}}/sugerencias",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id_cl}}",
+                "sugerencias"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, el conteo de sugerencias no cambio (RF-CL-010 no reenvia nada)\", () => {",
+                  "  const sugerencias = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(sugerencias.length).to.eql(pm.environment.get(\"sugerencias_count_cl\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

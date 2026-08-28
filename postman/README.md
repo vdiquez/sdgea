@@ -1,10 +1,10 @@
 # Colección Postman — corte vertical
 
-Cubre 45 de los 53 endpoints reales de `specs/spec-infra-servicios.md`
+Cubre 48 de los 56 endpoints reales de `specs/spec-infra-servicios.md`
 (captura-ingesta + records-custodia + seguridad-acceso + validacion-humana +
-normalizacion + extraccion), en el orden en que se probaron manualmente con
-`curl` — los 8 que faltan ya tienen su propia cobertura fuera de esta
-colección: en validacion-humana, candidatas a aprobación masiva, aprobación
+normalizacion + extraccion + clasificacion), en el orden en que se probaron
+manualmente con `curl` — los 8 que faltan ya tienen su propia cobertura fuera
+de esta colección: en validacion-humana, candidatas a aprobación masiva, aprobación
 en bloque y estado de la cola de clasificación (tests de Gradle, T-30); en
 records-custodia y normalizacion, `GET /sugerencias/pendientes` (T-28) y
 `GET /unidades/pendientes-de-limites` (T-39) — ambos se ejercitan
@@ -48,7 +48,19 @@ sí sola (P-01), confirmada primero con un actor sin permiso -> `403` y luego
 con el actor autorizado -> `Extraído`; una tercera unidad marcada `CORRUPTO`
 -> `En cuarentena` (RF-EX-009) para que el conteo final cuadre con tres
 unidades terminales; y una petición final contra `GET /eventos-auditoria`
-(P-08).
+(P-08); y la carpeta 8 (T-47, peticiones 68-74) ejercita el ciclo completo
+de Clasificación — **segundo flujo end-to-end real de solo dos servicios**
+(Clasificación no tiene persistencia propia, `specs/003-clasificacion/spec.md`
+§3, así que no aparece como un tercer servicio "con estado" en la cadena):
+custodiar un documento en records-custodia; clasificar con dos candidatas
+FICTICIAS y comprobar que la respuesta y el reenvío a
+`POST /sugerencias` llegan ordenados por confianza **descendente**
+(RF-CL-003 — al revés que las colas de Validación Humana) verificado
+consultando `GET /documentos/{id}/sugerencias` en records-custodia; agrupar
+a un expediente propuesto (RF-CL-005/006) y verificar el mismo endpoint;
+marcar un texto como no clasificable (RF-CL-010) y verificar que el conteo
+de sugerencias en records-custodia **no cambia** — su destino es el
+"Operador" (reporte), no Records/Custodia.
 
 ## Levantar el stack (con puertos locales para Postman)
 
@@ -75,7 +87,8 @@ docker compose -f ../deploy/docker-compose.saas.yml -f ../deploy/docker-compose.
    `unidad_id_vh_limites`/`lote_id_vh_limites`/`documento_id_vh_correccion`
    (carpeta 6, T-39),
    `rol_ex`/`actor_ex`/`identidad_id_ex`/`lote_id_ex`/`texto_id_ex`/`texto_id_ex_2`/`texto_id_ex_3`
-   (carpeta 7, T-43) — generadas con timestamp en la primera petición de cada flujo, así que correr la
+   (carpeta 7, T-43), `documento_id_cl`/`sugerencias_count_cl` (carpeta 8, T-47)
+   — generadas con timestamp en la primera petición de cada flujo, así que correr la
    colección varias veces no colisiona. La huella de contenido de
    Normalización también necesita timestamp: sin él, la segunda corrida
    detecta un duplicado real contra la primera y falla la aserción de
@@ -122,7 +135,12 @@ T-43/ciclo completo de Extracción, con los seis servicios corriendo a la vez
 — primer contexto Python que exige autorización real contra seguridad-acceso,
 RF-EX-011/P-03): 68/68 peticiones, 113/113 aserciones, dos corridas seguidas
 sin fallos desde la primera corrida — incluida la frontera de autorización
-(actor sin permiso -> `403`, actor autorizado -> `Extraído`).
+(actor sin permiso -> `403`, actor autorizado -> `Extraído`). Reverificado
+(2026-08-28, tras T-47/ciclo completo de Clasificación, con los siete
+servicios corriendo a la vez): 75/75 peticiones, 120/120 aserciones, dos
+corridas seguidas sin fallos desde la primera corrida — incluido el orden
+descendente por confianza (RF-CL-003) y que `POST /no-clasificables` no
+agrega ninguna `Sugerencia` nueva en records-custodia (RF-CL-010).
 
 ## Bajar el stack
 

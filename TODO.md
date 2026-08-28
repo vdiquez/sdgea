@@ -682,16 +682,23 @@ re-descubrirlo o inventar persistencia que la spec no pide):
       real que T-16..T-18/T-35/T-42 documentaron para Docker). Falta la
       verificación de punta a punta con Docker/Postman real (junto con T-47)
       cuando alguien la corra en un entorno con Docker disponible.
-- [ ] T-47 Colección Postman con el ciclo completo de Clasificación,
-      mismo patrón que T-36/T-43: custodiar un documento en records-custodia
-      → enviar una sugerencia de clasificación FICTICIA vía Clasificación →
-      verificar en records-custodia (`GET /documentos/{id}/sugerencias`)
-      que llegó como `Sugerencia` real → repetir para agrupamiento → un
-      texto marcado no clasificable. Segundo flujo end-to-end real de tres
-      servicios (records-custodia + Clasificación, mismo nivel que
-      Validación Humana↔Normalización en T-38). Verificar con Docker real y
-      dos corridas de Newman seguidas sin fallos — si el loop headless
-      llega hasta aquí sin poder tocar Docker/`npx` (mismo límite real que
-      T-43), es correcto que deje el trabajo sin comitear y explique por
-      qué, no que finja haberlo verificado; Victor o una sesión interactiva
-      lo retoma.
+- [x] T-47 Colección Postman con el ciclo completo de Clasificación
+      (carpeta "8. Clasificacion", peticiones 68-74). El loop headless dejó
+      el borrador de la colección construido pero sin comitear durante seis
+      sesiones consecutivas (docker compose/npx fuera del allowlist, mismo
+      límite real que T-43 — documentado seis veces en STATE.md, cada vez
+      confirmado por Codex como no ambiguo, no un `[?]`/QUESTIONS.md).
+      Retomado interactivamente: revisado el borrador (correcto, mismo
+      patrón que las carpetas 4/6/7), levantado el stack real de los siete
+      servicios (`docker compose -f deploy/docker-compose.saas.yml -f
+      deploy/docker-compose.local-ports.yml up -d --build`) y verificado con
+      dos corridas de Newman seguidas sin fallos: 75/75 peticiones, 120/120
+      aserciones. Flujo: custodiar un documento en records-custodia →
+      clasificar con dos candidatas FICTICIAS, verificar orden descendente
+      por confianza (RF-CL-003) en la respuesta y en
+      `GET /documentos/{id}/sugerencias` → agrupar a un expediente
+      propuesto (RF-CL-005/006), mismo endpoint → marcar no clasificable
+      (RF-CL-010) y verificar que el conteo de sugerencias en
+      records-custodia no cambia. Segundo flujo end-to-end real de solo dos
+      servicios (Clasificación no tiene persistencia propia). `postman/
+      README.md` actualizado (conteo de endpoints, carpeta 8, verificación).
