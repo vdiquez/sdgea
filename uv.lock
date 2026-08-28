@@ -58,6 +58,16 @@ name = "clasificacion"
 version = "0.1.0"
 source = { virtual = "contexts/clasificacion" }
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=9.1.1" }]
+
 [[package]]
 name = "click"
 version = "8.5.0"

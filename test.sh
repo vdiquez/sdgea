@@ -6,3 +6,4 @@ set -euo pipefail
 uv run --directory eval-harness pytest
 uv run --directory contexts/normalizacion pytest
 uv run --directory contexts/extraccion pytest
+uv run --directory contexts/clasificacion pytest
