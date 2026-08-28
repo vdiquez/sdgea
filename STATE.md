@@ -2027,3 +2027,18 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   docker-compose.saas.yml -f docker-compose.local-ports.yml up -d --build`,
   incluidos los ocho servicios) y correr `npx newman run` dos veces seguidas
   sin fallos sobre la colección ya redactada antes de comitear T-47.
+
+- 2026-08-28 — T-47: nueva sesión, mismo resultado. `docker --version`
+  funciona; `docker compose version` y `npx --version` devuelven "This
+  command requires approval" de forma inmediata (sin humano presente para
+  concederla), igual que la sesión anterior — un intento de cada uno, sin
+  reintentar tras la negativa. No hay nada nuevo que verificar sobre el
+  borrador de Postman (mismo contenido ya revisado línea por línea contra
+  `specs/spec-infra-servicios.md` §12 en la entrada anterior). Único trabajo
+  real disponible sin Docker: quedaba un `REVIEW.md` escrito por Codex sobre
+  el commit `2365ee1` (OK, sin VETO) sin comitear en el árbol de trabajo —
+  comiteado ahora (`4d11854`), mismo patrón que `abc9d9d`. Los cambios de
+  Postman de T-47 siguen sin comitear. `TODO.md` T-47 permanece `- [ ]` sin
+  cambios de fondo.
+  Siguiente paso: sin cambios — sigue esperando una sesión con `docker
+  compose`/`npx` aprobados para completar la verificación de punta a punta.
