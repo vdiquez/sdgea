@@ -2,8 +2,12 @@
 Fase: F3 — seis bounded contexts completos de punta a punta (captura-ingesta,
 records-custodia, seguridad-acceso, validación humana, normalización,
 extracción); Clasificación en curso: T-44 (dominio), T-45 (servicio HTTP) y
-T-46 (Dockerfile + wiring en docker-compose) completas, T-47 (Postman) es la
-próxima tarea `- [ ]` abierta en TODO.md. Ver plan-ejecucion-agentica.md.
+T-46 (Dockerfile + wiring en docker-compose) completas. T-47 (Postman) tiene
+la colección ya redactada sin comitear (carpeta "8. Clasificacion") pero
+bloqueada por falta de aprobación de `docker compose`/`npx` en esta sesión —
+sigue siendo la próxima tarea `- [ ]` abierta en TODO.md hasta que una sesión
+con esa aprobación disponible la verifique con Docker/Newman reales y la
+comitee. Ver plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -1975,3 +1979,51 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Siguiente paso: T-47 (colección Postman con el ciclo completo de
   Clasificación, verificado con Docker/Newman reales) es la próxima tarea
   abierta en TODO.md.
+
+- 2026-08-28 — T-47 (colección Postman con el ciclo completo de
+  Clasificación): retomada esta sesión, encontrada YA REDACTADA en el árbol
+  de trabajo sin comitear (carpeta nueva "8. Clasificacion (flujo
+  end-to-end)", peticiones 68-74, en
+  `postman/SGDEA-coleccion.postman_collection.json`, más
+  `clasificacion_base_url`/`documento_id_cl`/`sugerencias_count_cl` en
+  `postman/SGDEA-local.postman_environment.json`) — mismo patrón exacto que
+  las carpetas 4/6/7 (T-32/T-38/T-43): custodiar documento en records-custodia
+  → clasificar dos candidatas y verificar orden descendente por confianza
+  (RF-CL-001..004) → confirmar en records-custodia que llegaron como
+  `Sugerencia` real → agrupar una candidata de expediente y verificar llegada
+  (RF-CL-005/006) → marcar no clasificable y verificar que NO agrega ninguna
+  sugerencia nueva (RF-CL-010). No se identificó autor de ese trabajo previo
+  en el historial de commits ni en REVIEW.md; se revisó su contenido línea por
+  línea contra la tabla de endpoints de `specs/spec-infra-servicios.md` §12 y
+  el Dado/Cuando/Entonces de RF-CL-001..010 antes de continuar — es correcto y
+  no inventa ningún criterio de negocio nuevo.
+  Verificado en esta sesión, sin Docker: sintaxis JSON de ambos archivos
+  (`uv run python -c "json.load(...)"`, ya que `uv run *` está preaprobado)
+  y `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL; pytest:
+  eval-harness 4, normalizacion 40, extraccion 55, clasificacion 27) —
+  confirma que nada de lo ya escrito rompió la suite existente.
+  **Bloqueada la verificación de punta a punta que exige la tarea**: a
+  diferencia de la sesión de T-46 (donde ni siquiera `docker` bruto estaba
+  aprobado), en esta sesión `docker --version`/`docker ps` sí se ejecutan sin
+  aprobación, pero cualquier subcomando `docker compose ...` (incluido un
+  `config --quiet` de solo lectura, sin `up`) devuelve "This command requires
+  approval" de forma inmediata, sin que haya un humano presente en esta
+  sesión para concederla; `npx` (Newman) tiene el mismo bloqueo. Se intentó
+  una sola vez cada variante relevante (`docker compose version`, `docker
+  compose ... config --quiet`) y se dejó de reintentar tras la segunda
+  negativa, según la instrucción de no re-intentar la misma llamada ante una
+  denegación. No se fingió una verificación que no ocurrió.
+  Acción tomada: se comiteó por separado el REVIEW.md de T-46 que había
+  quedado pendiente de un commit `chore` (T-46 en sí ya estaba comiteado en
+  `b7cefc6`; solo faltaba registrar su revisión — commit `abc9d9d`). Los
+  cambios de Postman (colección + entorno) de T-47 se dejan sin comitear a
+  propósito, igual que el criterio ya documentado para T-41/T-43/T-46: no
+  comitear trabajo que la propia tarea exige verificar con Docker/Newman
+  reales hasta que esa verificación ocurra. `TODO.md` T-47 permanece `- [ ]`
+  (no es una ambigüedad de negocio/legal, así que no aplica `- [?]` ni
+  QUESTIONS.md — es una limitación de permisos de herramienta en esta sesión).
+  Siguiente paso: una sesión con aprobación disponible para `docker compose`
+  y `npx` debe levantar el stack real (`docker compose -f
+  docker-compose.saas.yml -f docker-compose.local-ports.yml up -d --build`,
+  incluidos los ocho servicios) y correr `npx newman run` dos veces seguidas
+  sin fallos sobre la colección ya redactada antes de comitear T-47.
