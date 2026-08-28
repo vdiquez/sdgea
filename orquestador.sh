@@ -26,6 +26,12 @@
 #   MAX_TASK_ATTEMPTS=3      intentos de tests por tarea antes de bloquear
 #   BACKOFF_START=600        backoff inicial ante rate limit (s)
 #   BACKOFF_MAX=5400         backoff máximo (s)
+#   RATE_LIMIT_HANDOFF_ATTEMPTS=2  ciclos de backoff que se toleran a Claude
+#                            antes de entregarle la iteración a Codex en modo
+#                            autorrevisión (implementa + se revisa a sí mismo,
+#                            marca STATE.md "PENDIENTE_AUDITORIA_CLAUDE").
+#                            Claude audita esas entradas en su próxima corrida
+#                            exitosa, antes de tomar tarea nueva de TODO.md.
 #   STEP_TIMEOUT=3600        timeout por paso de agente (s)
 #   NTFY_TOPIC=""            topic de ntfy.sh para notificaciones push (opcional)
 #   CONTAINED=0              =1 SOLO dentro de un contenedor sin volúmenes del host:
@@ -39,6 +45,7 @@ MAX_ITER="${MAX_ITER:-25}"
 MAX_TASK_ATTEMPTS="${MAX_TASK_ATTEMPTS:-3}"
 BACKOFF_START="${BACKOFF_START:-600}"
 BACKOFF_MAX="${BACKOFF_MAX:-5400}"
+RATE_LIMIT_HANDOFF_ATTEMPTS="${RATE_LIMIT_HANDOFF_ATTEMPTS:-2}"
 STEP_TIMEOUT="${STEP_TIMEOUT:-3600}"
 NTFY_TOPIC="${NTFY_TOPIC:-}"
 CONTAINED="${CONTAINED:-0}"
@@ -71,9 +78,14 @@ commit_count() { git rev-list --count HEAD 2>/dev/null || echo 0; }
 
 # ------------------------------------------------------- llamadas a los agentes
 # Claude Code headless. Captura session_id; ante rate limit hace backoff y
-# reanuda LA MISMA sesión con --resume.
+# reanuda LA MISMA sesión con --resume, hasta RATE_LIMIT_HANDOFF_ATTEMPTS
+# ciclos — a partir de ahí devuelve 2 (distinto de 1=fallo real) para que
+# cmd_loop entregue esa iteración a Codex en vez de seguir esperando: un
+# rate limit de cuenta (ventana de varias horas) no se resuelve reintentando
+# unos minutos más, a diferencia de un "overloaded"/429 transitorio, que sí
+# suele resolverse en el primer o segundo reintento.
 run_claude() { # run_claude <prompt> <etiqueta>
-  local prompt="$1" tag="$2" out sid="" wait="$BACKOFF_START" attempt=0
+  local prompt="$1" tag="$2" out sid="" wait="$BACKOFF_START" attempt=0 rl_attempts=0
   local -a flags=(--output-format json
                   --append-system-prompt "Reglas duras: .specify/memory/constitution.md es SOLO LECTURA, nunca la edites ni la comitees (specs/00-constitution.md es un stub que apunta ahí, mismo trato). El resto de specs/ (contextos, plan-*.md, tasks-*.md, correcciones) SÍ puedes crearlo y editarlo, y comitearlo tras pasar revisión de Codex — no pidas aprobación humana por archivo. No inventar referencias normativas ni umbrales: quedan PENDIENTE/[CLARIFICAR]. No implementar componentes probabilísticos reales. Ante ambigüedad real (no procedimental) escribir en QUESTIONS.md y detener la tarea.")
   if [ "$CONTAINED" = "1" ]; then
@@ -98,7 +110,12 @@ run_claude() { # run_claude <prompt> <etiqueta>
     [ -z "$sid" ] && sid="$(json_field "$out" session_id)"
     if [ "$rc" -eq 0 ]; then return 0; fi
     if is_rate_limited "$out"; then
-      log "Claude rate-limited (intento $attempt). Backoff ${wait}s; luego --resume ${sid:-nuevo}."
+      rl_attempts=$((rl_attempts+1))
+      if [ "$rl_attempts" -ge "$RATE_LIMIT_HANDOFF_ATTEMPTS" ]; then
+        log "Claude rate-limited $rl_attempts veces seguidas (~${wait}s de espera ya agotados). Se entrega esta iteración a Codex en modo autorrevisión en vez de seguir esperando."
+        return 2
+      fi
+      log "Claude rate-limited (intento $rl_attempts/$RATE_LIMIT_HANDOFF_ATTEMPTS). Backoff ${wait}s; luego --resume ${sid:-nuevo}."
       sleep "$wait"; wait=$(( wait*2 > BACKOFF_MAX ? BACKOFF_MAX : wait*2 ))
     elif [ "$attempt" -lt 3 ]; then
       log "Claude falló (rc=$rc). Reintento $attempt/3. Log: $out"; sleep 30
@@ -134,6 +151,18 @@ fitness() { # tests como árbitro objetivo
 
 # --------------------------------------------------------------------- prompts
 CLAUDE_STEP_PROMPT='Lee, en este orden: CLAUDE.md, .specify/memory/constitution.md, STATE.md, REVIEW.md y TODO.md.
+
+Si STATE.md tiene una o más entradas marcadas "PENDIENTE_AUDITORIA_CLAUDE" (commits que Codex
+hizo solo y autorrevisó mientras tu cuenta estaba en su límite de uso): audítalas TODAS primero,
+antes de tomar cualquier tarea nueva de TODO.md. Para cada una, revisa el commit correspondiente
+(git show) con el mismo rigor de una revisión tuya normal: P-01, P-03, P-08, honestidad de los
+tests, y (si tocó specs/) referencias/umbrales inventados. Si encuentras una violación real:
+corrígela tú mismo si es una corrección de consistencia clara contra un patrón ya ratificado en
+el proyecto, o escríbela en QUESTIONS.md si exige una decisión de Victor. Cuando termines de
+auditar una entrada, quita su marca "PENDIENTE_AUDITORIA_CLAUDE" de STATE.md y deja una línea
+diciendo qué encontraste (o que quedó conforme). Si no hay ninguna pendiente, sigue directo con
+lo de abajo.
+
 Toma la PRIMERA tarea abierta "- [ ]" de TODO.md y trabaja SOLO en ella.
 Si la tarea es de CÓDIGO (implementación de un RF):
 1) Localiza en la spec del contexto los criterios Dado/Cuando/Entonces del RF de la tarea.
@@ -170,6 +199,52 @@ Sobrescribe REVIEW.md con tu revisión. Si detectas una violación de la
 constitución o una referencia/umbral inventado, la PRIMERA línea de REVIEW.md debe
 ser exactamente "VETO: <motivo>".
 Puedes añadir tareas "- [ ]" al final de TODO.md solo si derivan de una spec existente.'
+
+# Modo autorrevisión: Claude está en su límite de uso de cuenta (ver
+# RATE_LIMIT_HANDOFF_ATTEMPTS) y Codex toma AMBOS roles de esta iteración —
+# implementa y, aparte, se revisa a sí mismo con CODEX_SELFREVIEW_PROMPT.
+# Marca STATE.md para que Claude audite el commit en su próxima corrida
+# exitosa (ver el párrafo nuevo al inicio de CLAUDE_STEP_PROMPT).
+CODEX_LEAD_PROMPT='Claude Code está en el límite de uso de su cuenta (rate limit sostenido, no un
+error transitorio) y no puede trabajar por ahora. Vas a implementar tú la siguiente tarea del
+loop, con las mismas reglas que sigue Claude Code aquí — y, porque no hay un segundo agente
+disponible para revisarte en este momento, además de implementar vas a autorrevisarte con el
+mismo rigor de una revisión de Codex normal antes de comitear.
+
+Lee, en este orden: AGENTS.md, .specify/memory/constitution.md, STATE.md, REVIEW.md y TODO.md.
+Toma la PRIMERA tarea abierta "- [ ]" de TODO.md y trabaja SOLO en ella.
+Si la tarea es de CÓDIGO (implementación de un RF):
+1) Localiza en la spec del contexto los criterios Dado/Cuando/Entonces del RF de la tarea.
+2) Escribe PRIMERO los tests que expresan esos criterios.
+3) Implementa hasta que los tests pasen ejecutando: __TEST_CMD__
+Si la tarea es de SPEC (nuevo contexto, plan-*.md o tasks-*.md, corrección a una spec
+existente): redáctala siguiendo el formato y el nivel de rigor de las specs ya existentes. No
+inventes referencias normativas ni umbrales.
+Antes de comitear, autorrevísate: P-01 (nada probabilístico escribe estado), P-03 (toda
+capacidad externa detrás de su interfaz propia), P-08 (toda transición emite evento de
+auditoría), honestidad de los tests, y (si tocaste specs/) que ninguna referencia normativa o
+umbral es inventado. Si encuentras un problema, corrígelo antes de comitear — no comitees algo
+que tú mismo vetarías si lo revisaras de otro.
+Al terminar:
+4) Haz un commit atómico con mensaje "RF-XXX: <resumen>" / "spec: <resumen>" / "chore: ...", y
+   añade una línea "AUTORREVISION: Codex (Claude no disponible)". Puedes comitear specs/
+   directamente — SOLO .specify/memory/constitution.md (y su stub specs/00-constitution.md)
+   está bloqueado por el hook y requiere HUMAN=1.
+5) Marca la tarea "- [x]" en TODO.md y actualiza STATE.md: agrega la entrada de esta tarea
+   marcada explícitamente "PENDIENTE_AUDITORIA_CLAUDE" (para que Claude Code la audite cuando
+   su cuenta vuelva a estar disponible), con la misma información de siempre (decisiones
+   tomadas, siguiente paso).
+Si encuentras un [CLARIFICAR], una celda PENDIENTE o una ambigüedad real: NO la resuelvas
+inventando. Escribe la pregunta en QUESTIONS.md, marca la tarea "- [?]" y termina limpiamente.'
+
+CODEX_SELFREVIEW_PROMPT="$CODEX_REVIEW_PROMPT"'
+
+Nota: este commit lo hiciste TÚ (Claude Code está en el límite de uso de su cuenta y no puede
+revisarte ahora) — no hay un segundo agente independiente revisándote en este momento, así que
+sé más exigente contigo mismo de lo habitual. Confirma además que el mensaje del commit incluye
+la línea "AUTORREVISION: Codex (Claude no disponible)" y que STATE.md deja la entrada de esta
+tarea marcada "PENDIENTE_AUDITORIA_CLAUDE". Si falta cualquiera de las dos, trátalo como hallazgo
+bloqueante y VETA hasta que se corrija.'
 
 PREFLIGHT_PROMPT='Fase F0 (pre-vuelo). Lee .specify/memory/constitution.md y luego aplica EN EL ÁRBOL DE
 TRABAJO, SIN COMITEAR, exactamente estas tres correcciones (Apéndice A del plan):
@@ -288,7 +363,8 @@ cmd_loop() {
   [ -f TODO.md ] || die "Falta TODO.md; corre bootstrap y seed."
   rm -f BLOCKED.md
   local prompt="${CLAUDE_STEP_PROMPT//__TEST_CMD__/$TEST_CMD}"
-  local stale=0 prev_count fail_streak=0
+  local codex_lead_prompt="${CODEX_LEAD_PROMPT//__TEST_CMD__/$TEST_CMD}"
+  local stale=0 prev_count fail_streak=0 codex_led rc_claude
   prev_count=$(commit_count)
   notify "Loop iniciado ($(git branch --show-current 2>/dev/null || echo '?'))"
 
@@ -305,7 +381,16 @@ cmd_loop() {
       return 0
     fi
 
-    run_claude "$prompt" "iter$i" || { echo "Motivo: Claude falló (iter $i)" > BLOCKED.md; notify "Loop bloqueado: Claude falló."; return 1; }
+    rc_claude=0
+    run_claude "$prompt" "iter$i" || rc_claude=$?
+    codex_led=0
+    if [ "$rc_claude" -eq 1 ]; then
+      echo "Motivo: Claude falló (iter $i)" > BLOCKED.md; notify "Loop bloqueado: Claude falló."; return 1
+    elif [ "$rc_claude" -eq 2 ]; then
+      notify "Claude en límite de uso sostenido; Codex toma la iteración $i (implementa + autorrevisión)."
+      run_codex "$codex_lead_prompt" "iter$i-lead" || { echo "Motivo: Codex en modo autorrevisión falló (iter $i)" > BLOCKED.md; notify "Loop bloqueado: Codex en modo autorrevisión falló."; return 1; }
+      codex_led=1
+    fi
 
     if fitness; then
       fail_streak=0
@@ -321,7 +406,11 @@ cmd_loop() {
       continue   # misma tarea, siguiente intento
     fi
 
-    run_codex "$CODEX_REVIEW_PROMPT" "iter$i" || log "Revisión de Codex falló; se continúa con precaución."
+    if [ "$codex_led" -eq 1 ]; then
+      run_codex "$CODEX_SELFREVIEW_PROMPT" "iter$i-selfreview" || log "Autorrevisión de Codex falló; se continúa con precaución."
+    else
+      run_codex "$CODEX_REVIEW_PROMPT" "iter$i" || log "Revisión de Codex falló; se continúa con precaución."
+    fi
     if head -1 REVIEW.md 2>/dev/null | grep -q '^VETO:'; then
       { echo "Motivo: VETO de Codex:"; head -5 REVIEW.md; } > BLOCKED.md
       notify "Loop detenido por VETO de Codex. Lee REVIEW.md; tú decides."

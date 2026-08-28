@@ -2192,3 +2192,62 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Búsqueda son los dos contextos probabilísticos restantes del pipeline
   (001 Normalización → 002 Extracción → 003 Clasificación → 004
   Enriquecimiento → 005 Indexación y Búsqueda).
+
+- 2026-08-28 — Mejora operativa de `orquestador.sh`: Victor pidió saber (1)
+  si empezar sesión nueva reduce el consumo de tokens manteniendo el mismo
+  flujo, y (2) si es posible detectar el 80% de uso de Claude para alternar
+  con Codex (Codex implementa, Claude valida).
+  (1) Confirmado que sí: el propio diseño del proyecto (STATE.md/TODO.md/
+  REVIEW.md/QUESTIONS.md como memoria externa) ya es lo que le permite a
+  `run_claude()` arrancar una sesión de `claude -p` nueva cada iteración sin
+  arrastrar historial — el mismo patrón aplica a sesiones interactivas.
+  (2) Verificado que NO existe un "80%" oficial expuesto por `claude --help`
+  ni por el formato `--output-format json` (sí trae `usage`/`total_cost_usd`
+  por llamada, pero no un % de cupo de cuenta) — proponer ese número sería
+  inventar un umbral, lo mismo que prohíbe la constitución para las specs.
+  En su lugar, Victor eligió (vía AskUserQuestion) el fallback reactivo: usar
+  la señal real que YA existe (`is_rate_limited()`), no una inventada.
+  Victor además hizo una pregunta clave que cambió el diseño: si se agota la
+  ventana de uso de Claude, ¿Claude Code sigue funcionando para algo (p. ej.
+  validar)? Respuesta: NO — el límite es de cuenta, no por rol; ninguna
+  llamada a Claude funciona hasta que la ventana se reinicia, así que
+  "Codex implementa, Claude valida" no puede ser simultáneo durante el
+  apagón. Se rediseñó como two-tiempos: durante el apagón, Codex implementa
+  Y se autorrevisa (sin segundo par de ojos); cuando Claude vuelve, audita
+  retroactivamente antes de tomar tarea nueva. Victor eligió esta opción
+  (autorrevisión) sobre "sin revisión" o "pausar código" (AskUserQuestion).
+  Implementado en `orquestador.sh`:
+  - `run_claude()`: nuevo contador `rl_attempts` independiente del contador
+    de fallos genéricos; tras `RATE_LIMIT_HANDOFF_ATTEMPTS` (default 2)
+    ciclos de rate-limit seguidos, devuelve `2` (en vez de seguir esperando
+    indefinidamente como antes) — código distinto de `1` (fallo real) para
+    que `cmd_loop` distinga "hay que entregarle el turno a Codex" de "esto
+    fracasó de verdad". Verificado con un `claude` simulado (rate-limited
+    siempre, éxito inmediato, fallo genérico): los tres casos devuelven el
+    código correcto (2, 0, 1 respectivamente) — no solo revisión visual.
+  - `CODEX_LEAD_PROMPT` (nuevo): Codex implementa la tarea con las mismas
+    reglas que `CLAUDE_STEP_PROMPT`, se autorrevisa contra P-01/P-03/P-08 y
+    honestidad de tests antes de comitear, añade "AUTORREVISION: Codex
+    (Claude no disponible)" al mensaje del commit y marca la entrada de
+    STATE.md "PENDIENTE_AUDITORIA_CLAUDE".
+  - `CODEX_SELFREVIEW_PROMPT` (nuevo): mismo `CODEX_REVIEW_PROMPT` de
+    siempre + una nota exigiendo más rigor por no haber un segundo agente
+    independiente, y verificando que el commit dejó ambas marcas.
+  - `CLAUDE_STEP_PROMPT`: nuevo párrafo al inicio — si STATE.md tiene
+    entradas "PENDIENTE_AUDITORIA_CLAUDE", auditarlas TODAS (mismo rigor que
+    una revisión normal) antes de tomar cualquier tarea nueva de TODO.md.
+  - `cmd_loop()`: cuando `run_claude` devuelve `2`, la iteración pasa a
+    `run_codex "$CODEX_LEAD_PROMPT"` y, tras `fitness`, a
+    `run_codex "$CODEX_SELFREVIEW_PROMPT"` en vez del par Claude+Codex
+    normal — mismo manejo de VETO/BLOCKED.md/watchdog que ya existía, sin
+    duplicar esa lógica.
+  Limitación conocida, no resuelta ahora (fuera del alcance pedido): si
+  Codex TAMBIÉN se queda sin cupo durante el modo autorrevisión, `run_codex`
+  sigue reintentando indefinidamente como siempre — no tiene un handoff
+  propio. Tampoco se optimizó el caso de varias iteraciones seguidas en modo
+  Codex-líder: cada iteración vuelve a darle a Claude una oportunidad fresca
+  de ~`BACKOFF_START`+`BACKOFF_START*2` segundos (~30 min con los defaults)
+  antes de ceder de nuevo — se prefirió así para reconectar con Claude en
+  cuanto la ventana se reinicie, a cambio de ese costo fijo por iteración
+  durante el apagón; si en la práctica resulta molesto, ajustar es sencillo
+  (guardar un timestamp de "no reintentar antes de X").
