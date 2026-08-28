@@ -1,54 +1,46 @@
-# Revisión de `b7cefc660e352929a401a332dc7409eaae92d0a9` — T-46
+# Revisión de `46ecb74` — documentación del bloqueo de T-47
 
 ## Resultado: OK
 
-El commit añade el empaquetado Docker y el wiring Compose de Clasificación, y
-reemplaza el stub de su punto de entrada por el arranque real de Uvicorn. Es
-consistente con `specs/003-clasificacion/spec.md` y con
-`specs/spec-infra-servicios.md` §12.
+El commit modifica exclusivamente `STATE.md`. Documenta que la colección Postman
+de T-47 existe sin comitear, que la verificación end-to-end con Docker/Newman no
+se realizó por falta de aprobación, y que la tarea continúa abierta. Esto coincide
+con `TODO.md`, donde T-47 permanece como `- [ ]`, y con el alcance de
+`specs/003-clasificacion/spec.md`.
 
 ## Principios constitucionales
 
-- **P-01 — conforme.** El cambio no añade una operación que materialice
-  clasificación ni expediente. El proceso expone la misma `api.app` cuyo flujo
-  sólo genera `SugerenciaSaliente` y la entrega por
-  `EnviadorDeSugerencias` a `POST /sugerencias` de Records/Custodia: la capa
-  anticorrupción. La decisión humana sigue siendo la única materialización.
-- **P-03 — conforme.** No se incorpora OCR, inferencia, embeddings, índices ni
-  otra capacidad externa crítica. La comunicación con Records/Custodia conserva
-  el puerto propio `EnviadorDeSugerencias`, con adaptador HTTP intercambiable;
-  la orquestación no depende de una implementación concreta.
-- **P-08 — conforme.** Clasificación no mantiene estado propio y T-46 no añade
-  transiciones. La recepción de la sugerencia continúa en Records/Custodia,
-  donde el contrato existente emite el evento de auditoría correspondiente.
+- **P-01 — conforme.** No cambia código ni estado de documentos o expedientes.
+  El flujo documentado entrega únicamente `Sugerencia` a Records/Custodia y no
+  afirma materialización sin decisión humana.
+- **P-03 — conforme.** No introduce ni modifica una capacidad externa o su
+  interfaz; el bloqueo de `docker compose` y Newman es operativo.
+- **P-08 — conforme.** No se introducen transiciones de estado. El commit no
+  altera la emisión de eventos de auditoría.
 
 ## Specs, referencias y umbrales
 
-Se modificó `specs/spec-infra-servicios.md`. No aparecen Acuerdo, Ley,
-Decreto, ISO ni otra referencia normativa nueva. El único número introducido
-es el puerto técnico `8087` (y su mapeo `8087:8087`), no un umbral normativo,
-de negocio o evaluación. Sus referencias a T-46, T-31 y a la spec de
-Clasificación ya existente son trazabilidad interna, no fuentes inventadas.
+No se modificó ningún archivo bajo `specs/`; no aplica el chequeo adicional de
+referencias normativas o umbrales nuevos. El puerto `8087` citado ya existe en
+la infraestructura y no es un umbral nuevo.
 
 ## Tests y honestidad
 
-Las 27 pruebas de Clasificación pasan. Los dobles de `test_api.py` se usan
-para probar la composición HTTP-dominio sin red y no amañan el adaptador:
-`test_integracion.py` usa `httpx.MockTransport` y verifica el método, URL y
-cuerpo exacto que `EnviadorDeSugerenciasHttp` manda a Records/Custodia.
+El commit no cambia implementación ni pruebas, por lo que no añade criterios de
+aceptación que puedan estar amañados. Su afirmación es honesta: separa las
+validaciones realizadas de la comprobación Docker/Newman pendiente y no marca
+T-47 como terminada ni incorpora los cambios Postman al commit.
 
-T-46 no tiene un RF nuevo con Dado/Cuando/Entonces; es empaquetado. La suite
-previa no cubría el entrypoint, pero el defecto del stub fue corregido y esta
-revisión importó `main.app` con éxito. También validó ambas composiciones
-`saas` y `onprem` combinadas con los puertos locales mediante `docker compose
-config --quiet`. No se construyó ni ejecutó una imagen/contenedor real: T-47
-mantiene pendiente esa comprobación end-to-end. Esa limitación queda
-documentada y no se presenta como evidencia inexistente.
+Los dos artefactos Postman sin comitear referidos por `STATE.md` existen y su
+JSON es válido. No ejecuté `./test.sh`: el commit no modifica código ni tests y
+la verificación de extremo a extremo requerida por T-47 sigue explícitamente
+pendiente.
 
 ## Verificación realizada
 
+- `git show HEAD`: sólo `STATE.md`.
 - `git diff --check HEAD^ HEAD`: sin errores.
-- `uv run --directory contexts/clasificacion pytest`: **27 passed**.
-- Importación de `main.app`: correcta.
-- `docker compose ... config --quiet` para SaaS y on-prem con
-  `docker-compose.local-ports.yml`: correcto.
+- `TODO.md`: T-47 sigue abierta y exige dos corridas Newman reales.
+- `specs/003-clasificacion/spec.md`: el flujo descrito respeta RF-CL-004,
+  RF-CL-006, RF-CL-007 y RF-CL-010.
+- JSON de la colección y el entorno Postman no comiteados: válido.
