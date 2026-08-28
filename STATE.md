@@ -4,10 +4,11 @@ records-custodia, seguridad-acceso, validación humana, normalización,
 extracción); Clasificación en curso: T-44 (dominio), T-45 (servicio HTTP) y
 T-46 (Dockerfile + wiring en docker-compose) completas. T-47 (Postman) tiene
 la colección ya redactada sin comitear (carpeta "8. Clasificacion") pero
-bloqueada por falta de aprobación de `docker compose`/`npx` en esta sesión —
-sigue siendo la próxima tarea `- [ ]` abierta en TODO.md hasta que una sesión
-con esa aprobación disponible la verifique con Docker/Newman reales y la
-comitee. Ver plan-ejecucion-agentica.md.
+bloqueada por falta de aprobación de `docker compose`/`npx` — sexta sesión
+consecutiva con el mismo bloqueo (2026-08-28) — sigue siendo la próxima tarea
+`- [ ]` abierta en TODO.md hasta que una sesión con esa aprobación disponible
+(por allowlist en `.claude/settings.local.json` o un humano presente) la
+verifique con Docker/Newman reales y la comitee. Ver plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -2122,3 +2123,37 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   compose`/`npx` aprobados (por allowlist o por un humano presente) para
   levantar el stack real y correr `npx newman run` dos veces seguidas sin
   fallos sobre la colección ya redactada antes de comitear T-47.
+
+- 2026-08-28 — T-47: sexta sesión, mismo resultado. A diferencia de las cinco
+  sesiones anteriores (que probaron primero `docker compose version`/`config
+  --quiet` de solo lectura), esta sesión intentó directamente el comando real
+  que la tarea exige: `docker compose -f deploy/docker-compose.saas.yml -f
+  deploy/docker-compose.local-ports.yml up -d --build`. Primer intento
+  encadenado con `cd deploy &&` devolvió un error distinto ("This Bash command
+  contains multiple operations..."); se retiró el `cd` y se repitió con rutas
+  relativas desde la raíz del repo (sin encadenar) — mismo resultado que las
+  sesiones anteriores: "This command requires approval", sin humano presente
+  para concederla. `npx --version`, probado por separado, igual. Un intento de
+  cada variante, sin reintentar tras la negativa. `docker --version`/`docker
+  ps` siguen funcionando sin aprobación (el daemon responde, sin contenedores
+  corriendo). Confirmado de nuevo contra `.claude/settings.local.json`:
+  `permissions.allow` sigue sin ningún patrón `docker compose`/`npx`, solo
+  `Bash(docker --version)` y `Bash(docker pull *)` — sexta sesión consecutiva
+  con la misma restricción estable, no un artefacto puntual del entorno ni del
+  comando (compuesto vs. suelto) usado para probarla.
+  Único trabajo real disponible sin Docker: un `REVIEW.md` de Codex sobre el
+  commit `5e39598` (OK, sin VETO) que quedó sin comitear — comiteado ahora
+  (`cc5afef`), mismo patrón que las cinco veces anteriores. No se volvió a
+  correr `./test.sh` porque no se tocó ningún archivo de código ni de test.
+  Los cambios de Postman de T-47 (carpeta "8. Clasificacion", peticiones
+  68-74, borrador sin cambios desde la primera sesión) siguen sin comitear a
+  propósito. `TODO.md` T-47 permanece `- [ ]` — sigue siendo una limitación de
+  permisos de herramienta, no una ambigüedad de negocio/legal, así que no
+  aplica `- [?]` ni `QUESTIONS.md`.
+  Siguiente paso: sin cambios de fondo. Dado que son ya seis sesiones idénticas,
+  la recomendación pasa de "reintentar" a "resolver la causa raíz": un humano
+  debe añadir `Bash(docker compose *)` y `Bash(npx *)` (o patrones más
+  acotados) a `permissions.allow` en `.claude/settings.local.json`, o correr él
+  mismo `docker compose ... up -d --build` + `npx newman run` (dos veces
+  seguidas sin fallos) en una sesión interactiva donde pueda conceder la
+  aprobación en el momento, antes de comitear T-47.
