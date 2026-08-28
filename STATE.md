@@ -2097,3 +2097,28 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   compose`/`npx` aprobados (por allowlist o por un humano presente) para
   levantar el stack real y correr `npx newman run` dos veces seguidas sin
   fallos sobre la colección ya redactada antes de comitear T-47.
+
+- 2026-08-28 — T-47: quinta sesión, mismo resultado. `docker ps` funciona (el
+  daemon responde, sin contenedores corriendo); `docker compose -f
+  deploy/docker-compose.saas.yml -f deploy/docker-compose.local-ports.yml up
+  -d --build` y, por separado, `npx --version` devuelven "This command
+  requires approval" de forma inmediata, sin humano presente en esta sesión
+  para concederla — un intento de cada uno (probados sueltos, no encadenados),
+  sin reintentar tras la negativa. Confirmado de nuevo contra
+  `.claude/settings.local.json`: `permissions.allow` sigue sin ningún patrón
+  `docker compose`/`npx`, solo `Bash(docker --version)` y `Bash(docker pull
+  *)`. No hay ningún RF ni Dado/Cuando/Entonces que reinterpretar aquí — es la
+  misma restricción de permisos de herramienta que las cuatro sesiones
+  anteriores, no una ambigüedad de negocio/legal, así que T-02 (ver
+  QUESTIONS.md, resuelta) no aplica de precedente para inventar nada.
+  Único trabajo real disponible sin Docker: un `REVIEW.md` de Codex sobre el
+  commit `26cf6ff` (OK, sin VETO) que quedó sin comitear — comiteado ahora,
+  mismo patrón que `abc9d9d`/`4d11854`/`457595c`/`231c463`. No se volvió a
+  correr `./test.sh` porque no se tocó ningún archivo de código ni de test.
+  Los cambios de Postman de T-47 (carpeta "8. Clasificacion", peticiones
+  68-74, borrador sin cambios desde la primera sesión) siguen sin comitear a
+  propósito. `TODO.md` T-47 permanece `- [ ]`.
+  Siguiente paso: sin cambios — sigue esperando una sesión con `docker
+  compose`/`npx` aprobados (por allowlist o por un humano presente) para
+  levantar el stack real y correr `npx newman run` dos veces seguidas sin
+  fallos sobre la colección ya redactada antes de comitear T-47.
