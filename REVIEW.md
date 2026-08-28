@@ -1,60 +1,27 @@
-# Revisión de `d1471fca79ec2c40ed7405dc8860ca772a29f363` — T-41b
+OK: commit `82f866b` conforme a la constitución y al contexto de Extracción.
 
-Revisados `AGENTS.md`, `.specify/memory/constitution.md`, `STATE.md`, el plan
-vigente, `specs/002-extraccion/spec.md`, `specs/spec-infra-servicios.md`, el
-diff completo de `HEAD` y las pruebas de Extracción.
+## Alcance revisado
 
-## Resultado: OK
+- Commit: `82f866b` — marca T-42 completada en `TODO.md` y registra su evidencia en `STATE.md`.
+- Diff efectivo: solo `STATE.md` y `TODO.md`; no modifica código, pruebas, Docker/Compose ni archivos bajo `specs/`.
+- Contexto contrastado: `specs/002-extraccion/spec.md` (RF-EX-004 y RF-EX-011), `specs/spec-infra-servicios.md` §11 y la implementación de T-42 que este commit cierra (`959d07e`).
 
-El commit corrige el VETO anterior de RF-EX-011. No se detectó violación de la
-constitución, referencia normativa inventada, ni umbral numérico nuevo sin
-fuente o sin marcar como pendiente.
+## Constitución
 
-## Principios constitucionales
-
-- **P-01 — pasa.** `SugerenciaOcr` conserva modelo, contenido, calidad,
-  evidencia y fecha; `recibir_sugerencia_ocr` deja el agregado en
-  `PENDIENTE_DE_EXTRACCION`. La única materialización hacia `EXTRAIDO` desde
-  esa salida probabilística es `confirmar_extraccion`, después de una decisión
-  humana autorizada. El OCR sigue siendo ficticio: no se implementa ni invoca
-  un componente probabilístico real.
-- **P-03 — pasa.** La verificación contra seguridad-acceso está detrás del
-  puerto propio `VerificadorDeAutorizacion`. El dominio y el endpoint dependen
-  del puerto; `VerificadorDeAutorizacionHttp` es el adaptador de producción
-  para `POST /autorizacion`, y los dobles de prueba son intercambiables sin
-  acoplar el dominio a HTTP.
-- **P-08 — pasa.** La confirmación autorizada devuelve `EventoAuditoria` con
-  actor, fecha y transición real `PENDIENTE_DE_EXTRACCION` → `EXTRAIDO`; el
-  endpoint la persiste junto con el agregado mediante `guardar_con_evento`.
-  La denegación ocurre antes de cualquier transición, por lo que no hay evento
-  de transición que emitir. Las demás transiciones ya existentes del contexto
-  siguen devolviendo evento de auditoría.
-
-## Honestidad de las pruebas
-
-Las pruebas cubren el criterio Dado/Cuando/Entonces de RF-EX-011, no solo su
-camino feliz: una sugerencia confirmada por el verificador permitido queda
-`EXTRAIDO`, conserva contenido y calidad, y registra actor, fecha y ambos
-estados; el verificador que deniega provoca `AccesoDenegadoError` antes de
-materializar. El test HTTP además comprueba el 403 del endpoint. Los dobles son
-inyecciones explícitas del puerto y representan las dos respuestas de la
-dependencia; no ocultan la regla de autorización ni una transición.
+- **P-01 — conforme.** `HEAD` no introduce una vía probabilística de escritura. La implementación que T-42 registra conserva la salida OCR como `SugerenciaOcr`: `recibir_sugerencia_ocr` deja el agregado en `PENDIENTE_DE_EXTRACCION`; solo `confirmar_extraccion`, tras decisión humana explícita, lo materializa.
+- **P-03 — conforme.** El dominio depende del puerto `VerificadorDeAutorizacion`; `VerificadorDeAutorizacionHttp` es el adaptador hacia Seguridad y Acceso. El Compose solo configura su URL interna. No hay consumo directo de OCR real: sigue siendo ficticio.
+- **P-08 — conforme.** El commit no añade transiciones. Las transiciones ya implementadas devuelven `EventoAuditoria` y `guardar_con_evento` persiste agregado y evento en una única transacción; la prueba de persistencia fuerza una violación `NOT NULL` y verifica rollback de ambos, por lo que no es un doble amañado.
 
 ## Specs, referencias y umbrales
 
-El commit modifica `specs/002-extraccion/spec.md` y
-`specs/spec-infra-servicios.md`. El chequeo de diff no encontró nuevas citas a
-Acuerdo, Ley, Decreto o ISO, ni nuevos umbrales de negocio. `POST
-/autorizacion`, el permiso `confirmar`/`documento`, el puerto 8083 y su URL
-base ya estaban definidos en `specs/spec-infra-servicios.md`; las adiciones
-solo documentan el consumidor de Extracción y la corrección de RF-EX-011.
+- No hay cambios bajo `specs/`, por lo que el chequeo adicional de referencias normativas y umbrales nuevos no aplica.
+- El diff tampoco añade Acuerdos, Leyes, Decretos, ISO ni valores de umbral. No hay cita ni número inventado.
 
-## Verificación
+## Honestidad y verificación
 
-- `git diff --check HEAD^ HEAD`: sin errores.
-- `uv run --directory contexts/extraccion pytest -q`: **55 passed**.
-  Solo hubo advertencias no bloqueantes del entorno: deprecación de
-  `starlette.testclient` y falta de permiso para escribir `.pytest_cache`.
+- El commit no cambia pruebas. T-42 es infraestructura de empaquetado, no un RF nuevo con criterio Dado/Cuando/Entonces; no presenta tests como prueba de un comportamiento que no cubren.
+- Las pruebas relevantes sí ejercen los criterios de aceptación: la sugerencia OCR no materializa sola (RF-EX-004/P-01); un actor sin permiso no confirma ni muta el agregado (RF-EX-011/P-03); y todo evento de transición comprueba actor, fecha y estados antes/después (P-08).
+- Ejecutado: `uv run --directory contexts/extraccion pytest` con caché temporal — **55 passed**. `docker compose ... config --quiet` validó las composiciones SaaS y on-prem con el overlay local (solo emitió advertencias por no poder leer la configuración Docker del usuario).
+- Límite de esta revisión: la suite completa `bash ./test.sh` no pudo completarse porque el sandbox no permite descargar Gradle 9.7.0 tras aislar su caché temporal. No es un fallo del proyecto; la evidencia histórica de `./test.sh` en `STATE.md` no fue reproducible íntegramente en este entorno. Tampoco se construyó ni levantó la imagen/stack; esa comprobación de punta a punta sigue prevista en T-43.
 
-No se añadieron tareas a `TODO.md`: no queda trabajo derivado de una spec
-existente a partir de esta revisión.
+No se añadieron tareas a `TODO.md`: T-43 ya cubre la verificación pendiente con Docker real y Newman.

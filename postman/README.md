@@ -1,17 +1,21 @@
 # Colección Postman — corte vertical
 
-Cubre 37 de los 42 endpoints reales de `specs/spec-infra-servicios.md`
+Cubre 45 de los 53 endpoints reales de `specs/spec-infra-servicios.md`
 (captura-ingesta + records-custodia + seguridad-acceso + validacion-humana +
-normalizacion), en el orden en que se probaron manualmente con `curl` — los 5
-que faltan ya tienen su propia cobertura fuera de esta colección: en
-validacion-humana, candidatas a aprobación masiva, aprobación en bloque y
-estado de la cola de clasificación (tests de Gradle, T-30); en
+normalizacion + extraccion), en el orden en que se probaron manualmente con
+`curl` — los 8 que faltan ya tienen su propia cobertura fuera de esta
+colección: en validacion-humana, candidatas a aprobación masiva, aprobación
+en bloque y estado de la cola de clasificación (tests de Gradle, T-30); en
 records-custodia y normalizacion, `GET /sugerencias/pendientes` (T-28) y
 `GET /unidades/pendientes-de-limites` (T-39) — ambos se ejercitan
 indirectamente aquí (Validación Humana los llama al resolver
 `/colas/clasificacion` y `/colas/limites`) y tienen su propia cobertura
 directa en Gradle/pytest, pero ninguna petición de esta colección los llama
-por su ruta original. 54 peticiones: publicar la misma versión de TRD
+por su ruta original; en extraccion, `GET /textos/{id}`,
+`GET /textos/pendientes-de-revision` y `GET /textos/{id}/entrega` — los tres
+tienen su propia cobertura directa en `tests/test_api.py` (T-41), simplemente
+esta colección no necesitó llamarlos para demostrar el ciclo completo. 68
+peticiones: publicar la misma versión de TRD
 dos veces para demostrar el fix del VETO de Codex (T-19); validar un ítem
 como corrupto (RF-CI-006, T-02) antes de leer el conteo por estado — por eso
 la petición 02 espera un ítem ya `EN_CUARENTENA`; en Seguridad y Acceso
@@ -33,7 +37,18 @@ límites en Normalización, T-38); la **cola de límites** de Validación Humana
 consultada vía `GET /colas/limites` y `/colas/limites/estado`; y una
 **corrección** (serie decidida distinta de la sugerida, RF-VH-008) cuya
 huella queda consultable en `GET /documentos/correcciones` de
-records-custodia, marcada `PENDIENTE_DE_REREVISION` (RF-VH-009, T-39).
+records-custodia, marcada `PENDIENTE_DE_REREVISION` (RF-VH-009, T-39); y la
+carpeta 7 (T-43, peticiones 54-67) ejercita el ciclo completo de Extracción
+— **primer contexto Python del proyecto que exige autorización real de
+seguridad-acceso para materializar** (RF-EX-011/P-03): rol + identidad con
+permiso `confirmar`/`documento` (mismo patrón que la carpeta 4/T-38); una
+unidad born-digital (extracción determinística, calidad 1.0); una segunda
+unidad por escaneo con una sugerencia de OCR ficticia que NO materializa por
+sí sola (P-01), confirmada primero con un actor sin permiso -> `403` y luego
+con el actor autorizado -> `Extraído`; una tercera unidad marcada `CORRUPTO`
+-> `En cuarentena` (RF-EX-009) para que el conteo final cuadre con tres
+unidades terminales; y una petición final contra `GET /eventos-auditoria`
+(P-08).
 
 ## Levantar el stack (con puertos locales para Postman)
 
@@ -58,7 +73,9 @@ docker compose -f ../deploy/docker-compose.saas.yml -f ../deploy/docker-compose.
    `unidad_id_no`/`unidad_id_no_2`/`lote_id_no`/`huella_no`,
    `unidad_id_vh_no`/`lote_id_vh_no` (carpeta 6, T-38),
    `unidad_id_vh_limites`/`lote_id_vh_limites`/`documento_id_vh_correccion`
-   (carpeta 6, T-39) — generadas con timestamp en la primera petición de cada flujo, así que correr la
+   (carpeta 6, T-39),
+   `rol_ex`/`actor_ex`/`identidad_id_ex`/`lote_id_ex`/`texto_id_ex`/`texto_id_ex_2`/`texto_id_ex_3`
+   (carpeta 7, T-43) — generadas con timestamp en la primera petición de cada flujo, así que correr la
    colección varias veces no colisiona. La huella de contenido de
    Normalización también necesita timestamp: sin él, la segunda corrida
    detecta un duplicado real contra la primera y falla la aserción de
@@ -100,7 +117,12 @@ es_correccion boolean not null` sin `DEFAULT` falla contra una tabla con
 filas existentes, ver `spec-infra-servicios.md` §4), corregido con
 `columnDefinition = "boolean not null default false"` y confirmado con dos
 corridas seguidas limpias después (volumen de Postgres reiniciado en limpio
-para partir de un esquema consistente).
+para partir de un esquema consistente). Reverificado (2026-08-27, tras
+T-43/ciclo completo de Extracción, con los seis servicios corriendo a la vez
+— primer contexto Python que exige autorización real contra seguridad-acceso,
+RF-EX-011/P-03): 68/68 peticiones, 113/113 aserciones, dos corridas seguidas
+sin fallos desde la primera corrida — incluida la frontera de autorización
+(actor sin permiso -> `403`, actor autorizado -> `Extraído`).
 
 ## Bajar el stack
 

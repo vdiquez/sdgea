@@ -1636,3 +1636,46 @@ captura-ingesta/records-custodia, diseño de UI/UX, o F4.
   Extracción, verificación con Docker real y Newman) es la próxima tarea
   abierta en TODO.md — requiere un entorno con Docker disponible, que esta
   sesión no tiene; queda para Victor o una sesión interactiva con Docker.
+
+- [x] T-43, tercer y último hallazgo operativo real del loop headless sobre
+  Extracción (mismo patrón honesto que T-41, no un error): al relanzar
+  `./orquestador.sh loop` para T-42 en adelante, dos iteraciones más
+  construyeron la colección Postman completa ("7. Extraccion", peticiones
+  54-67) pero **el loop headless se negó explícitamente a marcarla
+  terminada o comitearla** — razonó correctamente que T-43 exige levantar
+  Docker real y correr Newman, y ni `docker compose` ni `npx` están en el
+  `--allowedTools` de `orquestador.sh` (restricción de seguridad
+  intencional, no un descuido). Dejó una explicación clara de por qué en el
+  campo `result` de su turno (invisible para cualquiera en una sesión
+  headless) y el trabajo sin comitear en el árbol de trabajo, en vez de
+  fingir una verificación que no hizo. Dos iteraciones sin commit activaron
+  el watchdog del loop (`stale >= 2`), que se detuvo solo — comportamiento
+  correcto del mecanismo, no un ciclo errático (Victor preguntó
+  explícitamente por esto; se confirmó revisando `.loop/loop.log` y los
+  logs JSON de cada iteración antes de actuar, no se asumió nada).
+  Retomado en sesión interactiva: inspeccionada la colección (14 peticiones
+  nuevas, cubre el ciclo completo — born-digital, escaneo/OCR con la
+  sugerencia NO materializándose sola, la frontera real de autorización
+  403→200, cuarentena, conteo, bitácora), levantado el stack Docker real por
+  primera vez con el contenedor `extraccion` (`docker compose -f
+  docker-compose.saas.yml -f docker-compose.local-ports.yml up -d --build`)
+  y verificado con Newman: **68/68 peticiones, 113/113 aserciones, limpio
+  desde la primera corrida** (incluida la aserción de `403 Forbidden` para
+  el actor sin permiso y `200 OK`/`Extraído` para el autorizado). Segunda
+  corrida igual de limpia. Stack bajado al terminar.
+  `postman/README.md` actualizado: cobertura ahora 45/53 endpoints reales
+  (53 = 42 anteriores + 11 de extraccion, §11), con los tres endpoints de
+  extraccion no ejercitados aquí (`GET /textos/{id}`,
+  `GET /textos/pendientes-de-revision`, `GET /textos/{id}/entrega`)
+  documentados como cubiertos por `tests/test_api.py` en su lugar; nueva
+  línea de verificación en el historial.
+  **Con esto, Extracción (specs/002-extraccion/spec.md) queda completa de
+  punta a punta**: dominio con dos rondas de VETO corregidas (T-40) →
+  HTTP + persistencia (T-41) → autorización real corregida (T-41b) →
+  Docker (T-42) → Postman/Newman verificado con los seis servicios
+  corriendo a la vez (T-43). Seis de los nueve bounded contexts
+  implementados. Siguiente paso: decisión de Victor — otro contexto
+  probabilístico (Clasificación, Enriquecimiento, Indexación y Búsqueda),
+  cerrar alguna de las brechas ya documentadas (autorización real en
+  captura-ingesta/records-custodia, RF-VH-001 para los contextos que aún no
+  existen), diseño de UI/UX, o F4.

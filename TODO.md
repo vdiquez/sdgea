@@ -493,11 +493,30 @@ repetirse aquí (ver STATE.md para el detalle completo de cada una):
       imagen y `docker compose up` reales no se construyeron ni se corrieron
       aquí — falta esa verificación de punta a punta (junto con T-43) cuando
       alguien la corra en un entorno con Docker disponible.
-- [ ] T-43 Colección Postman con el ciclo completo de Extracción, mismo
+- [x] T-43 Colección Postman con el ciclo completo de Extracción, mismo
       patrón que T-36 (Normalización): recepción -> determinación de
       soporte -> extracción (born-digital y vía OCR ficticio) -> conteo por
-      estado -> consulta de la bitácora de auditoría. Verificar con Docker
-      real y dos corridas de Newman seguidas sin fallos (mismo estándar de
-      verificación que el resto de este proyecto — el loop agéntico no lo
-      hace solo, así que Victor o una sesión interactiva de Claude Code debe
-      confirmarlo después de que T-40..T-42 pasen la revisión de Codex).
+      estado -> consulta de la bitácora de auditoría. Carpeta nueva
+      "7. Extraccion" (peticiones 54-67): setup de identidad autorizada en
+      seguridad-acceso (RF-EX-011/P-03, mismo patrón que la carpeta 4/T-38);
+      unidad born-digital (extracción determinística, calidad 1.0); segunda
+      unidad por escaneo con sugerencia de OCR ficticia que NO materializa
+      por sí sola (P-01), confirmada primero con un actor sin permiso ->
+      `403` y luego con el actor autorizado -> `Extraído` (frontera real de
+      autorización, RF-EX-011); tercera unidad `CORRUPTO` -> `En cuarentena`
+      (RF-EX-009) para que el conteo final cuadre con tres unidades
+      terminales; y `GET /eventos-auditoria` (P-08).
+      **Construida por el loop headless, comiteada en sesión interactiva**
+      (mismo patrón que T-41): el loop headless completó la colección
+      correctamente pero se negó, con razón, a marcarla terminada o
+      comitearla — T-43 exige verificar con Docker/Newman reales, y
+      `docker compose`/`npx` no están en el `--allowedTools` de
+      `orquestador.sh` (a propósito, por seguridad). Dejó el trabajo sin
+      comitear y una explicación clara de por qué en vez de fingir éxito —
+      comportamiento correcto, no un error. Retomado en sesión interactiva:
+      levantado el stack Docker real (`docker compose ... up -d --build`,
+      incluido el contenedor `extraccion` por primera vez), verificado con
+      Newman dos corridas seguidas: **68/68 peticiones, 113/113 aserciones**,
+      limpio desde la primera corrida (incluida la frontera de autorización
+      403/200). `postman/README.md` actualizado con los conteos reales y el
+      resultado de la verificación.
