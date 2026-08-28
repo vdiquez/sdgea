@@ -8,12 +8,15 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.2",
+    # RF-EX-011 / P-03: cliente HTTP real del VerificadorDeAutorizacion
+    # (integracion.py) contra seguridad-acceso — ya no solo dependencia de
+    # test (TestClient de FastAPI), ahora también de producción.
+    "httpx>=0.28",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
-    "httpx>=0.28",
 ]
 
 [tool.pytest.ini_options]

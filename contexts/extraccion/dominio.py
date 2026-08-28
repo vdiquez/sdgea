@@ -1,6 +1,7 @@
 from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import Enum
+from typing import Protocol
 
 
 # `str, Enum` por el mismo motivo que en normalizacion/dominio.py (T-33): el valor
@@ -34,6 +35,24 @@ class CondicionDeExtraccion(str, Enum):
 
 
 class ErrorDeDominio(Exception):
+    pass
+
+
+# RF-EX-011 / P-03 (VETO real de Codex sobre commit cf93d84, ver REVIEW.md):
+# "un actor autorizado la confirma" no se cumple con un `str` de nombre libre
+# — hace falta consultar una autorización real detrás de una interfaz propia,
+# nunca simularla con una convención de nombre. Puerto mínimo (P-03: el
+# dominio desconoce cuál implementación está detrás); en producción lo
+# implementa un cliente HTTP real contra `POST /autorizacion` de
+# seguridad-acceso (`integracion.py`, primer consumidor Python de ese
+# endpoint — mismo contrato que `VerificadorDePermisosHttp` en
+# validacion-humana, T-30); en los tests de dominio lo implementa un doble
+# simple en memoria.
+class VerificadorDeAutorizacion(Protocol):
+    def tiene_permiso(self, actor: str, accion: str, tipo_recurso: str) -> bool: ...
+
+
+class AccesoDenegadoError(Exception):
     pass
 
 
@@ -212,9 +231,20 @@ def recibir_sugerencia_ocr(
 # sugerencia adjunta tal cual): si un texto de baja confianza necesita
 # corrección humana del contenido, ese mecanismo sigue [CLARIFICAR] en
 # specs/002-extraccion/spec.md §8, no se inventa uno aquí.
+#
+# Tercer VETO real de Codex sobre este mismo RF (commit cf93d84, ver
+# REVIEW.md): el criterio dice literalmente "un actor autorizado la
+# confirma" — a diferencia de RF-RC-004/RF-NO-004 (que solo exigen "una
+# decisión humana"/"un humano", sin la palabra "autorizado"), este RF exige
+# verificar la autorización, no solo aceptar cualquier `str` como actor.
+# Corregido: exige un `verificador` (VerificadorDeAutorizacion) y rechaza con
+# AccesoDenegadoError si el actor no tiene el permiso "confirmar"/"documento"
+# — verificado ANTES de tocar el estado del agregado.
 def confirmar_extraccion(
-    texto: TextoExtraido, actor: str, fecha: datetime
+    texto: TextoExtraido, actor: str, fecha: datetime, verificador: VerificadorDeAutorizacion
 ) -> tuple[TextoExtraido, EventoAuditoria]:
+    if not verificador.tiene_permiso(actor, "confirmar", "documento"):
+        raise AccesoDenegadoError(f"El actor '{actor}' no tiene permiso para confirmar extracciones.")
     if texto.sugerencia_ocr is None:
         raise ErrorDeDominio(f"El texto extraído '{texto.id}' no tiene una sugerencia de OCR pendiente de confirmar.")
     if texto.estado != EstadoTextoExtraido.PENDIENTE_DE_EXTRACCION:

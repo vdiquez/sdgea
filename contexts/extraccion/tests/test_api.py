@@ -4,10 +4,21 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from api import app, obtener_sesion
+from api import app, obtener_sesion, obtener_verificador
 from persistencia import Base
 
 FECHA = "2026-08-27T00:00:00Z"
+
+# RF-EX-011 / P-03 (VETO real de Codex sobre commit cf93d84, ver REVIEW.md):
+# doble de prueba del VerificadorDeAutorizacion inyectado vía
+# dependency_overrides — mismo criterio que _sesion_de_prueba para no
+# ejercitar una llamada HTTP real contra seguridad-acceso en estos tests.
+# Deniega solo al actor reservado "actor-no-autorizado", usado exclusivamente
+# por el test negativo de abajo; el resto de este archivo confirma con
+# actores que este doble sí permite.
+class _VerificadorDePrueba:
+    def tiene_permiso(self, actor: str, accion: str, tipo_recurso: str) -> bool:
+        return actor != "actor-no-autorizado"
 
 
 @pytest.fixture()
@@ -28,6 +39,7 @@ def client():
             sesion.close()
 
     app.dependency_overrides[obtener_sesion] = _sesion_de_prueba
+    app.dependency_overrides[obtener_verificador] = lambda: _VerificadorDePrueba()
     yield TestClient(app)
     app.dependency_overrides.clear()
 
@@ -181,6 +193,18 @@ class TestConfirmacionDeExtraccion:
         response = _confirmar(client, "texto-8")
 
         assert response.status_code == 409
+        assert response.json()["error"]
+
+    # RF-EX-011 / P-03 (VETO real de Codex sobre commit cf93d84, ver
+    # REVIEW.md): un actor sin permiso no puede confirmar la extracción.
+    def test_confirmar_con_actor_no_autorizado_responde_403(self, client):
+        _recibir_unidad(client, "texto-8b")
+        _determinar_soporte(client, "texto-8b", "ESCANEO")
+        _recibir_sugerencia_ocr(client, "texto-8b", calidad=0.73)
+
+        response = _confirmar(client, "texto-8b", actor="actor-no-autorizado")
+
+        assert response.status_code == 403
         assert response.json()["error"]
 
 

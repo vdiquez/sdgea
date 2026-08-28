@@ -460,6 +460,23 @@ repetirse aquí (ver STATE.md para el detalle completo de cada una):
       existía todavía cuando el loop headless comiteó T-40, así que los
       comentarios de `api.py`/`persistencia.py` que decían "§8" (sección
       equivocada — esa es "Formato de error") se corrigieron a "§11".
+- [x] T-41b RF-EX-011 / P-03 — corrige el VETO de Codex sobre commit `cf93d84`
+      (REVIEW.md lo dejó sin comitear: el mensaje del commit decía "Codex
+      confirma OK" pero una revisión posterior sobre ese mismo commit
+      encontró que `confirmar_extraccion` acepta cualquier `str` como actor
+      sin verificar autorización — RF-EX-011 es el único de los tres RF
+      equivalentes del proyecto cuyo criterio dice literalmente "un actor
+      **autorizado**", no solo "una decisión humana"/"un humano"). Ver
+      QUESTIONS.md 2026-08-27 y STATE.md para el detalle completo. Corregido:
+      puerto `VerificadorDeAutorizacion` (P-03, `dominio.py`) +
+      `AccesoDenegadoError` (403); `confirmar_extraccion` lo exige y rechaza
+      antes de materializar. Implementación real: `integracion.py`,
+      `VerificadorDeAutorizacionHttp` contra `POST /autorizacion` de
+      seguridad-acceso (primer consumidor Python de ese endpoint,
+      `SEGURIDAD_ACCESO_BASE_URL`). TDD: 2 tests de dominio (permitido/
+      denegado) + 1 test HTTP (403), 55/55 tests en el módulo. `./test.sh`
+      completo del repo en verde. `specs/spec-infra-servicios.md`
+      (§9/§10/§11) y `specs/002-extraccion/spec.md` (§1/§7) actualizadas.
 - [ ] T-42 Dockerfile real de extraccion + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que T-35
       (Normalización): build en dos etapas con `uv sync --no-dev --frozen`;

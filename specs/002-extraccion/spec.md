@@ -75,6 +75,20 @@ el mismo shape que `SugerenciaDeLimites` (Normalización) y `Sugerencia`
 (records-custodia) — con `contenido` añadido porque eso es, precisamente, lo
 que una sugerencia de OCR propone.
 
+**Tercera vuelta (Codex, commit `cf93d84`, ver `REVIEW.md`) — "actor
+autorizado" exige verificar autorización real, no solo aceptar un `str`:**
+RF-EX-011 (§5) es, de los tres RF equivalentes de este proyecto
+(RF-RC-004/RF-NO-004/RF-EX-011), el único cuyo Dado/Cuando/Entonces dice
+literalmente "un actor autorizado" en vez de "una decisión humana"/"un
+humano" — por eso Codex lo sostuvo a un estándar distinto. `confirmar_extraccion`
+materializaba `Extraído` para cualquier cadena `actor`, sin consultar
+autorización. Corregido: nuevo puerto `VerificadorDeAutorizacion` (P-03,
+`dominio.py`) que `confirmar_extraccion` consulta antes de materializar,
+rechazando con `AccesoDenegadoError` (HTTP 403) si el actor no tiene el
+permiso `confirmar`/`documento`; implementado en producción por un cliente
+HTTP real contra `POST /autorizacion` de seguridad-acceso
+(`integracion.py`, `specs/spec-infra-servicios.md` §11).
+
 ---
 
 ## 2. Lenguaje ubicuo
@@ -294,7 +308,7 @@ tiempo real.
 | RF-EX-008 | Constitución del proyecto P-08; Ley 594 de 2000 (integridad del acervo) | PENDIENTE | ☐ |
 | RF-EX-009 | Requisitos funcionales de SGDEA (AGN) — captura | PENDIENTE | ☐ |
 | RF-EX-010 | Requisitos funcionales de SGDEA (AGN) | PENDIENTE | ☐ |
-| RF-EX-011 | Constitución del proyecto P-01; RF-RC-004; RF-NO-004 | N/A | ☐ |
+| RF-EX-011 | Constitución del proyecto P-01, P-03; RF-RC-004; RF-NO-004 | N/A | ☐ |
 
 ---
 

@@ -392,6 +392,7 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
 | validacion-humana como orquestador HTTP real, sin persistencia propia | Decisión de Victor, 2026-08-26; specs/007-validacion-humana/spec.md §3 |
 | RF-VH-005 cerrado (Validación Humana confirma límites vía Normalización) | Decisión de Victor, 2026-08-27 ("Cierra el ciclo RF-VH-005"), TODO.md T-38 |
 | RF-VH-001/002/010/009 ampliados (cola de límites; correcciones pendientes de re-revisión) | Decisión de Victor, 2026-08-27 ("Si, sigamos con T-39"), TODO.md T-39 |
+| RF-EX-011 exige verificar autorización real (`VerificadorDeAutorizacion` + `POST /autorizacion`) | VETO real de Codex sobre commit `cf93d84`, ver `REVIEW.md` y `QUESTIONS.md` 2026-08-27; P-01, P-03 |
 
 ## 10. Decisiones pendientes / preguntas abiertas
 
@@ -402,7 +403,10 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
   §5), pero `captura-ingesta` y `records-custodia` todavía no lo llaman —
   sus endpoints siguen sin exigir una decisión de `POST /autorizacion` antes
   de responder. `validacion-humana` (T-30) sí lo llama de verdad, siendo el
-  primer consumidor real de `/autorizacion`. Hasta que captura-ingesta y
+  primer consumidor real de `/autorizacion`; `extraccion` (2026-08-27, VETO
+  de Codex sobre commit `cf93d84`, ver §11) es el segundo, pero solo para
+  `POST /textos/{id}/confirmacion` — el único endpoint cuyo RF (RF-EX-011)
+  exige literalmente un "actor autorizado". Hasta que captura-ingesta y
   records-custodia hagan lo mismo, ambos siguen sin deber exponerse fuera de
   una red de confianza (docker-compose interno).
 - ~~RF-VH-005 (confirmación/corrección de límites de documento)~~ — **cerrado
@@ -474,14 +478,29 @@ propias (mismo criterio que `UnidadDocumentalEntity` en normalizacion) y
 `evidencia` serializada a JSON en una columna de texto. Variables de entorno
 idénticas a los otros contextos: `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`.
 
-Autorización: al igual que `confirmar_limites` en Normalización,
-`confirmar_extraccion` no verifica autorización dentro del dominio — ese
-chequeo, cuando exista, vive en la capa de orquestación (mismo criterio que
-`GestionDeLimites`/`GestionDeDecisiones` en Validación Humana, que inyectan un
-`VerificadorDePermisos`), no en la función de dominio pura. Ningún contexto
-Python de este proyecto tiene todavía esa capa de orquestación con
-autorización real — es una brecha compartida con Normalización, no específica
-de Extracción.
+Autorización (corregido 2026-08-27, VETO real de Codex sobre commit `cf93d84`,
+ver `REVIEW.md`): a diferencia de `confirmar_limites` en Normalización y
+`materializar` en records-custodia (cuyo Dado/Cuando/Entonces solo exige "una
+decisión humana"/"un humano"), el de RF-EX-011 dice literalmente "un actor
+**autorizado** la confirma" — Codex sostuvo que aceptar cualquier `str` como
+actor no cumplía ese criterio. `confirmar_extraccion(texto, actor, fecha,
+verificador)` ahora exige un puerto `VerificadorDeAutorizacion`
+(`dominio.py`, P-03) y rechaza con `AccesoDenegadoError` (HTTP 403) si el
+actor no tiene el permiso `confirmar`/`documento`. `POST
+/textos/{id}/confirmacion` lo inyecta vía `Depends(obtener_verificador)`
+(`api.py`), implementado por `VerificadorDeAutorizacionHttp`
+(`integracion.py`) — primer consumidor **Python** de `POST /autorizacion` en
+seguridad-acceso (Kotlin ya lo consumía desde `validacion-humana`, T-30).
+Variable de entorno nueva: `SEGURIDAD_ACCESO_BASE_URL`
+(default `http://localhost:8083`, mismo patrón que `RECORDS_CUSTODIA_BASE_URL`
+en validacion-humana). El resto de las funciones de dominio de Extracción
+(`recibir_unidad`, `determinar_soporte`, etc.) sigue sin verificar
+autorización — solo RF-EX-011 lo exige literalmente en su criterio; extenderlo
+a los demás endpoints sería alcance no pedido. La brecha que sigue abierta
+(§10) es que `captura-ingesta`/`records-custodia`/`confirmar_limites` en
+Normalización todavía no llaman a `/autorizacion` — ninguno de esos RFs usa la
+palabra "autorizado" en su criterio, así que no están cubiertos por este
+mismo VETO.
 
 Fuera de alcance de esta spec: recepción real de unidades desde Normalización
 (RF-EX-001 asume que la unidad ya llega en la petición, mismo tipo de brecha

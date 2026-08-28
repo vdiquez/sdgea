@@ -397,3 +397,39 @@ resolución, §2 (lenguaje ubicuo) con el término "Sugerencia de OCR", RF-EX-00
 y RF-EX-011 reescritos con vocabulario de sugerencia en vez de "resultado".
 29/29 tests en el módulo. Pendiente: comitear y pedirle a Codex una tercera
 revisión antes de retomar `./orquestador.sh loop`.
+
+## 2026-08-27 · T-40 Extracción — tercera vuelta de Codex, VETO mantenido — Corregido (no requirió nueva decisión de Victor)
+
+Codex revisó el commit que se creía cierre limpio (`cf93d84`, mensaje
+"Codex confirma OK") y encontró que el veredicto "OK" de esa misma revisión no
+era correcto: `confirmar_extraccion(texto, actor: str, fecha)` acepta
+cualquier cadena como `actor` sin verificar autorización alguna, pero RF-EX-011
+(§5) dice literalmente "Cuando un **actor autorizado** la confirma" — a
+diferencia de RF-RC-004/RF-NO-004 (los dos RF que T-40 cita como "mismo
+criterio"), cuyo Dado/Cuando/Entonces solo exige "una decisión humana"/"un
+humano", sin la palabra "autorizado". Es la misma clase de hallazgo que las dos
+vueltas anteriores: una inconsistencia entre lo que el propio RF de este
+contexto exige por escrito y lo que el código hace, no una decisión de negocio
+nueva — no requiere ratificación de Victor, igual que la segunda vuelta
+(`e623ad6`) tampoco la requirió.
+
+Corregido directamente: nuevo puerto `VerificadorDeAutorizacion` (P-03,
+`dominio.py`) que `confirmar_extraccion` consulta antes de materializar,
+rechazando con `AccesoDenegadoError` (HTTP 403 en `api.py`) si el actor no
+tiene el permiso `confirmar`/`documento`. En producción lo implementa un
+cliente HTTP real (`integracion.py`, `VerificadorDeAutorizacionHttp`) contra
+`POST /autorizacion` de seguridad-acceso — primer consumidor **Python** de ese
+endpoint (Kotlin ya lo consumía desde `validacion-humana`, T-30); variable de
+entorno nueva `SEGURIDAD_ACCESO_BASE_URL`, mismo patrón que
+`RECORDS_CUSTODIA_BASE_URL` en validacion-humana. En los tests de dominio lo
+implementa un doble simple en memoria (`_VerificadorDeAutorizacionFalso`), con
+un caso de actor permitido y otro de actor sin permiso (el hallazgo explícito
+del VETO: "su test no cubre el criterio «actor autorizado»"); en los tests de
+API se sobreescribe la dependencia de FastAPI con un doble equivalente.
+
+No se extendió esta verificación a las demás funciones de dominio de
+Extracción ni a `confirmar_limites`/`materializar` en los otros contextos: solo
+RF-EX-011 usa la palabra "autorizado" en su criterio — extenderlo sería alcance
+no pedido por este VETO. `specs/spec-infra-servicios.md` §9/§10/§11 y
+`specs/002-extraccion/spec.md` §1/§7 actualizadas. 55/55 tests en
+`contexts/extraccion` (53 + 2 nuevos), `./test.sh` completo del repo en verde.

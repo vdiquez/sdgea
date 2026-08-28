@@ -1533,3 +1533,58 @@ captura-ingesta/records-custodia, diseño de UI/UX, o F4.
   nuevo, considerar si conviene ampliar el patrón `--allowedTools` de
   `run_claude()` (p. ej. `Bash(bash ./test.sh*)` además de `Bash(./test.sh
   *)`) para que este mismo bloqueo no se repita.
+
+- [x] T-41b RF-EX-011 / P-03 — corrige el VETO de Codex sobre commit `cf93d84`
+  (ver `REVIEW.md`, no comiteado por el loop headless que lo escribió; ver
+  `QUESTIONS.md` 2026-08-27 para el análisis completo). Tomado como primera
+  prioridad de esta sesión: `REVIEW.md` tenía un VETO real sin resolver y sin
+  comitear, tomando precedencia sobre T-42/T-43 (mismo criterio que
+  T-19/T-20/T-21/T-22/T-37: un VETO real de Codex se corrige antes de seguir
+  con la siguiente tarea planificada de TODO.md).
+  La sesión interactiva que cerró T-41 (entrada de arriba) había clasificado
+  este mismo hallazgo como "brecha compartida con Normalización, no
+  bloqueante" — pero esa lectura pasaba por alto que RF-EX-011 es, de los tres
+  RF equivalentes del proyecto (RF-RC-004/RF-NO-004/RF-EX-011), el único cuyo
+  Dado/Cuando/Entonces dice literalmente "un actor **autorizado**" en vez de
+  "una decisión humana"/"un humano" — Codex sostuvo el VETO precisamente por
+  esa diferencia textual, y tenía razón: no es la misma brecha que
+  `confirmar_limites`/`materializar`, es un criterio de aceptación propio de
+  este RF que el código nunca cumplió.
+  Corregido: nuevo puerto `VerificadorDeAutorizacion` (P-03, `dominio.py`,
+  `Protocol` con `tiene_permiso(actor, accion, tipo_recurso)`);
+  `confirmar_extraccion` ahora lo exige como parámetro y rechaza con
+  `AccesoDenegadoError` (nuevo, HTTP 403 en `api.py`) si el actor no tiene el
+  permiso `confirmar`/`documento`, verificado ANTES de tocar el agregado.
+  Implementación real de producción: `integracion.py` (nuevo módulo),
+  `VerificadorDeAutorizacionHttp` — primer consumidor **Python** de `POST
+  /autorizacion` en seguridad-acceso (Kotlin ya lo consumía desde
+  `validacion-humana`, T-30); mismo contrato JSON que
+  `VerificadorDePermisosHttp` (identidadId/accion/tipoRecurso/fecha,
+  `resultado: "PERMITIDO"|"DENEGADO"`). Variable de entorno nueva
+  `SEGURIDAD_ACCESO_BASE_URL` (default `http://localhost:8083`, mismo patrón
+  que el resto de contextos). `httpx` se promovió de dependencia de test a
+  dependencia principal en `pyproject.toml` de extraccion (ya no es solo
+  `TestClient`, ahora también código de producción).
+  Alcance deliberadamente angosto: no se extendió esta verificación a ninguna
+  otra función de dominio de Extracción ni a `confirmar_limites`
+  (Normalización) o `materializar` (records-custodia) — ninguno de esos otros
+  RF usa la palabra "autorizado" en su criterio, así que la brecha documentada
+  en `spec-infra-servicios.md` §10 para captura-ingesta/records-custodia sigue
+  abierta tal cual, sin tocar.
+  TDD: 2 tests nuevos en `test_dominio.py` (actor permitido confirma con
+  éxito vía un doble `_VerificadorDeAutorizacionFalso`; actor sin permiso
+  levanta `AccesoDenegadoError` sin dejar el texto materializado) — los 7
+  call-sites existentes de `confirmar_extraccion` en el módulo se
+  actualizaron para pasar el nuevo parámetro `verificador` obligatorio; 1 test
+  nuevo en `test_api.py` (actor no autorizado responde 403 vía
+  `dependency_overrides[obtener_verificador]`, mismo patrón que
+  `obtener_sesion`). 55/55 tests en `contexts/extraccion` (53 + 2 dominio + 1
+  API), `./test.sh` completo del repo en verde (Gradle + eval-harness +
+  normalizacion + extraccion).
+  `specs/spec-infra-servicios.md` §9 (fila de trazabilidad nueva), §10 (nota
+  de que extraccion es ahora el segundo consumidor Python real de
+  `/autorizacion`, solo para este endpoint) y §11 (párrafo de autorización
+  reescrito) actualizadas; `specs/002-extraccion/spec.md` §1 (tercera nota de
+  resolución) y §7 (RF-EX-011 traza también a P-03) actualizadas.
+  Siguiente paso: T-42 (Dockerfile + wiring en docker-compose) sigue siendo la
+  próxima tarea abierta en TODO.md — no cambia por esta corrección.

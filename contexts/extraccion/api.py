@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
 import dominio
+from integracion import VerificadorDeAutorizacionHttp
 from persistencia import AlmacenDeTextos, crear_fabrica_de_sesiones
 
 # specs/spec-infra-servicios.md §11 · Contrato mínimo — extraccion. Cada
@@ -37,6 +38,13 @@ def obtener_almacen(sesion: Session = Depends(obtener_sesion)) -> AlmacenDeTexto
     return AlmacenDeTextos(sesion)
 
 
+# RF-EX-011 / P-03: implementación real inyectada vía Depends, igual criterio
+# que obtener_almacen — el endpoint (y dominio.confirmar_extraccion) desconoce
+# que detrás hay un cliente HTTP contra seguridad-acceso.
+def obtener_verificador() -> dominio.VerificadorDeAutorizacion:
+    return VerificadorDeAutorizacionHttp()
+
+
 def _o_404(texto: dominio.TextoExtraido | None, id: str) -> dominio.TextoExtraido:
     if texto is None:
         raise HTTPException(status_code=404, detail=f"No encontrado: {id}")
@@ -48,6 +56,16 @@ def _manejar_error_de_dominio(request, exc: dominio.ErrorDeDominio):
     from fastapi.responses import JSONResponse
 
     return JSONResponse(status_code=409, content={"error": str(exc)})
+
+
+# RF-EX-011 / P-03 (VETO real de Codex sobre commit cf93d84): mismo formato
+# de error unificado `{"error": mensaje}` que el resto de contextos (T-19),
+# 403 por ser un rechazo de autorización, no un conflicto de estado (409).
+@app.exception_handler(dominio.AccesoDenegadoError)
+def _manejar_acceso_denegado(request, exc: dominio.AccesoDenegadoError):
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=403, content={"error": str(exc)})
 
 
 class ProcedenciaDto(BaseModel):
@@ -186,13 +204,18 @@ def recibir_sugerencia_ocr(
 
 
 # RF-EX-011: única operación que materializa Extraído a partir de una
-# sugerencia de OCR (P-01) — ver QUESTIONS.md 2026-08-27.
+# sugerencia de OCR (P-01) — ver QUESTIONS.md 2026-08-27. Verifica
+# autorización real contra seguridad-acceso antes de materializar (P-03,
+# VETO de Codex sobre commit cf93d84).
 @app.post("/textos/{id}/confirmacion")
 def confirmar_extraccion(
-    id: str, request: ConfirmacionRequest, almacen: AlmacenDeTextos = Depends(obtener_almacen)
+    id: str,
+    request: ConfirmacionRequest,
+    almacen: AlmacenDeTextos = Depends(obtener_almacen),
+    verificador: dominio.VerificadorDeAutorizacion = Depends(obtener_verificador),
 ) -> dominio.TextoExtraido:
     texto = _o_404(almacen.buscar(id), id)
-    actualizado, evento = dominio.confirmar_extraccion(texto, actor=request.actor, fecha=request.fecha)
+    actualizado, evento = dominio.confirmar_extraccion(texto, actor=request.actor, fecha=request.fecha, verificador=verificador)
     almacen.guardar_con_evento(actualizado, evento)
     return actualizado
 

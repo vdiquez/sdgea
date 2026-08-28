@@ -2,6 +2,7 @@ from datetime import datetime
 
 import pytest
 from dominio import (
+    AccesoDenegadoError,
     CondicionDeExtraccion,
     ErrorDeDominio,
     EstadoTextoExtraido,
@@ -19,6 +20,25 @@ from dominio import (
     recibir_sugerencia_ocr,
     recibir_unidad,
 )
+
+
+# RF-EX-011 / P-03 (VETO real de Codex sobre commit cf93d84): doble simple en
+# memoria del puerto VerificadorDeAutorizacion — mismo criterio que los
+# `AlmacenDe*EnMemoria`/dobles de otros contextos (p. ej. VerificadorDePermisos
+# en validacion-humana, T-30). `VERIFICADOR_PERMITE` es el que usan todos los
+# tests que no ejercitan la rama de autorización en sí (RF-EX-005/006/etc.);
+# `VERIFICADOR_DENIEGA` solo lo usa TestConfirmacionDeExtraccion para probar
+# el rechazo.
+class _VerificadorDeAutorizacionFalso:
+    def __init__(self, permitidos: set[str]):
+        self._permitidos = permitidos
+
+    def tiene_permiso(self, actor: str, accion: str, tipo_recurso: str) -> bool:
+        return actor in self._permitidos
+
+
+VERIFICADOR_PERMITE = _VerificadorDeAutorizacionFalso(permitidos={"archivista-1", "archivista-2"})
+VERIFICADOR_DENIEGA = _VerificadorDeAutorizacionFalso(permitidos=set())
 
 PROCEDENCIA = ProcedenciaHeredada(
     fuente="escaner-sala-3",
@@ -152,10 +172,10 @@ class TestSugerenciaOcr:
 # humana de la extracción vía OCR — corrige los VETOs de Codex sobre commits
 # dd97fb4 y e623ad6: nada probabilístico escribe estado por sí solo (P-01).
 class TestConfirmacionDeExtraccion:
-    def test_dada_una_sugerencia_de_ocr_pendiente_cuando_un_humano_la_confirma_queda_extraido_con_actor_y_fecha(self):
+    def test_dada_una_sugerencia_de_ocr_pendiente_cuando_un_actor_autorizado_la_confirma_queda_extraido_con_actor_y_fecha(self):
         pendiente = _texto_con_sugerencia_ocr_pendiente(calidad=0.73)
 
-        confirmado, evento = confirmar_extraccion(pendiente, actor="archivista-1", fecha=PROCEDENCIA.fecha)
+        confirmado, evento = confirmar_extraccion(pendiente, actor="archivista-1", fecha=PROCEDENCIA.fecha, verificador=VERIFICADOR_PERMITE)
 
         assert confirmado.estado == EstadoTextoExtraido.EXTRAIDO
         assert confirmado.contenido == "texto reconocido"
@@ -165,16 +185,31 @@ class TestConfirmacionDeExtraccion:
         assert evento.estado_anterior == "PENDIENTE_DE_EXTRACCION"
         assert evento.estado_posterior == "EXTRAIDO"
 
+    # RF-EX-011 / P-03 (VETO real de Codex sobre commit cf93d84, ver
+    # REVIEW.md): el criterio dice "un actor autorizado la confirma" — un
+    # actor sin permiso debe ser rechazado, no aceptado por ser un `str`
+    # cualquiera. `VERIFICADOR_DENIEGA` no otorga permiso a ningún actor.
+    def test_un_actor_sin_permiso_no_puede_confirmar_la_extraccion(self):
+        pendiente = _texto_con_sugerencia_ocr_pendiente(calidad=0.73)
+
+        with pytest.raises(AccesoDenegadoError):
+            confirmar_extraccion(pendiente, actor="actor-sin-permiso", fecha=PROCEDENCIA.fecha, verificador=VERIFICADOR_DENIEGA)
+
+        # El rechazo no debe dejar rastro de materialización: el texto sigue
+        # pendiente de extracción, sin contenido ni calidad materializados.
+        assert pendiente.estado == EstadoTextoExtraido.PENDIENTE_DE_EXTRACCION
+        assert pendiente.contenido is None
+
     def test_no_se_puede_confirmar_una_extraccion_sin_sugerencia_de_ocr_pendiente(self):
         with pytest.raises(ErrorDeDominio):
-            confirmar_extraccion(_texto_escaneo(), actor="archivista-1", fecha=PROCEDENCIA.fecha)
+            confirmar_extraccion(_texto_escaneo(), actor="archivista-1", fecha=PROCEDENCIA.fecha, verificador=VERIFICADOR_PERMITE)
 
     def test_no_se_puede_confirmar_una_extraccion_dos_veces(self):
         pendiente = _texto_con_sugerencia_ocr_pendiente()
-        confirmado, _ = confirmar_extraccion(pendiente, actor="archivista-1", fecha=PROCEDENCIA.fecha)
+        confirmado, _ = confirmar_extraccion(pendiente, actor="archivista-1", fecha=PROCEDENCIA.fecha, verificador=VERIFICADOR_PERMITE)
 
         with pytest.raises(ErrorDeDominio):
-            confirmar_extraccion(confirmado, actor="archivista-2", fecha=PROCEDENCIA.fecha)
+            confirmar_extraccion(confirmado, actor="archivista-2", fecha=PROCEDENCIA.fecha, verificador=VERIFICADOR_PERMITE)
 
 
 # RF-EX-005 · Estratificación de calidad de la extracción
@@ -188,7 +223,7 @@ class TestEstratificacionDeCalidad:
     def test_un_texto_extraido_expone_su_calidad_y_soporte_de_origen_escaneo(self):
         pendiente = _texto_con_sugerencia_ocr_pendiente(calidad=0.6)
 
-        extraido, _ = confirmar_extraccion(pendiente, actor="archivista-1", fecha=PROCEDENCIA.fecha)
+        extraido, _ = confirmar_extraccion(pendiente, actor="archivista-1", fecha=PROCEDENCIA.fecha, verificador=VERIFICADOR_PERMITE)
 
         assert extraido.calidad == 0.6
         assert extraido.soporte == Soporte.ESCANEO
@@ -197,19 +232,19 @@ class TestEstratificacionDeCalidad:
 # RF-EX-006 · Enrutamiento de baja confianza a revisión humana
 class TestRevisionPorBajaConfianza:
     def test_un_texto_bajo_el_umbral_aparece_como_candidato_a_revision(self):
-        extraido, _ = confirmar_extraccion(_texto_con_sugerencia_ocr_pendiente(calidad=0.3), actor="archivista-1", fecha=PROCEDENCIA.fecha)
+        extraido, _ = confirmar_extraccion(_texto_con_sugerencia_ocr_pendiente(calidad=0.3), actor="archivista-1", fecha=PROCEDENCIA.fecha, verificador=VERIFICADOR_PERMITE)
 
         candidatas = candidatas_a_revision_por_baja_confianza([extraido], umbral=0.5)
 
         assert candidatas == [extraido]
 
     def test_un_texto_sobre_el_umbral_no_aparece_como_candidato(self):
-        extraido, _ = confirmar_extraccion(_texto_con_sugerencia_ocr_pendiente(calidad=0.9), actor="archivista-1", fecha=PROCEDENCIA.fecha)
+        extraido, _ = confirmar_extraccion(_texto_con_sugerencia_ocr_pendiente(calidad=0.9), actor="archivista-1", fecha=PROCEDENCIA.fecha, verificador=VERIFICADOR_PERMITE)
 
         assert candidatas_a_revision_por_baja_confianza([extraido], umbral=0.5) == []
 
     def test_un_texto_de_baja_confianza_conserva_su_marca_al_entregarse(self):
-        extraido, _ = confirmar_extraccion(_texto_con_sugerencia_ocr_pendiente(calidad=0.2), actor="archivista-1", fecha=PROCEDENCIA.fecha)
+        extraido, _ = confirmar_extraccion(_texto_con_sugerencia_ocr_pendiente(calidad=0.2), actor="archivista-1", fecha=PROCEDENCIA.fecha, verificador=VERIFICADOR_PERMITE)
 
         entregado = entregar(extraido)
 
