@@ -1,42 +1,47 @@
-# Revisión de `65574aa51ae6f5ef4e4864e100524de96d302416` — T-47 sigue bloqueada
+# Revisión de `5b89fc1175bda9ff35522d8fb666249853aa1a23` — T-47 sigue bloqueada
 
 ## Resultado: OK
 
-El commit modifica exclusivamente `STATE.md` (15 adiciones). Documenta el bloqueo
-operativo de T-47 y conserva correctamente la tarea como pendiente; no afirma que
-la validación end-to-end se hubiera realizado.
+El commit modifica exclusivamente `STATE.md` (33 líneas añadidas). Registra una
+tercera comprobación de permisos y mantiene T-47 pendiente; no afirma que la
+verificación end-to-end requerida haya ocurrido ni cambia comportamiento del
+producto.
 
-## Contraste con la spec y la constitución
+## Contraste con spec y constitución
 
-- **Spec aplicable:** `specs/003-clasificacion/spec.md`, RF-CL-004, RF-CL-006 y
-  RF-CL-010. T-47 de `TODO.md` exige verificar el flujo completo con Docker y dos
-  ejecuciones consecutivas de Newman antes de cerrarla; permanece como `- [ ]`.
-- **P-01 — conforme.** No hay cambio a flujos probabilísticos ni a estado de
-  documento/expediente. El registro mantiene que las salidas pendientes son
-  sugerencias hacia Records/Custodia; no hay materialización sin decisión humana.
-- **P-03 — conforme.** No se incorpora ni modifica capacidad externa, interfaz,
-  adaptador ni dependencia concreta.
-- **P-08 — conforme.** No se crea ni modifica una transición de estado; por tanto,
-  no hay obligación de auditoría nueva o alterada en este commit.
+- **Contexto aplicable:** Clasificación, `specs/003-clasificacion/spec.md`, en
+  particular RF-CL-004, RF-CL-006 y RF-CL-010. `TODO.md` T-47 exige validar el
+  flujo real de sugerencias con Docker y dos corridas consecutivas de Newman;
+  sigue marcado `- [ ]`.
+- **P-01 — conforme.** No se modifica ningún componente probabilístico ni estado
+  de documento/expediente. El registro conserva explícitamente que las salidas
+  de Clasificación son sugerencias hacia Records/Custodia, pendientes de la
+  verificación real; no hay materialización por IA ni sin decisión humana.
+- **P-03 — conforme.** No se incorporan, eliminan ni conectan capacidades
+  externas, interfaces o adaptadores.
+- **P-08 — conforme.** No existe transición de estado en el diff; por tanto no
+  se crea ni se omite un evento de auditoría.
 
 ## Specs, referencias y umbrales
 
-No se modificó ningún archivo bajo `specs/`, por lo que el chequeo adicional de
-referencias normativas y umbrales no aplica. El diff tampoco introduce citas
-normativas ni valores numéricos nuevos.
+No se modifica ningún archivo bajo `specs/`. Por ello no aplica el control
+adicional de referencias normativas o umbrales nuevos. El diff de `STATE.md`
+tampoco introduce citas normativas ni valores de umbral de producto.
 
 ## Tests y honestidad
 
-El commit no cambia implementación ni pruebas; por ello no introduce tests que
-puedan estar amañados frente a criterios Dado/Cuando/Entonces. La declaración es
-honesta: los archivos Postman de T-47 continúan fuera del commit, la tarea sigue
-abierta y la doble ejecución real de Newman se conserva como requisito pendiente.
+No hay código ni pruebas modificados, de modo que este commit no introduce tests
+amañados ni cobertura nueva que contrastar contra un Dado/Cuando/Entonces. La
+afirmación de bloqueo es honesta: declara que no se volvió a ejecutar `./test.sh`
+porque no hubo cambios de código/pruebas, deja sin commit los artefactos Postman y
+no pretende sustituir las dos ejecuciones reales de Newman exigidas por T-47.
 
 ## Verificación realizada
 
-- `git show HEAD` y el diff confirman que sólo cambió `STATE.md`.
+- `git show HEAD`: sólo cambia `STATE.md`.
 - `git diff --check HEAD^ HEAD`: sin errores de espacios.
-- `TODO.md`, `STATE.md` y `specs/003-clasificacion/spec.md`: coherentes respecto
-  del flujo de sugerencias, decisión humana y cero pérdida silenciosa.
-- El árbol conserva cambios no comiteados de Postman y una caché local ajenos al
-  commit revisado; no se alteraron.
+- `TODO.md` mantiene T-47 abierta y exige Docker real más dos corridas de Newman.
+- La spec de Clasificación y el contrato de infraestructura mantienen el envío a
+  Records/Custodia como `Sugerencia`, sin alterar documento ni expediente.
+- Se preservaron los cambios no comiteados de Postman y la caché local, ajenos al
+  commit revisado.
