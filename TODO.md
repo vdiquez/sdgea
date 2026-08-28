@@ -432,20 +432,34 @@ repetirse aquí (ver STATE.md para el detalle completo de cada una):
       usan `estado_anterior=estado_posterior=texto.estado.value` en vez de un
       sentinel inventado. 29/29 tests tras el segundo fix. Ver commit
       siguiente para el detalle completo.
-- [ ] T-41 RF-EX-001..011 — Servicio HTTP (FastAPI) + persistencia
+- [x] T-41 RF-EX-001..011 — Servicio HTTP (FastAPI) + persistencia
       (SQLAlchemy + Postgres) para Extracción, mismo patrón que T-34
       (Normalización): cada endpoint traduce un método de dominio ya
       probado, incluido `POST .../confirmacion` para `confirmar_extraccion`
-      (RF-EX-011, nueva — un resultado de OCR nunca materializa por sí
-      solo, ver QUESTIONS.md 2026-08-27); `guardar_con_evento(texto, evento)`
-      persiste ambos en una única transacción con rollback explícito si
-      falla (mismo criterio que `AlmacenDeUnidades` en Normalización, T-37);
-      `GET /eventos-auditoria` desde el principio; endpoint de pendientes de
-      revisión por baja confianza (mismo criterio que
-      `GET /sugerencias/pendientes`, T-28, y
-      `GET /unidades/pendientes-de-limites`, T-39) declarado ANTES de
-      cualquier ruta con `{id}`. Variables de entorno idénticas a los otros
-      contextos Python: `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`.
+      (RF-EX-011); `guardar_con_evento(texto, evento)` persiste ambos en una
+      única transacción con rollback explícito si falla (mismo criterio que
+      `AlmacenDeUnidades` en Normalización, T-37 — verificado con un test
+      real de violación NOT NULL, no un doble simulado); `GET
+      /eventos-auditoria` desde el principio; `GET
+      /textos/pendientes-de-revision?umbral=` declarado ANTES de `GET
+      /textos/{id}` (mismo criterio que `GET /sugerencias/pendientes`, T-28,
+      y `GET /unidades/pendientes-de-limites`, T-39). Variables de entorno
+      idénticas a los otros contextos Python:
+      `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`.
+      **Nota operativa real sobre esta tarea**: implementada por el loop
+      headless (`./orquestador.sh loop`), que produjo el código completo
+      (53/53 tests) pero quedó bloqueado sin comitear — `bash ./test.sh` y
+      `./gradlew test` no calzan con el patrón `--allowedTools
+      "Bash(./test.sh *)"` de `orquestador.sh` (solo matchea la forma
+      literal `./test.sh`, sin prefijo `bash`), y el proceso terminó
+      preguntando algo que nadie podía responder en una sesión headless. El
+      trabajo quedó sin comitear en el árbol de trabajo; retomado en sesión
+      interactiva: inspeccionado, verificado con `./test.sh` completo
+      (Gradle + los tres módulos Python, incluido extraccion 53/53) y
+      comiteado. `specs/spec-infra-servicios.md` §11 (nueva) escrita — no
+      existía todavía cuando el loop headless comiteó T-40, así que los
+      comentarios de `api.py`/`persistencia.py` que decían "§8" (sección
+      equivocada — esa es "Formato de error") se corrigieron a "§11".
 - [ ] T-42 Dockerfile real de extraccion + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que T-35
       (Normalización): build en dos etapas con `uv sync --no-dev --frozen`;

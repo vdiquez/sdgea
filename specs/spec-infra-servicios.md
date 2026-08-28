@@ -428,3 +428,64 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
   se promueven a verdad de referencia del set patrón sigue
   `[CLARIFICAR]` — ya lo estaba en `specs/eval/edd-harness.md` §9 antes de
   esta tarea; T-39 no lo resuelve, solo expone las candidatas.
+
+## 11. Contrato mínimo — `extraccion`
+
+Traduce las funciones de `contexts/extraccion/dominio.py` (T-40, corregido en
+tres rondas de revisión de Codex — ver `QUESTIONS.md` 2026-08-27):
+`recibir_unidad`, `determinar_soporte`, `extraer_texto_born_digital`,
+`recibir_sugerencia_ocr`, `confirmar_extraccion`,
+`marcar_cuarentena_o_rechazo`, `entregar`, `candidatas_a_revision_por_baja_confianza`,
+`contar_por_estado`. Sigue el mismo patrón Python/FastAPI/SQLAlchemy que
+Normalización (T-33..T-37): capa de dominio sin dependencias de framework,
+`guardar_con_evento` persiste el agregado y su `EventoAuditoria` en una única
+transacción (P-08 desde el primer commit, no como fix posterior — lección de
+V-01/T-37).
+
+| Método y ruta | Dominio que invoca | RF |
+|---|---|---|
+| `POST /textos` | `recibir_unidad(...)` | RF-EX-001 |
+| `GET /textos/pendientes-de-revision?umbral=` | `candidatas_a_revision_por_baja_confianza(...)` | RF-EX-006 |
+| `GET /textos/{id}` | consulta directa del almacén | — |
+| `POST /textos/{id}/soporte` | `determinar_soporte(...)` | RF-EX-002 |
+| `POST /textos/{id}/extraccion-born-digital` | `extraer_texto_born_digital(...)` | RF-EX-003 |
+| `POST /textos/{id}/sugerencia-ocr` | `recibir_sugerencia_ocr(...)` | RF-EX-004 |
+| `POST /textos/{id}/confirmacion` | `confirmar_extraccion(...)` | RF-EX-011 |
+| `POST /textos/{id}/validacion` | `marcar_cuarentena_o_rechazo(...)` | RF-EX-009 |
+| `GET /textos/{id}/entrega` | `entregar(...)` | RF-EX-010 |
+| `GET /lotes/{lote_o_flujo_id}/conteo` | `contar_por_estado(...)` | RF-EX-008 |
+| `GET /eventos-auditoria` | `AlmacenDeTextos.eventos_de_auditoria()` | RF-EX-008, P-08 |
+
+`GET /textos/pendientes-de-revision` declarado ANTES de `GET /textos/{id}` en
+`api.py` — mismo motivo real que en normalizacion (T-39): FastAPI/Starlette
+resuelve rutas por orden de declaración, a diferencia de Spring MVC.
+`umbral` es obligatorio, sin valor por defecto: el umbral de calidad sigue
+`[CLARIFICAR]` en `specs/002-extraccion/spec.md` §8, así que nunca se
+inventa uno en el código — lo declara el llamador en cada consulta.
+
+`GET /textos/{id}/entrega` es de solo lectura (no transiciona estado —
+`Extraído` ya es terminal de éxito): valida y devuelve, sin anexar evento ni
+recibir actor/fecha; un texto no `Extraído` responde 409 vía el mismo
+manejador de `ErrorDeDominio` que el resto del módulo.
+
+Mapeo de persistencia (estructura, no DDL): `TextoExtraido` → tabla
+`textos_extraidos`, con procedencia y sugerencia de OCR aplanadas en columnas
+propias (mismo criterio que `UnidadDocumentalEntity` en normalizacion) y
+`evidencia` serializada a JSON en una columna de texto. Variables de entorno
+idénticas a los otros contextos: `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`.
+
+Autorización: al igual que `confirmar_limites` en Normalización,
+`confirmar_extraccion` no verifica autorización dentro del dominio — ese
+chequeo, cuando exista, vive en la capa de orquestación (mismo criterio que
+`GestionDeLimites`/`GestionDeDecisiones` en Validación Humana, que inyectan un
+`VerificadorDePermisos`), no en la función de dominio pura. Ningún contexto
+Python de este proyecto tiene todavía esa capa de orquestación con
+autorización real — es una brecha compartida con Normalización, no específica
+de Extracción.
+
+Fuera de alcance de esta spec: recepción real de unidades desde Normalización
+(RF-EX-001 asume que la unidad ya llega en la petición, mismo tipo de brecha
+que Normalización tiene con Captura/Ingesta); entrega real a Clasificación,
+Enriquecimiento e Indexación y Búsqueda (`entregar()` es una validación de
+lectura, no una integración HTTP real — esos tres contextos no existen
+todavía).

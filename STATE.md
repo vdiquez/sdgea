@@ -1491,3 +1491,45 @@ captura-ingesta/records-custodia, diseño de UI/UX, o F4.
   correcciones documentadas en `QUESTIONS.md` (entradas 2026-08-27).
   Siguiente paso: retomar `./orquestador.sh loop` para T-41 en adelante —
   Codex confirmó T-40 sin VETO pendiente.
+
+- [x] T-41 (retomado tras un segundo hallazgo operativo real del loop
+  headless). Al relanzar `./orquestador.sh loop`, la primera iteración
+  implementó T-41 completo (`api.py`, `persistencia.py`,
+  `tests/test_api.py`, `tests/test_persistencia.py`, 53/53 tests según su
+  propio reporte) pero **nunca lo comiteó**: intentó verificar con `bash
+  ./test.sh` y `./gradlew test` (además de `uv run pytest` directo y una
+  variante por PowerShell), y las cinco variantes fueron denegadas porque
+  `--allowedTools "Bash(git *),Bash(./test.sh *)"` (`run_claude` en
+  `orquestador.sh`) solo matchea la forma LITERAL `./test.sh`, sin prefijo
+  `bash` ni comandos distintos — nunca intentó esa forma exacta. Terminó su
+  turno preguntando (en el campo `result` de su JSON, nunca visible para
+  nadie en una sesión headless) si podía comitear solo con el lado Python
+  verificado; el loop vio `rc=0` (la sesión de Claude no "falló", solo
+  terminó sin commit), corrió `./test.sh` (sin cambios que probar, pasó
+  trivialmente) y llamó a `run_codex`, que revisó `git show HEAD` — que
+  seguía siendo el último commit de la sesión interactiva (el cierre de T-40)
+  — y esta vez SÍ vetó algo que en la revisión anterior había llamado "no
+  bloqueante": `confirmar_extraccion` acepta cualquier `str` como actor sin
+  verificar autorización. Ese hallazgo, real en sí mismo, apuntaba a un
+  commit equivocado (T-40, dominio puro) en vez del código de T-41 realmente
+  pendiente — la autorización nunca se ha verificado dentro de una función de
+  dominio Python en este proyecto (`confirmar_limites` en Normalización tiene
+  el mismo shape sin objeción); ese chequeo vive en la capa de orquestación
+  (mismo criterio que `GestionDeLimites`/`GestionDeDecisiones` en Validación
+  Humana), que ningún contexto Python tiene todavía — brecha compartida con
+  Normalización, documentada en `spec-infra-servicios.md` §11, no específica
+  de Extracción ni bloqueante para T-41.
+  Retomado en sesión interactiva: inspeccionado el trabajo no comiteado (alta
+  calidad — sigue el patrón de Normalización T-34/T-37 correctamente,
+  incluido el test de atomicidad real con violación NOT NULL), verificado con
+  `./test.sh` completo (Gradle + eval-harness + normalizacion + extraccion,
+  53/53 en el módulo nuevo) y comiteado. Se escribió
+  `specs/spec-infra-servicios.md` §11 (nueva — no existía cuando el loop
+  comiteó T-40, así que las referencias "§8" en los comentarios de
+  `api.py`/`persistencia.py` apuntaban a la sección equivocada, "Formato de
+  error"; corregidas a "§11").
+  Siguiente paso: T-42 (Dockerfile + wiring en docker-compose) es la próxima
+  tarea abierta en TODO.md. Antes de relanzar `./orquestador.sh loop` de
+  nuevo, considerar si conviene ampliar el patrón `--allowedTools` de
+  `run_claude()` (p. ej. `Bash(bash ./test.sh*)` además de `Bash(./test.sh
+  *)`) para que este mismo bloqueo no se repita.
