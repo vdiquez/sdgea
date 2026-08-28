@@ -1588,3 +1588,51 @@ captura-ingesta/records-custodia, diseño de UI/UX, o F4.
   resolución) y §7 (RF-EX-011 traza también a P-03) actualizadas.
   Siguiente paso: T-42 (Dockerfile + wiring en docker-compose) sigue siendo la
   próxima tarea abierta en TODO.md — no cambia por esta corrección.
+
+- [x] T-42 Dockerfile real de extraccion + wiring en
+  `deploy/docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que
+  T-35 (Normalización, `contexts/normalizacion/Dockerfile`): build en dos
+  etapas (`python:3.12-slim`), `uv sync --directory contexts/extraccion
+  --no-dev --frozen` en la etapa de build (excluye pytest, que `./test.sh` ya
+  corre en CI antes de construir la imagen), runtime con el `.venv` copiado y
+  solo los cinco módulos de producción (`dominio.py`, `persistencia.py`,
+  `integracion.py`, `api.py`, `main.py` — el nuevo respecto a normalizacion es
+  `integracion.py`, el cliente HTTP de `VerificadorDeAutorizacionHttp` de
+  T-41b). Contexto de build la raíz del repo (`context: ..` desde
+  `deploy/`), igual que el resto, por ser miembro del workspace `uv`
+  compartido. `EXPOSE 8086` (default de `SERVER_PORT` en `main.py`).
+  Wiring: servicio `extraccion` añadido a `docker-compose.{saas,onprem}.yml`
+  con Postgres propio (mismo criterio que normalizacion: mantiene estado
+  propio, textos extraídos) y, a diferencia de normalizacion,
+  `SEGURIDAD_ACCESO_BASE_URL: http://seguridad-acceso:8083` +
+  `depends_on: [postgres, seguridad-acceso]` — la única variable de entorno
+  nueva que este contexto necesita respecto al patrón de normalizacion,
+  porque `confirmar_extraccion` (RF-EX-011/T-41b) consulta de verdad
+  `POST /autorizacion`. Sin `ports:` en ninguno de los dos modos, mismo
+  criterio P-02/§7 que los otros cinco servicios (red interna de
+  docker-compose, no expuesto al host). `docker-compose.local-ports.yml`
+  gana el mapeo `8086:8086` (puerto siguiente disponible tras 8081-8085),
+  solo para Postman/curl desde el host.
+  T-42 es infraestructura de empaquetado (como T-12/T-16/T-17/T-18/T-35), no
+  un RF con Dado/Cuando/Entonces propio, así que no aplica TDD sobre
+  criterios de negocio. Verificación de honestidad en su lugar: `./test.sh`
+  completo en verde tras el cambio (Gradle BUILD SUCCESSFUL, 25 tareas
+  up-to-date; pytest: eval-harness 4 passed, normalizacion 40 passed,
+  extraccion 55 passed — sin tocar ningún test ni código de dominio/API).
+  Los tres `docker-compose*.yml` se revisaron visualmente contra el mismo
+  patrón de indentación YAML que ya usan captura-ingesta/records-custodia/
+  seguridad-acceso/validacion-humana/normalizacion (no se pudo correr un
+  parser YAML automatizado en esta sesión: el intérprete `python` requiere
+  aprobación manual de permisos en este entorno interactivo, a diferencia del
+  sandbox headless donde T-18 sí lo corrió). **Límite de esta verificación,
+  documentado explícitamente, igual que T-16/T-17/T-18/T-35**: `docker` no
+  está instalado en este entorno, así que ni la imagen ni
+  `docker compose up` real se construyeron ni se corrieron aquí.
+  Antes de este commit se comiteó por separado (`chore:`) una actualización
+  de `REVIEW.md` que había quedado sin comitear de la sesión anterior: el
+  veredicto final de Codex sobre T-41b (`d1471fc`, "OK", sin VETO) estaba
+  escrito en el árbol de trabajo pero nunca se guardó en el repo.
+  Siguiente paso: T-43 (colección Postman con el ciclo completo de
+  Extracción, verificación con Docker real y Newman) es la próxima tarea
+  abierta en TODO.md — requiere un entorno con Docker disponible, que esta
+  sesión no tiene; queda para Victor o una sesión interactiva con Docker.

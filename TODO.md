@@ -477,11 +477,22 @@ repetirse aquí (ver STATE.md para el detalle completo de cada una):
       denegado) + 1 test HTTP (403), 55/55 tests en el módulo. `./test.sh`
       completo del repo en verde. `specs/spec-infra-servicios.md`
       (§9/§10/§11) y `specs/002-extraccion/spec.md` (§1/§7) actualizadas.
-- [ ] T-42 Dockerfile real de extraccion + wiring en
+- [x] T-42 Dockerfile real de extraccion + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que T-35
       (Normalización): build en dos etapas con `uv sync --no-dev --frozen`;
       Postgres propio; puerto siguiente disponible (8086) en
-      `docker-compose.local-ports.yml`.
+      `docker-compose.local-ports.yml`. `SEGURIDAD_ACCESO_BASE_URL` cableada
+      en el servicio (RF-EX-011/T-41b, `VerificadorDeAutorizacionHttp` contra
+      `POST /autorizacion`); `depends_on: [postgres, seguridad-acceso]`.
+      T-42 es infraestructura de empaquetado (como T-18/T-35), no un RF con
+      Dado/Cuando/Entonces propio — verificación por honestidad: `./test.sh`
+      completo en verde (Gradle 25 tareas; pytest: eval-harness 4,
+      normalizacion 40, extraccion 55, todos passed) confirma que
+      Dockerfile/compose no rompieron nada existente. Mismo límite que
+      T-16..T-18/T-35: `docker` no está instalado en este entorno, así que la
+      imagen y `docker compose up` reales no se construyeron ni se corrieron
+      aquí — falta esa verificación de punta a punta (junto con T-43) cuando
+      alguien la corra en un entorno con Docker disponible.
 - [ ] T-43 Colección Postman con el ciclo completo de Extracción, mismo
       patrón que T-36 (Normalización): recepción -> determinación de
       soporte -> extracción (born-digital y vía OCR ficticio) -> conteo por
