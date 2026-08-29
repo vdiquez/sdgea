@@ -745,3 +745,125 @@ re-descubrirlo o inventar persistencia que la spec no pide):
       exacto del handoff; no wireado a `test.sh` (toma ~90s por los backoffs
       reales de la rama de fallo genérico). Codex confirmó OK sobre el
       commit de corrección.
+
+# Enriquecimiento
+
+Decisión de Victor, 2026-08-29 ("Continuemos con el contexto de
+Enriquecimiento"). Sigue `specs/004-enriquecimiento/spec.md` (RF-EN-001..010).
+Mismo patrón que Normalización/Extracción/Clasificación: contexto híbrido,
+Python/FastAPI (ya scaffolded en `contexts/enriquecimiento/`, miembro del
+workspace uv, wiring documentado en `docker-compose.saas.yml`), sin
+Postgres propio (spec §3: "igual que Clasificación, este contexto no
+mantiene estado propio de sus sugerencias después de entregarlas" — mismo
+criterio que validacion-humana/clasificacion, T-31/T-46).
+
+**Dos `[CLARIFICAR]` reales en `specs/004-enriquecimiento/spec.md` §8, NO
+resueltos aquí — no bloquean el corte vertical, pero definen su alcance**:
+1. El esquema exacto de metadatos obligatorios (campos, formatos) — hereda
+   el mismo `[CLARIFICAR]` de `spec-records-custodia.md` §8. Igual que
+   Clasificación nunca inventó cuántas sugerencias top-N emitir, este
+   contexto nunca inventa nombres de campo reales ("fecha", "remitente",
+   etc.) como si fueran el esquema canónico: el "campo de metadato" es una
+   cadena que el LLAMADOR declara al enviar el texto a evaluar (mismo
+   criterio que `CondicionDeExtraccion`/`CondicionValidacion` en los otros
+   contextos — el dominio no decide la taxonomía, la recibe).
+2. Si Enriquecimiento depende de una clasificación (serie) confirmada o
+   sugerida para saber qué campos son obligatorios, o si extrae un conjunto
+   común de campos independiente de la serie — tensión real entre dos specs
+   ya escritas, sin resolver. Se sortea de la misma forma: el llamador
+   declara explícitamente qué campos evaluar en cada llamada: el dominio no
+   decide "cuáles son los obligatorios para esta serie".
+   Si en algún punto una tarea necesitara resolver esto de verdad (no solo
+   sortearlo) para avanzar, es un `[CLARIFICAR]` real — QUESTIONS.md, no
+   inventar.
+
+**Brecha de implementación ya documentada en la spec (§8, no es tarea de
+esta lista)**: `DocumentoDeArchivo`/`DecisionHumana` en records-custodia
+solo modelan `clasificacionResultante`, no un campo de metadatos — la
+materialización de metadatos no tiene dónde aterrizar todavía. No bloquea:
+la sugerencia de todas formas llega a records-custodia como `Sugerencia`
+genérica vía `POST /sugerencias` (mismo `tipo` libre que ya usa
+Clasificación, `tipo="metadato"`, sin tocar Kotlin) — mismo criterio que la
+brecha de RF-RC-008/Expediente que Clasificación dejó documentada y sin
+resolver.
+
+**Lecciones ya aprendidas en Normalización/Extracción/Clasificación que NO
+deben repetirse aquí** (ver STATE.md para el detalle completo de cada una):
+- P-08 desde el inicio (T-37): cada función de transición de dominio debe
+  devolver también un `EventoAuditoria` — no agregarlo como fix posterior.
+- En FastAPI/Starlette, cualquier ruta GET literal (p. ej.
+  `/textos/pendientes-de-revision`) debe declararse ANTES que su ruta
+  hermana con `{id}` (T-39/T-41).
+- Persistencia atómica agregado+evento en una sola transacción con rollback
+  explícito (`guardar_con_evento`, T-37) — aunque este contexto no persiste
+  agregados propios (spec §3), si alguna tarea introduce persistencia real
+  en algún punto, aplica el mismo patrón desde el primer commit.
+- P-03: toda capacidad externa (records-custodia, seguridad-acceso si hace
+  falta autorización) detrás de un puerto/`Protocol` propio, nunca
+  tipado contra la clase HTTP concreta (T-45-corrección).
+- RF-CL-010 (Clasificación) enseñó a no responder 200/201 con una lista
+  vacía sin salida explícita cuando el criterio de negocio exige una acción
+  — si algún RF de Enriquecimiento tiene una forma similar ("no
+  enriquecible", RF-EN-009), exigir al menos una razón explícita, no un
+  cuerpo vacío silencioso.
+- Nunca inventar el esquema de metadatos ni la dependencia con Clasificación
+  (ver arriba) — recíbelos como parámetro del llamador o déjalos fuera de
+  alcance, nunca un valor fijo inventado.
+
+- [ ] T-49 RF-EN-001..010 — dominio de Enriquecimiento en Python
+      (`contexts/enriquecimiento/dominio.py`), mismo patrón que
+      `contexts/clasificacion/dominio.py` (T-44): `recibir_texto_extraido`
+      (RF-EN-001) como única puerta de entrada; `ValorPropuesto` (campo,
+      valor_original, valor_normalizado, confianza, evidencia — RF-EN-003/
+      004) y campo marcado "no encontrado" explícito (RF-EN-005), ambos
+      componentes FICTICIOS: el llamador entrega el valor/confianza/
+      evidencia YA CALCULADOS, el dominio nunca extrae nada de verdad;
+      `SugerenciaDeMetadatos` (agregado sin persistencia propia, spec §3);
+      `a_sugerencia_saliente` — traducción pura a la forma genérica que ya
+      acepta `POST /sugerencias` de records-custodia (`tipo="metadato"`),
+      sin llamada HTTP (eso es T-50); `marcar_no_enriquecible` (RF-EN-009,
+      razón declarada por el llamador, mismo criterio que
+      `MarcaNoClasificable`); test estructural de que el módulo no expone
+      ninguna operación de materialización (RF-EN-007, mismo criterio que
+      T-09/T-44). Sin agregado persistido, sin `EventoAuditoria` propio
+      (records-custodia ya emite el evento de recepción — mismo criterio
+      que Clasificación, spec §4). `uv run --directory
+      contexts/enriquecimiento pytest` agregado a `test.sh` en este mismo
+      commit. TDD contra cada Dado/Cuando/Entonces de RF-EN-001..010.
+- [ ] T-50 RF-EN-001..010 — Servicio HTTP (FastAPI) para Enriquecimiento,
+      SIN persistencia propia (spec §3), contra
+      `specs/spec-infra-servicios.md` §13 (nueva). Mismo patrón que T-45
+      (Clasificación): endpoint(s) que componen las funciones puras de
+      `dominio.py` y reenvían con un cliente HTTP real
+      (`EnviadorDeSugerenciasHttp`, detrás de un puerto/`Protocol` propio —
+      lección de T-45-corrección aplicada desde el inicio, no como fix
+      posterior) contra `POST /sugerencias` de records-custodia. Variable de
+      entorno: `RECORDS_CUSTODIA_BASE_URL`. Manejo de errores: mismo
+      criterio que clasificacion/extraccion (`ErrorDeDominio` → 409,
+      `ServicioNoDisponibleError` → 502). TDD: tests de integración con
+      `httpx.MockTransport` (verifica método/URL/cuerpo JSON exactos,
+      lección de T-45) + tests de API con `dependency_overrides`.
+- [ ] T-51 Dockerfile real de enriquecimiento + wiring en
+      `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que
+      clasificacion (T-46): build en dos etapas con `uv sync --no-dev
+      --frozen`, SIN Postgres propio, solo `RECORDS_CUSTODIA_BASE_URL` y
+      `depends_on: [records-custodia]`; siguiente puerto disponible en
+      `docker-compose.local-ports.yml`. Verificar `main.py` real (no el
+      stub "Hello from enriquecimiento!") antes de escribir el
+      `ENTRYPOINT` — mismo hallazgo real que T-46 encontró para
+      clasificacion. T-51 es infraestructura de empaquetado, no un RF con
+      Dado/Cuando/Entonces propio — verificación por honestidad
+      (`./test.sh` completo en verde tras el cambio).
+- [ ] T-52 Colección Postman con el ciclo completo de Enriquecimiento,
+      mismo patrón que T-47 (Clasificación): carpeta nueva "9.
+      Enriquecimiento", flujo end-to-end real de dos servicios (custodiar
+      documento en records-custodia → enviar sugerencia de metadatos con
+      al menos dos campos, uno con valor propuesto y otro marcado "no
+      encontrado" → verificar en `GET /documentos/{id}/sugerencias` que
+      ambos llegan distinguibles por campo, RF-EN-008/010 → marcar un
+      texto "no enriquecible" y verificar que el conteo de sugerencias no
+      cambia, RF-EN-009). Verificar con el stack Docker real levantado y
+      dos corridas de Newman seguidas sin fallos, actualizar
+      `postman/README.md` con el conteo real. `specs/spec-infra-servicios.md`
+      §10 actualizada (Enriquecimiento deja de aparecer como servicio que
+      no existe).
