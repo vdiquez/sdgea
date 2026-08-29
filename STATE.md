@@ -2339,8 +2339,13 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
 
 # Enriquecimiento
 
-- 2026-08-29 — T-49 (RF-EN-001..010, dominio de Enriquecimiento en Python)
-  cerrada, mismo patrón que `contexts/clasificacion/dominio.py` (T-44):
+- 2026-08-29 — T-49 (dominio de Enriquecimiento en Python) — dominio
+  PARCIAL de RF-EN-001..010, no "cerrada": RF-EN-006 (entrega real a
+  Records/Custodia, sin alterar el documento) exige la llamada HTTP que
+  hace T-50 — este commit solo hace la traducción pura, local. Corrección de
+  encuadre pedida por Codex sobre la redacción original de esta entrada (ver
+  entrada siguiente para el detalle del VETO real que motivó la corrección).
+  Mismo patrón que `contexts/clasificacion/dominio.py` (T-44):
   `contexts/enriquecimiento/dominio.py` — `recibir_texto_extraido` (RF-EN-001,
   única puerta de entrada, misma precondición defensiva "Extraído" que
   clasificacion); `ValorPropuesto` (campo, valor_original, valor_normalizado,
@@ -2378,6 +2383,26 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   enriquecimiento 15, todos passed). No se tocó ningún `[CLARIFICAR]` de la
   spec (esquema de metadatos y su relación con clasificación siguen
   pendientes, §8).
+  **VETO real de Codex sobre este commit (`b63f7aa`), corregido en el commit
+  siguiente**: RF-EN-009 (cero pérdida silenciosa) no se cumplía de verdad —
+  `generar_sugerencia_de_metadatos()` aceptaba `valores=[]` sin llamar a
+  `exigir_al_menos_un_valor()`, y `a_sugerencia_saliente()` lo convertía en
+  `[]`: ni sugerencia ni `MarcaNoEnriquecible`, la pérdida silenciosa exacta
+  que el RF prohíbe. El test existente (`test_exigir_al_menos_un_valor_
+  rechaza_lista_vacia`) llamaba al guardia de forma aislada, nunca a través
+  de la operación real — 15/15 tests pasaban con el caso de aceptación roto.
+  Mismo defecto de raíz que el VETO de Codex sobre `17642a7` en
+  clasificacion (T-45-corrección): ahí también faltaba conectar el guardia a
+  la operación que produce la salida. Corregido: `generar_sugerencia_de_
+  metadatos()` ahora llama `exigir_al_menos_un_valor(valores)` antes de
+  construir la sugerencia. TDD: nuevo test `test_generar_sugerencia_de_
+  metadatos_rechaza_lista_vacia_en_vez_de_perderla_en_silencio` — confirmado
+  en rojo primero (`DID NOT RAISE ErrorDeDominio` contra el código sin
+  corregir) y en verde después. 16/16 tests en el módulo.
+  Segundo hallazgo de la misma revisión, de encuadre no de código: la
+  entrada original de esta sección decía "T-49 ... cerrada" implicando que
+  RF-EN-006 (entrega real a Records/Custodia) también quedaba resuelto —
+  corregido arriba a "dominio PARCIAL", ya que la entrega HTTP real es T-50.
   Siguiente paso: T-50 (servicio HTTP FastAPI para Enriquecimiento, sin
   persistencia propia, `specs/spec-infra-servicios.md` §13 nueva) es la
   próxima tarea abierta en TODO.md.

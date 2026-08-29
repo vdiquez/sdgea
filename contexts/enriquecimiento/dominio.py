@@ -91,6 +91,12 @@ def generar_sugerencia_de_metadatos(
     modelo_id: str,
     fecha: datetime,
 ) -> SugerenciaDeMetadatos:
+    # RF-EN-009 (VETO real de Codex sobre el primer commit de T-49): sin este
+    # llamado, valores=[] pasaba de largo y a_sugerencia_saliente() lo convertía
+    # en [] -- ninguna sugerencia, ninguna marca de "no enriquecible". La
+    # operación que produce la salida real es la que debe rechazar la pérdida
+    # silenciosa, no un guardia aislado que nadie invoca.
+    exigir_al_menos_un_valor(valores)
     return SugerenciaDeMetadatos(documento_id=texto.documento_id, valores=valores, modelo_id=modelo_id, fecha=fecha)
 
 

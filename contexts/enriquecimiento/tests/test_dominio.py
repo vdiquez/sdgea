@@ -206,6 +206,18 @@ class TestCeroPerdidaSilenciosa:
 
         assert exigir_al_menos_un_valor([no_encontrado]) == [no_encontrado]
 
+    def test_generar_sugerencia_de_metadatos_rechaza_lista_vacia_en_vez_de_perderla_en_silencio(self):
+        # VETO real de Codex sobre el commit T-49 (ver REVIEW.md): la
+        # protección de exigir_al_menos_un_valor existía pero no estaba
+        # conectada a la operación real que produce la salida -- un texto
+        # con valores=[] pasaba de largo y a_sugerencia_saliente() lo
+        # convertía en [] (ninguna sugerencia, ninguna marca). Este test
+        # ejerce la operación real, no el guardia aislado.
+        texto = _texto_disponible()
+
+        with pytest.raises(ErrorDeDominio):
+            generar_sugerencia_de_metadatos(texto, [], "enriquecedor-ficticio-v1", FECHA)
+
 
 # RF-EN-010 · Consulta de sugerencias de metadatos por documento
 class TestConsultaDeSugerenciasPorDocumento:
