@@ -1,38 +1,40 @@
-OK: commit `37a53b5` conforme.
+OK: commit `a732343` conforme.
 
-Alcance revisado: T-48; nuevo `GET /eventos-auditoria` de
-`records-custodia`, su prueba HTTP, la petición Postman 75 y la actualización
-de `specs/spec-infra-servicios.md` §4.
+Commit revisado: `a732343` — `fix: corrige VETO real sobre run_id (precision de segundo no bastaba)`.
 
-- P-01: conforme. El endpoint es exclusivamente de lectura sobre
-  `CustodiaOriginales.eventosDeAuditoria`; no acepta ni materializa una
-  sugerencia, ni modifica documento o expediente. Las sugerencias siguen
-  entrando por `POST /sugerencias` hacia
-  `CapaAnticorrupcionSugerencias`, y la única mutación de clasificación sigue
-  siendo `materializar(DecisionHumana)`.
-- P-03: conforme. No se añade ni se consume capacidad externa; el controlador
-  usa el agregado/puerto de dominio ya cableado en `RecordsCustodiaConfig`.
-- P-08: conforme. La lectura devuelve la única `BitacoraAuditoria` compartida
-  por custodia y la capa anticorrupción, por lo que hace observable tanto
-  `ORIGINAL_CUSTODIADO` como `SUGERENCIA_RECIBIDA`; no crea una vía paralela
-  ni mutable de auditoría. La emisión de ambos eventos ya es responsabilidad
-  de las transiciones existentes y está cubierta además por las pruebas de
-  dominio/transaccionales previas.
-- Honestidad de pruebas: conforme. El nuevo test HTTP custodia un documento,
-  envía una sugerencia por el endpoint real y solo entonces consulta el nuevo
-  endpoint; exige `200` y ambos eventos con sus actores correctos. La petición
-  Postman 75 extiende esa comprobación al flujo de Clasificación y exige los
-  dos emisores ficticios esperados, además de actor y fecha no vacíos. No hay
-  mocks, datos precargados ni aserciones que omitan el comportamiento nuevo.
-- Control adicional de `specs/`: conforme. La única modificación de spec
-  incorpora el contrato de lectura y referencias internas ya existentes
-  (P-08, T-20/T-48 y endpoints análogos). No añade referencias normativas
-  (Acuerdo, Ley, Decreto, ISO) ni introduce umbrales numéricos.
+Alcance y contexto: corrige la unicidad de los tags de log del orquestador
+definido en `plan-ejecucion-agentica.md` §§3–5. Centraliza la generación en
+`nuevo_run_id()` (marca de tiempo + PID) y hace que `cmd_preflight` y
+`cmd_loop` la consuman. Añade `test-run-id.sh` y lo incorpora a `test.sh`.
+No toca archivos bajo `specs/`.
 
-Verificación ejecutable: intenté
-`./gradlew :contexts:records-custodia:test --rerun-tasks`, con un
-`GRADLE_USER_HOME` escribible dentro del repo. No fue posible ejecutarla en
-este sandbox porque no tiene la distribución Gradle 9.7 en caché y la descarga
-está bloqueada por la restricción de red (`Permission denied: getsockopt`). No
-es un fallo del proyecto ni altera el dictamen estático; el commit documenta
-dos corridas reales de Newman, 76/76 peticiones y 121/121 aserciones.
+- P-01: conforme. No introduce una ruta probabilística hacia el estado de un
+  documento o expediente; únicamente cambia nombres de archivos de log del
+  proceso de desarrollo.
+- P-03: conforme. No se agrega ni se consume capacidad externa del producto.
+  Las CLIs ya existentes del orquestador no constituyen una de las capacidades
+  críticas enumeradas por P-03.
+- P-08: conforme en alcance. No se agrega ni modifica una transición de
+  documento/expediente, ni su emisión de auditoría.
+- Control de `specs/`: no aplicable. El commit modifica solo
+  `orquestador.sh`, `test-run-id.sh` y `test.sh`; por tanto no añade referencias
+  normativas ni umbrales que verificar.
+
+Honestidad de pruebas: conforme. `test-run-id.sh` sustituye `date` en `PATH`
+por un doble que devuelve exactamente la misma marca de tiempo, ejecuta la
+función real extraída de `orquestador.sh` en dos procesos `bash -c` distintos y
+falla si los valores coinciden. También comprueba que se preserva el prefijo
+temporal. Así el test ejercita justamente la colisión que motivó el VETO; no
+depende de una hora real distinta, mocks de la función bajo prueba ni datos
+precargados. La inspección del diff confirma además que ambos puntos de uso
+(`cmd_preflight` y `cmd_loop`) delegan en esa función.
+
+Verificaciones ejecutadas:
+
+- `bash test-run-id.sh`: PASS (2/2 aserciones).
+- `bash -n orquestador.sh` y `bash -n test-run-id.sh`: PASS.
+- `bash test.sh`: la prueba nueva pasa, pero la suite completa no puede
+  continuar en este sandbox porque Gradle 9.7.0 no está en caché y la descarga
+  está bloqueada (`Permission denied: getsockopt`). Reintentado con
+  `GRADLE_USER_HOME` escribible fuera del repositorio; mismo bloqueo de red.
+  Es una limitación del entorno de revisión, no un fallo atribuido al commit.
