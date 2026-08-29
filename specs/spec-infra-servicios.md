@@ -400,6 +400,7 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
 | RF-EX-011 exige verificar autorización real (`VerificadorDeAutorizacion` + `POST /autorizacion`) | VETO real de Codex sobre commit `cf93d84`, ver `REVIEW.md` y `QUESTIONS.md` 2026-08-27; P-01, P-03 |
 | `clasificacion` como orquestador HTTP sin persistencia propia, Python/FastAPI | Decisión de Victor, 2026-08-28 ("Sigamos con Clasificación"); `specs/003-clasificacion/spec.md` §3, TODO.md T-45 |
 | Dockerfile real de `clasificacion` + wiring en docker-compose, sin Postgres propio, puerto 8087 | TODO.md T-46; mismo criterio que `validacion-humana` (T-31) para el empaquetado sin base de datos propia |
+| `enriquecimiento` como orquestador HTTP sin persistencia propia, Python/FastAPI, puerto único que expone la bifurcación de `evaluar_texto` | Decisión de Victor, 2026-08-27 ("continuar con Extracción...") y 2026-08-28/29 (secuencia del pipeline); `specs/004-enriquecimiento/spec.md` §3, TODO.md T-50 |
 
 ## 10. Decisiones pendientes / preguntas abiertas
 
@@ -595,3 +596,68 @@ ni Postgres, mismo criterio "sin base de datos propia" que
 `SERVER_PORT`, `depends_on: records-custodia`, sin `ports:`) y en
 `deploy/docker-compose.local-ports.yml` (`8087:8087`, solo para Postman/curl
 desde el host).
+
+## 13. Contrato mínimo — `enriquecimiento`
+
+Traduce las funciones puras de `contexts/enriquecimiento/dominio.py` (T-49):
+`recibir_texto_extraido`, `proponer_valor`, `marcar_campo_no_encontrado`,
+`evaluar_texto` (única operación de evaluación — bifurca hacia
+`SugerenciaDeMetadatos` o `MarcaNoEnriquecible`, corregido tras el segundo
+VETO real de Codex sobre T-49, ver `STATE.md`), `a_sugerencia_saliente`. Igual
+que `clasificacion` (§12), este contexto **no tiene persistencia propia**
+(`specs/004-enriquecimiento/spec.md` §3): el endpoint compone las funciones
+puras de dominio y reenvía el resultado a `records-custodia` vía
+`POST /sugerencias` (`integracion.py`, `EnviadorDeSugerenciasHttp`, cliente
+`httpx` real, detrás del puerto `dominio.EnviadorDeSugerencias` desde el
+primer commit — lección de T-45-corrección aplicada desde el inicio, no como
+fix posterior).
+
+| Método y ruta | Dominio que invoca | RF |
+|---|---|---|
+| `POST /enriquecimientos` | `recibir_texto_extraido(...)` + `proponer_valor(...)`/`marcar_campo_no_encontrado(...)` por cada campo declarado + `evaluar_texto(...)` + (si produce `SugerenciaDeMetadatos`) `a_sugerencia_saliente(...)` y reenvío a `POST /sugerencias` (`tipo="metadato"`) por cada valor/campo, uno por elemento | RF-EN-001, RF-EN-002, RF-EN-003, RF-EN-004, RF-EN-005, RF-EN-006, RF-EN-008, RF-EN-009, RF-EN-010 |
+
+Un único endpoint, a diferencia de `clasificacion` (§12: `/clasificaciones` +
+`/agrupamientos` + `/no-clasificables`, tres rutas separadas): aquí
+`evaluar_texto` ya decide, a partir de la misma entrada, si el texto produce
+una `SugerenciaDeMetadatos` (al menos un valor propuesto o campo marcado "no
+encontrado") o una `MarcaNoEnriquecible` (ninguno de los dos, con la razón que
+declara el llamador en `razon_no_enriquecible`) — separar la ruta en la capa
+HTTP duplicaría esa bifurcación y reabriría el hueco de pérdida silenciosa que
+el segundo VETO de Codex sobre T-49 cerró. Cuando la respuesta es una
+`SugerenciaDeMetadatos`, cada `ValorPropuesto`/`CampoNoEncontrado` se traduce y
+reenvía como una `SugerenciaSaliente` independiente (RF-EN-008: revisable y
+aprobable por campo) — respuesta `201` con la lista. Cuando es una
+`MarcaNoEnriquecible`, no se reenvía nada a `records-custodia` (mismo
+criterio que `POST /no-clasificables` en clasificacion: el reporte es la
+propia respuesta HTTP síncrona) — respuesta `200` con la marca.
+
+Cuerpo de `POST /sugerencias` que construye `EnviadorDeSugerenciasHttp`
+(`documentoId`/`tipo`/`contenidoPropuesto`/`modeloId`/`evidencia`/
+`confianza`/`fecha` en camelCase, mismo criterio que en `clasificacion`, §12)
+— ver §4 y `http/Dtos.kt::RecibirSugerenciaRequest` para el contrato exacto
+que expone records-custodia. Campo no encontrado se traduce con
+`contenido_propuesto="{campo}=NO_ENCONTRADO"`, `confianza=0.0`, `evidencia=[]`
+(representación estructural de "sin evidencia" ya fijada en T-49, no un
+umbral inventado).
+
+Sin mapeo de persistencia: no hay tablas propias de este contexto (mismo
+criterio que `clasificacion`/`validacion-humana`).
+
+Variables de entorno: `RECORDS_CUSTODIA_BASE_URL` (default
+`http://localhost:8082`, mismo patrón que en `clasificacion`/`extraccion`);
+`SERVER_PORT` (default `8088`, siguiente puerto disponible tras
+`clasificacion`).
+
+Manejo de errores: `dominio.ErrorDeDominio` (texto no recibido en `Extraído`,
+o llamada malformada sin valores y sin razón declarada) → 409;
+`ServicioNoDisponibleError` (`records-custodia` no responde o responde error)
+→ 502, mismo criterio que `clasificacion` (§12).
+
+Prueba de integración honesta (T-50, mismo criterio que `clasificacion`/T-45):
+`tests/test_integracion.py` inyecta un
+`httpx.Client(transport=httpx.MockTransport(...))` en
+`EnviadorDeSugerenciasHttp` y verifica método, URL y cuerpo JSON exactos de la
+petición que construye. `tests/test_api.py` sigue el patrón de
+dependency-injection con un doble (`_EnviadorDePrueba`) para probar la
+composición HTTP↔dominio sin red, incluida la bifurcación
+sugerencia/marca-no-enriquecible y la granularidad por campo (RF-EN-008).

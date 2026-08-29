@@ -100,6 +100,11 @@ wheels = [
 name = "enriquecimiento"
 version = "0.1.0"
 source = { virtual = "contexts/enriquecimiento" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "uvicorn", extra = ["standard"] },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -107,6 +112,11 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]

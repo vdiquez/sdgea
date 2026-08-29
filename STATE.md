@@ -1,9 +1,9 @@
 # STATE
 Fase: F3 — siete bounded contexts completos de punta a punta (captura-ingesta,
 records-custodia, seguridad-acceso, validación humana, normalización,
-extracción, clasificación); un octavo (Enriquecimiento) en construcción. T-49
-(dominio de Enriquecimiento en Python) cerrada (2026-08-29). Próxima tarea
-abierta: T-50 (servicio HTTP FastAPI para Enriquecimiento). Ver
+extracción, clasificación); un octavo (Enriquecimiento) en construcción. T-50
+(servicio HTTP FastAPI para Enriquecimiento) cerrada (2026-08-29). Próxima
+tarea abierta: T-51 (Dockerfile + wiring en docker-compose). Ver
 plan-ejecucion-agentica.md.
 
 Hecho:
@@ -2421,3 +2421,55 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Siguiente paso: T-50 (servicio HTTP FastAPI para Enriquecimiento, sin
   persistencia propia, `specs/spec-infra-servicios.md` §13 nueva) es la
   próxima tarea abierta en TODO.md.
+
+- 2026-08-29 — T-50 (Servicio HTTP FastAPI para Enriquecimiento) implementado
+  contra `specs/spec-infra-servicios.md` §13 (nueva), mismo patrón que T-45
+  (Clasificación): `contexts/enriquecimiento/api.py` + `integracion.py`, SIN
+  persistencia propia (spec §3). Diferencia deliberada de diseño frente a
+  clasificacion: un único endpoint `POST /enriquecimientos`, no tres rutas
+  separadas (`/clasificaciones` + `/agrupamientos` + `/no-clasificables`) —
+  porque `evaluar_texto` (T-49) ya bifurca por sí sola entre
+  `SugerenciaDeMetadatos` (201, reenvía cada valor/campo como
+  `SugerenciaSaliente` independiente vía `POST /sugerencias`, RF-EN-008) y
+  `MarcaNoEnriquecible` (200, no reenvía nada, mismo criterio que
+  `/no-clasificables`); separar la ruta en la capa HTTP habría duplicado esa
+  decisión y reabierto el hueco de pérdida silenciosa que el segundo VETO de
+  Codex sobre T-49 cerró (ver entrada anterior).
+  P-03 aplicado desde el primer commit (lección de T-45-corrección, no como
+  fix posterior): nuevo puerto `dominio.EnviadorDeSugerencias` (`Protocol`);
+  `EnviadorDeSugerenciasHttp` (`integracion.py`) lo implementa explícitamente;
+  `api.py` tipa contra el puerto, nunca contra la clase concreta.
+  `EnviadorDeSugerenciasHttp` reenvía con el mismo cuerpo camelCase que
+  `records-custodia` espera (`documentoId`/`tipo`/`contenidoPropuesto`/
+  `modeloId`/`evidencia`/`confianza`/`fecha`), igual que en clasificacion.
+  Manejo de errores: `ErrorDeDominio` → 409 (texto no `Extraído`, o llamada
+  malformada sin valores y sin razón), `ServicioNoDisponibleError` → 502,
+  mismo criterio unificado `{"error": ...}` del resto del proyecto.
+  `pyproject.toml` gana `fastapi`/`uvicorn[standard]`/`httpx` (mismas
+  versiones que clasificacion/extraccion/normalizacion); `uv.lock`
+  regenerado con `uv sync --all-packages` desde la raíz del workspace.
+  **Nota operativa real de esta tarea**: `uv sync` corrido primero dentro de
+  `contexts/enriquecimiento` (sin `--all-packages` desde la raíz) desinstaló
+  del venv compartido del workspace seis paquetes que otros miembros
+  necesitan (`psycopg`, `sqlalchemy`, `greenlet`, `platform-python`,
+  `tzdata`) — el proyecto usa un workspace `uv` con un único `.venv`/`uv.lock`
+  compartido (`[tool.uv.workspace]` en el `pyproject.toml` raíz), así que
+  `uv sync` debe correrse desde la raíz (o con `--all-packages`), nunca desde
+  el directorio de un miembro individual. Corregido de inmediato con
+  `uv sync --all-packages` antes de correr ningún test; verificado que
+  `uv.lock` solo ganó las tres dependencias nuevas (`git diff --stat` = 10
+  líneas añadidas, cero eliminadas) y que `./test.sh` completo sigue en verde
+  para los cuatro contextos Python existentes.
+  TDD: 3 tests nuevos de integración (`tests/test_integracion.py`, con
+  `httpx.MockTransport` — verifica método/URL/cuerpo JSON exactos de la
+  petición saliente, mismo criterio de honestidad que clasificacion/T-45) +
+  10 tests nuevos de API (`tests/test_api.py`, con doble vía
+  `dependency_overrides` — cubre valor propuesto, campo no encontrado,
+  granularidad por campo con dos elementos en la misma petición, texto no
+  extraído, servicio no disponible, y ambas ramas de RF-EN-009 —
+  marca-con-razón y rechazo-sin-razón), 29 en el módulo junto con los 19 de
+  dominio (T-49). `./test.sh` completo del repo en verde (Gradle BUILD
+  SUCCESSFUL; pytest: eval-harness 4, normalizacion 40, extraccion 55,
+  clasificacion 27, enriquecimiento 29).
+  Siguiente paso: T-51 (Dockerfile real de enriquecimiento + wiring en
+  docker-compose) es la próxima tarea abierta en TODO.md.

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+from typing import Protocol
 
 
 class ErrorDeDominio(Exception):
@@ -168,6 +169,17 @@ def a_sugerencia_saliente(sugerencia: SugerenciaDeMetadatos) -> list[SugerenciaS
                 )
             )
     return salientes
+
+
+# RF-EN-006/RF-EN-010 / P-03 (lección de T-45-corrección — VETO real de Codex
+# sobre commit 17642a7 de clasificacion, ver REVIEW.md — aplicada aquí desde
+# el inicio, no como fix posterior): la capa de orquestación (api.py) no debe
+# conocer la implementación concreta que reenvía la sugerencia a
+# records-custodia. El dominio solo declara el puerto; integracion.py (T-50)
+# aporta la única implementación real (HTTP) y los tests de api.py inyectan
+# un doble en memoria.
+class EnviadorDeSugerencias(Protocol):
+    def enviar(self, sugerencia: SugerenciaSaliente) -> None: ...
 
 
 # RF-EN-009: el llamador declara la condición de "no enriquecible" (mismo

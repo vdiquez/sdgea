@@ -830,7 +830,7 @@ deben repetirse aquí** (ver STATE.md para el detalle completo de cada una):
       que Clasificación, spec §4). `uv run --directory
       contexts/enriquecimiento pytest` agregado a `test.sh` en este mismo
       commit. TDD contra cada Dado/Cuando/Entonces de RF-EN-001..010.
-- [ ] T-50 RF-EN-001..010 — Servicio HTTP (FastAPI) para Enriquecimiento,
+- [x] T-50 RF-EN-001..010 — Servicio HTTP (FastAPI) para Enriquecimiento,
       SIN persistencia propia (spec §3), contra
       `specs/spec-infra-servicios.md` §13 (nueva). Mismo patrón que T-45
       (Clasificación): endpoint(s) que componen las funciones puras de
@@ -843,6 +843,9 @@ deben repetirse aquí** (ver STATE.md para el detalle completo de cada una):
       `ServicioNoDisponibleError` → 502). TDD: tests de integración con
       `httpx.MockTransport` (verifica método/URL/cuerpo JSON exactos,
       lección de T-45) + tests de API con `dependency_overrides`.
+      Ver STATE.md para el detalle completo (un único endpoint
+      `POST /enriquecimientos`, no tres como en clasificacion, porque
+      `evaluar_texto` ya bifurca por sí solo).
 - [ ] T-51 Dockerfile real de enriquecimiento + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que
       clasificacion (T-46): build en dos etapas con `uv sync --no-dev
