@@ -401,6 +401,7 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
 | `clasificacion` como orquestador HTTP sin persistencia propia, Python/FastAPI | Decisión de Victor, 2026-08-28 ("Sigamos con Clasificación"); `specs/003-clasificacion/spec.md` §3, TODO.md T-45 |
 | Dockerfile real de `clasificacion` + wiring en docker-compose, sin Postgres propio, puerto 8087 | TODO.md T-46; mismo criterio que `validacion-humana` (T-31) para el empaquetado sin base de datos propia |
 | `enriquecimiento` como orquestador HTTP sin persistencia propia, Python/FastAPI, puerto único que expone la bifurcación de `evaluar_texto` | Decisión de Victor, 2026-08-27 ("continuar con Extracción...") y 2026-08-28/29 (secuencia del pipeline); `specs/004-enriquecimiento/spec.md` §3, TODO.md T-50 |
+| Dockerfile real de `enriquecimiento` + wiring en docker-compose, sin Postgres propio, puerto 8088 | TODO.md T-51; mismo criterio que `clasificacion` (T-46) para el empaquetado sin base de datos propia |
 
 ## 10. Decisiones pendientes / preguntas abiertas
 
@@ -661,3 +662,12 @@ petición que construye. `tests/test_api.py` sigue el patrón de
 dependency-injection con un doble (`_EnviadorDePrueba`) para probar la
 composición HTTP↔dominio sin red, incluida la bifurcación
 sugerencia/marca-no-enriquecible y la granularidad por campo (RF-EN-008).
+
+Dockerfile (T-51): cuarto contenedor Python/FastAPI del proyecto, mismo build
+en dos etapas con `uv` que `normalizacion`/`extraccion`/`clasificacion` — sin
+`persistencia.py` ni Postgres, mismo criterio "sin base de datos propia" que
+`contexts/validacion-humana/Dockerfile` y `contexts/clasificacion/Dockerfile`.
+Wireado en `deploy/docker-compose.{saas,onprem}.yml` (variables
+`RECORDS_CUSTODIA_BASE_URL`, `SERVER_PORT`, `depends_on: records-custodia`,
+sin `ports:`) y en `deploy/docker-compose.local-ports.yml` (`8088:8088`, solo
+para Postman/curl desde el host).

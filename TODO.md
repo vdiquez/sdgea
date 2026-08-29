@@ -846,17 +846,37 @@ deben repetirse aquí** (ver STATE.md para el detalle completo de cada una):
       Ver STATE.md para el detalle completo (un único endpoint
       `POST /enriquecimientos`, no tres como en clasificacion, porque
       `evaluar_texto` ya bifurca por sí solo).
-- [ ] T-51 Dockerfile real de enriquecimiento + wiring en
+- [x] T-51 Dockerfile real de enriquecimiento + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que
       clasificacion (T-46): build en dos etapas con `uv sync --no-dev
       --frozen`, SIN Postgres propio, solo `RECORDS_CUSTODIA_BASE_URL` y
-      `depends_on: [records-custodia]`; siguiente puerto disponible en
-      `docker-compose.local-ports.yml`. Verificar `main.py` real (no el
-      stub "Hello from enriquecimiento!") antes de escribir el
-      `ENTRYPOINT` — mismo hallazgo real que T-46 encontró para
-      clasificacion. T-51 es infraestructura de empaquetado, no un RF con
-      Dado/Cuando/Entonces propio — verificación por honestidad
-      (`./test.sh` completo en verde tras el cambio).
+      `depends_on: [records-custodia]`; puerto 8088 (ya reservado por
+      `specs/spec-infra-servicios.md` §13 desde T-50) en
+      `docker-compose.local-ports.yml`.
+      **Mismo hallazgo real que T-46 encontró para clasificacion**:
+      `contexts/enriquecimiento/main.py` seguía siendo el stub sin tocar
+      ("Hello from enriquecimiento!") — T-49/T-50 nunca lo tocaron porque
+      los tests importan `api.app` directo. Corregido al mismo patrón que
+      `contexts/clasificacion/main.py`
+      (`uvicorn.run(app, ..., port=int(os.environ.get("SERVER_PORT",
+      "8088")))`).
+      T-51 es infraestructura de empaquetado (como T-18/T-35/T-42/T-46), no
+      un RF con Dado/Cuando/Entonces propio. Verificación de honestidad:
+      `./test.sh` completo en verde tras el cambio (Gradle 25 tareas BUILD
+      SUCCESSFUL; pytest: eval-harness 4, normalizacion 40, extraccion 55,
+      clasificacion 27, enriquecimiento 29, todos passed) confirma que el
+      fix de `main.py` y el Dockerfile no rompieron nada existente; los
+      tres `docker-compose*.yml` se validaron parseándolos con PyYAML
+      (`uv run --directory eval-harness python -c "import yaml; ..."`,
+      disponible en el entorno de esta sesión a diferencia de T-46) —
+      confirma sintaxis válida y ausencia de `ports:` en el servicio nuevo
+      de `saas.yml`/`onprem.yml`. Mismo límite que T-16..T-18/T-35/T-42/T-46:
+      `docker` no está instalado en este entorno, así que la imagen y
+      `docker compose up` reales no se construyeron ni se corrieron aquí —
+      falta esa verificación de punta a punta (junto con T-52) cuando
+      alguien la corra en un entorno con Docker disponible.
+      `specs/spec-infra-servicios.md` §9 (trazabilidad) y §13 (nota de
+      Dockerfile) actualizadas.
 - [ ] T-52 Colección Postman con el ciclo completo de Enriquecimiento,
       mismo patrón que T-47 (Clasificación): carpeta nueva "9.
       Enriquecimiento", flujo end-to-end real de dos servicios (custodiar

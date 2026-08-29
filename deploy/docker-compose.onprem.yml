@@ -4,19 +4,20 @@
 # externa debe ser autoalojada — el appliance debe operar sin conectividad
 # saliente, incluso en entornos aislados (P-10). Dockerfiles reales ya
 # wireados para captura-ingesta, records-custodia (T-18), seguridad-acceso
-# (T-26), validacion-humana (T-31), normalizacion (T-35), extraccion (T-42) y
-# clasificacion (T-46, specs/spec-infra-servicios.md) — son los mismos que en
-# modo SaaS (P-02: un solo código base); ninguno tiene todavía una capacidad
-# externa de P-03 que abstraer (seguridad-acceso es autoalojado por diseño
-# desde T-23; validacion-humana y clasificacion no tienen Postgres propio,
-# T-30/T-46; normalizacion y extraccion solo usan Postgres, sin ningún
-# componente probabilístico real detrás de
+# (T-26), validacion-humana (T-31), normalizacion (T-35), extraccion (T-42),
+# clasificacion (T-46) y enriquecimiento (T-51,
+# specs/spec-infra-servicios.md) — son los mismos que en modo SaaS (P-02: un
+# solo código base); ninguno tiene todavía una capacidad externa de P-03 que
+# abstraer (seguridad-acceso es autoalojado por diseño desde T-23;
+# validacion-humana, clasificacion y enriquecimiento no tienen Postgres
+# propio, T-30/T-46/T-51; normalizacion y extraccion solo usan Postgres, sin
+# ningún componente probabilístico real detrás de
 # `recibir_sugerencia_de_limites`/`recibir_sugerencia_ocr` — ambos son
-# FICTICIOS, T-33/T-40; clasificacion tampoco tiene ninguno real detrás de
-# `clasificar`/`agrupar`, T-44).
+# FICTICIOS, T-33/T-40; clasificacion/enriquecimiento tampoco tienen ninguno
+# real detrás de `clasificar`/`agrupar`/`evaluar_texto`, T-44/T-49).
 #
-# TODO por contexto, cuando exista su Dockerfile: los dos restantes de
-# docker-compose.saas.yml (enriquecimiento, indexacion-busqueda).
+# TODO por contexto, cuando exista su Dockerfile: el restante de
+# docker-compose.saas.yml (indexacion-busqueda).
 #
 # TODO — implementaciones self-hosted de las seis capacidades de P-03, cada una
 # como contenedor local (candidatas a evaluar, no decididas todavía):
@@ -144,6 +145,20 @@ services:
     environment:
       RECORDS_CUSTODIA_BASE_URL: http://records-custodia:8082
       SERVER_PORT: "8087"
+    depends_on:
+      - records-custodia
+
+  # T-49/T-50: cuarto contenedor Python/FastAPI. Sin Postgres propio (mismo
+  # criterio que validacion-humana/clasificacion): orquestador HTTP puro que
+  # reenvía cada sugerencia de metadatos a POST /sugerencias de
+  # records-custodia (tipo="metadato").
+  enriquecimiento:
+    build:
+      context: ..
+      dockerfile: contexts/enriquecimiento/Dockerfile
+    environment:
+      RECORDS_CUSTODIA_BASE_URL: http://records-custodia:8082
+      SERVER_PORT: "8088"
     depends_on:
       - records-custodia
 

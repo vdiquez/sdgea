@@ -1,9 +1,10 @@
 # STATE
 Fase: F3 — siete bounded contexts completos de punta a punta (captura-ingesta,
 records-custodia, seguridad-acceso, validación humana, normalización,
-extracción, clasificación); un octavo (Enriquecimiento) en construcción. T-50
-(servicio HTTP FastAPI para Enriquecimiento) cerrada (2026-08-29). Próxima
-tarea abierta: T-51 (Dockerfile + wiring en docker-compose). Ver
+extracción, clasificación); un octavo (Enriquecimiento) en construcción. T-51
+(Dockerfile real de enriquecimiento + wiring en docker-compose) cerrada
+(2026-08-29). Próxima tarea abierta: T-52 (colección Postman con el ciclo
+completo de Enriquecimiento, verificación con Docker/Newman real). Ver
 plan-ejecucion-agentica.md.
 
 Hecho:
@@ -2473,3 +2474,52 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   clasificacion 27, enriquecimiento 29).
   Siguiente paso: T-51 (Dockerfile real de enriquecimiento + wiring en
   docker-compose) es la próxima tarea abierta en TODO.md.
+
+- 2026-08-29 — T-51 (Dockerfile real de enriquecimiento + wiring en
+  docker-compose) implementado, mismo patrón que T-46 (Clasificación):
+  `contexts/enriquecimiento/Dockerfile` — build en dos etapas con `uv sync
+  --no-dev --frozen`, SIN `persistencia.py` ni Postgres (spec §3, mismo
+  criterio "sin base de datos propia" que `validacion-humana`/`clasificacion`).
+  Wireado en `deploy/docker-compose.{saas,onprem}.yml` (servicio
+  `enriquecimiento`, `RECORDS_CUSTODIA_BASE_URL`, `SERVER_PORT="8088"`,
+  `depends_on: [records-custodia]`, sin `ports:` — mismo criterio de red
+  interna que los otros siete servicios) y en
+  `deploy/docker-compose.local-ports.yml` (`8088:8088`, solo para Postman/curl
+  desde el host). Puerto 8088 ya estaba reservado por
+  `specs/spec-infra-servicios.md` §13 desde T-50, así que no hubo que decidir
+  uno nuevo.
+  **Mismo hallazgo real que T-46 encontró para clasificacion**:
+  `contexts/enriquecimiento/main.py` seguía siendo el stub de la etapa 0
+  (`print("Hello from enriquecimiento!")`) — T-49/T-50 nunca lo tocaron porque
+  los tests importan `api.app` directo vía `TestClient`/`MockTransport`, sin
+  pasar por `main.py`. Sin corregirlo, el `ENTRYPOINT` del contenedor habría
+  impreso un saludo y salido, sin servir HTTP. Corregido al mismo patrón que
+  `contexts/clasificacion/main.py`: `uvicorn.run(app, host="0.0.0.0",
+  port=int(os.environ.get("SERVER_PORT", "8088")))`.
+  Cabeceras de `docker-compose.{saas,onprem}.yml` actualizadas para que la
+  lista de Dockerfiles reales y el TODO de contextos pendientes (ahora solo
+  `indexacion-busqueda`) reflejen a enriquecimiento como cerrado.
+  `specs/spec-infra-servicios.md` actualizada: fila nueva en la tabla de
+  trazabilidad (§9) y nota de Dockerfile al final de §13 (mismo formato que
+  la nota de T-46 al final de §12).
+  T-51 es infraestructura de empaquetado (como T-18/T-35/T-42/T-46), no un RF
+  con Dado/Cuando/Entonces propio. Verificación de honestidad: `./test.sh`
+  completo en verde tras el cambio (Gradle 25 tareas BUILD SUCCESSFUL; pytest:
+  eval-harness 4, normalizacion 40, extraccion 55, clasificacion 27,
+  enriquecimiento 29, todos passed) confirma que el fix de `main.py` y el
+  Dockerfile no rompieron nada existente. A diferencia de T-46 (que no pudo
+  validar los `docker-compose*.yml` con un parser YAML automatizado), en esta
+  sesión sí había un intérprete Python disponible vía `uv run
+  --directory eval-harness python`: los tres compose se parsearon con
+  `yaml.safe_load` confirmando sintaxis válida, la lista completa de
+  servicios (`saas`/`onprem` ganan `enriquecimiento`; `local-ports` gana su
+  bloque de puertos) y la ausencia explícita de `ports:` en el bloque
+  `enriquecimiento` de `saas.yml`/`onprem.yml`. Mismo límite real que
+  T-16..T-18/T-35/T-42/T-46: `docker` no está instalado en este entorno, así
+  que la imagen y `docker compose up` reales no se construyeron ni se
+  corrieron aquí — falta esa verificación de punta a punta (junto con T-52)
+  cuando alguien la corra en un entorno con Docker disponible.
+  Siguiente paso: T-52 (colección Postman con el ciclo completo de
+  Enriquecimiento, verificación con Docker/Newman real) es la próxima tarea
+  abierta en TODO.md — y la última pendiente para cerrar Enriquecimiento de
+  punta a punta.
