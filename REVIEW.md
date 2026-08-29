@@ -1,54 +1,22 @@
-# Revision of `2f3312ae25c0fbfe792e32c51a5ff7e9288556c5`
+OK: commit `6fd0497` conforme.
 
-## Result: OK (no VETO)
+Alcance revisado: `orquestador.sh` y `test-run-claude.sh`. No modifica
+`specs/`, por lo que no aplica el control adicional de referencias normativas
+ni umbrales.
 
-The commit completes T-47: it updates coordination documentation and adds the
-Postman collection for the Classification vertical slice. It changes neither
-`specs/` nor production code.
+- P-01: no interviene en documentos, sugerencias ni materialización de estado.
+- P-03: no añade ni consume capacidades externas del producto; el doble de
+  `claude` es local, temporal y exclusivo de la prueba del orquestador.
+- P-08: no introduce transiciones de documento o expediente.
+- Honestidad: `./test-run-claude.sh` pasó. Sustituye el binario por un doble
+  ejecutable en `PATH` y ejerce `run_claude()` con las mismas señales que
+  reconoce `is_rate_limited()`: éxito (rc=0, 1 llamada), rate-limit sostenido
+  (rc=2 tras exactamente 2 llamadas) y error genérico sin esa señal (rc=1 tras
+  3 llamadas). No está configurado para pasar por mera inspección: registra y
+  comprueba las invocaciones reales; el backoff queda reducido a 1 s solamente
+  para que la prueba sea reproducible. La integración `cmd_loop` ya consume
+  explícitamente rc=2 para invocar `run_codex`; su contrato de retorno queda
+  cubierto por esta prueba.
 
-## Contrast with `specs/003-clasificacion/spec.md`
-
-- Folder 8 exercises RF-CL-001..006 and RF-CL-010: it custodizes a document,
-  posts two FICTITIOUS candidates, verifies descending ranking (RF-CL-003),
-  verifies their arrival at Records/Custodia as `Sugerencia`, groups it, and
-  verifies that `no-clasificable` does not forward a suggestion.
-- **P-01: compliant.** The collection reaches Records/Custodia solely through
-  `POST /sugerencias`. Classification depends on the `EnviadorDeSugerencias`
-  port; its HTTP adapter calls that endpoint. In Records/Custodia,
-  `CapaAnticorrupcionSugerencias.recibir` stores a `Sugerencia` without
-  modifying the document. Materialization remains the human-decision operation
-  of RF-RC-004. The candidates are explicitly supplied by the fictitious caller;
-  no real classifier is implemented.
-- **P-03: compliant.** The external Records/Custodia capability is behind the
-  project-owned `EnviadorDeSugerencias` protocol. `api.py` depends on that
-  interface and `EnviadorDeSugerenciasHttp` is an interchangeable adapter. The
-  commit adds no direct external consumption.
-- **P-08: compliant in the implementation.** Each suggestion reception goes
-  through the anti-corruption layer, which appends `SUGERENCIA_RECIBIDA` with
-  model actor, date, and before/after state; its transactional wrapper makes
-  that append atomic with storage. Classification has no state of its own to
-  audit. The new Postman flow does not yet assert those events, so T-48 was
-  added to make that end-to-end evidence explicit.
-
-## Specs, references, and thresholds
-
-No file under `specs/` changed, so the additional normative-reference and
-threshold review is inapplicable. The diff introduces no Acuerdo, Ley, Decreto,
-ISO reference, or numeric threshold.
-
-## Tests and honesty
-
-The added test is an HTTP integration collection, not a self-asserting fake:
-it chains responses across both services and checks content, order, type, and
-counts. Its assertions are consistent with the covered Given/When/Then criteria;
-no passing condition is rigged. Its P-08 end-to-end coverage is incomplete, not
-misrepresented, and is tracked as T-48.
-
-## Verification performed
-
-- Read `AGENTS.md`, the constitution, `STATE.md`, the full commit diff, and
-  the Classification spec.
-- `git diff --check HEAD^ HEAD` returned no whitespace errors.
-- Both modified Postman JSON files parse successfully with `ConvertFrom-Json`.
-- Local pytest execution was unavailable: this environment denied `python.exe`
-  and does not expose `pytest`. This has not been represented as a suite run.
+La exclusión de `test.sh` está documentada junto a `run_claude()` y es razonable:
+esta prueba de herramienta duerme los reintentos reales del camino genérico.
