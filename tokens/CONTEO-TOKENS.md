@@ -6,7 +6,7 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 
 **Total general (todas las invocaciones registradas): 37.162.681 tokens.**
 
-**Limitación conocida:** los tags `iterN` de `orquestador.sh` se reinician en cada corrida de `./orquestador.sh loop` y no son únicos entre sesiones — una corrida nueva puede sobrescribir en disco los logs `claude-iterN-*`/`codex-iterN-*` de una corrida anterior que llegó a la misma iteración N. Ver el docstring del script para el caso real en que esto ya pasó (2026-08-29). Los totales de aquí reflejan lo que sobrevive en `.loop/logs/` hoy, no necesariamente el histórico completo — por eso este archivo se comitea como snapshot en vez de regenerarse solo desde disco.
+**Nota histórica:** hasta el 2026-08-29 los tags `iterN` de `orquestador.sh` se reiniciaban en cada corrida y colisionaban entre sesiones — la corrida de T-48 sobrescribió en disco los logs originales `iter1`/`iter2` del corte vertical T-01..T-22. Corregido ese mismo día (`run_id` único por invocación, ver el docstring del script). Los totales de aquí reflejan lo que sobrevive en `.loop/logs/` hoy, no necesariamente el histórico completo de corridas anteriores a la corrección — por eso este archivo se comitea como snapshot en vez de regenerarse solo desde disco.
 
 ## Resumen por agente y modo
 

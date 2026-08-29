@@ -351,8 +351,13 @@ EOF
 # ------------------------------------------------------------------- preflight
 cmd_preflight() {
   mkdir -p "$LOG_DIR"
+  # run_id único por invocación: sin él, dos corridas de preflight en
+  # sesiones distintas reusan el tag "preflight" y la segunda sobrescribe en
+  # disco los logs de la primera (hallazgo real, 2026-08-29 — ver el mismo
+  # problema documentado abajo para cmd_loop).
+  local run_id; run_id="$(date +%Y%m%d-%H%M%S)"
   log "F0: Claude propone las correcciones de corpus (sin comitear)."
-  run_claude "$PREFLIGHT_PROMPT" "preflight" || die "Pre-vuelo falló; revisa $LOG_DIR."
+  run_claude "$PREFLIGHT_PROMPT" "${run_id}-preflight" || die "Pre-vuelo falló; revisa $LOG_DIR."
   echo; echo "================ REVISIÓN HUMANA REQUERIDA ================"
   git --no-pager diff --stat -- specs/ CLAUDE-CODE-KICKOFF.md 2>/dev/null || true
   echo "Revisa:   git diff specs/"
@@ -369,6 +374,13 @@ cmd_loop() {
   local prompt="${CLAUDE_STEP_PROMPT//__TEST_CMD__/$TEST_CMD}"
   local codex_lead_prompt="${CODEX_LEAD_PROMPT//__TEST_CMD__/$TEST_CMD}"
   local stale=0 prev_count fail_streak=0 codex_led rc_claude
+  # run_id único por invocación de cmd_loop: los tags "iter$i" por sí solos
+  # se reinician en cada corrida y NO son únicos entre sesiones -- una
+  # corrida nueva puede sobrescribir en disco los logs claude-iterN-*/
+  # codex-iterN-* de una corrida anterior que llegó a la misma iteración N
+  # (hallazgo real, 2026-08-29: pasó de verdad entre el corte vertical
+  # T-01..T-22 y una corrida posterior para T-48, ver tokens/CONTEO-TOKENS.md).
+  local run_id; run_id="$(date +%Y%m%d-%H%M%S)"
   prev_count=$(commit_count)
   notify "Loop iniciado ($(git branch --show-current 2>/dev/null || echo '?'))"
 
@@ -386,13 +398,13 @@ cmd_loop() {
     fi
 
     rc_claude=0
-    run_claude "$prompt" "iter$i" || rc_claude=$?
+    run_claude "$prompt" "${run_id}-iter$i" || rc_claude=$?
     codex_led=0
     if [ "$rc_claude" -eq 1 ]; then
       echo "Motivo: Claude falló (iter $i)" > BLOCKED.md; notify "Loop bloqueado: Claude falló."; return 1
     elif [ "$rc_claude" -eq 2 ]; then
       notify "Claude en límite de uso sostenido; Codex toma la iteración $i (implementa + autorrevisión)."
-      run_codex "$codex_lead_prompt" "iter$i-lead" || { echo "Motivo: Codex en modo autorrevisión falló (iter $i)" > BLOCKED.md; notify "Loop bloqueado: Codex en modo autorrevisión falló."; return 1; }
+      run_codex "$codex_lead_prompt" "${run_id}-iter$i-lead" || { echo "Motivo: Codex en modo autorrevisión falló (iter $i)" > BLOCKED.md; notify "Loop bloqueado: Codex en modo autorrevisión falló."; return 1; }
       codex_led=1
     fi
 
@@ -411,9 +423,9 @@ cmd_loop() {
     fi
 
     if [ "$codex_led" -eq 1 ]; then
-      run_codex "$CODEX_SELFREVIEW_PROMPT" "iter$i-selfreview" || log "Autorrevisión de Codex falló; se continúa con precaución."
+      run_codex "$CODEX_SELFREVIEW_PROMPT" "${run_id}-iter$i-selfreview" || log "Autorrevisión de Codex falló; se continúa con precaución."
     else
-      run_codex "$CODEX_REVIEW_PROMPT" "iter$i" || log "Revisión de Codex falló; se continúa con precaución."
+      run_codex "$CODEX_REVIEW_PROMPT" "${run_id}-iter$i" || log "Revisión de Codex falló; se continúa con precaución."
     fi
     if head -1 REVIEW.md 2>/dev/null | grep -q '^VETO:'; then
       { echo "Motivo: VETO de Codex:"; head -5 REVIEW.md; } > BLOCKED.md

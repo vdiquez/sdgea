@@ -36,19 +36,25 @@ reporta "usage"):
 Costo en USD: Claude expone `total_cost_usd` directo. Codex (`exec --json`)
 no expone ningún campo de costo — se deja en blanco, no se inventa una tarifa.
 
-LIMITACIÓN REAL CONOCIDA (encontrada 2026-08-29, corriendo el loop para
-T-48): los tags de `orquestador.sh` (`iter1`, `iter2`, ...) se reinician en
-CADA invocación de `cmd_loop` — no son únicos entre corridas del loop en
-sesiones distintas. Una corrida nueva sobrescribe silenciosamente
-`.loop/logs/claude-iter1-*.json`/`codex-iter1-*.log` de una corrida anterior
-si ambas llegan a la misma iteración N. Esto ya pasó una vez: la corrida de
-T-48 pisó los logs originales de `iter1`/`iter2` del corte vertical
-T-01..T-22 (agosto). El snapshot de `tokens/CONTEO-TOKENS.md` committeado
-ANTES de esa corrida conserva esos números históricos; los que corran este
-script DESPUÉS no van a poder recuperarlos desde `.loop/logs/` porque ya no
-existen en disco. Mitigación manual: archivar o renombrar `.loop/logs/`
-antes de cada `./orquestador.sh loop` si se quiere conservar el detalle
-crudo de corridas anteriores (el propio script no lo hace por sí solo).
+LIMITACIÓN REAL, ENCONTRADA Y CORREGIDA (2026-08-29, corriendo el loop para
+T-48): antes de esa corrida, los tags de `orquestador.sh` (`iter1`, `iter2`,
+`preflight`, ...) se reiniciaban en CADA invocación de `cmd_loop`/
+`cmd_preflight` — no eran únicos entre corridas en sesiones distintas. Una
+corrida nueva sobrescribía silenciosamente `.loop/logs/claude-iter1-*.json`/
+`codex-iter1-*.log` de una corrida anterior si ambas llegaban a la misma
+iteración N. Esto pasó de verdad: la corrida de T-48 pisó los logs
+originales de `iter1`/`iter2` del corte vertical T-01..T-22 (agosto). El
+snapshot de `tokens/CONTEO-TOKENS.md` committeado ANTES de esa corrida
+conserva esos números históricos (ver el historial de git de este archivo);
+los que corran este script sobre corridas ANTERIORES a la corrección no van
+a poder recuperarlos desde `.loop/logs/` porque ya no existen en disco.
+Corregido en `orquestador.sh` (mismo commit que agrega esta nota):
+`cmd_loop`/`cmd_preflight` generan un `run_id` único
+(`date +%Y%m%d-%H%M%S`) al arrancar y lo prefijan a todos los tags que pasan
+a `run_claude`/`run_codex` — los tags dejan de ser "iter1" y pasan a ser
+"20260829-231205-iter1", únicos por invocación. Este script no necesitó
+cambios: ya no asume ninguna forma fija para el tag (usa el nombre de
+archivo completo tal cual).
 """
 from __future__ import annotations
 
@@ -247,15 +253,16 @@ def generar_markdown(filas: list[Fila]) -> str:
     L.append(f"**Total general (todas las invocaciones registradas): {fmt_num(total_general)} tokens.**")
     L.append("")
     L.append(
-        "**Limitación conocida:** los tags `iterN` de `orquestador.sh` se "
-        "reinician en cada corrida de `./orquestador.sh loop` y no son "
-        "únicos entre sesiones — una corrida nueva puede sobrescribir en "
-        "disco los logs `claude-iterN-*`/`codex-iterN-*` de una corrida "
-        "anterior que llegó a la misma iteración N. Ver el docstring del "
-        "script para el caso real en que esto ya pasó (2026-08-29). Los "
-        "totales de aquí reflejan lo que sobrevive en `.loop/logs/` hoy, no "
-        "necesariamente el histórico completo — por eso este archivo se "
-        "comitea como snapshot en vez de regenerarse solo desde disco."
+        "**Nota histórica:** hasta el 2026-08-29 los tags `iterN` de "
+        "`orquestador.sh` se reiniciaban en cada corrida y colisionaban "
+        "entre sesiones — la corrida de T-48 sobrescribió en disco los "
+        "logs originales `iter1`/`iter2` del corte vertical T-01..T-22. "
+        "Corregido ese mismo día (`run_id` único por invocación, ver el "
+        "docstring del script). Los totales de aquí reflejan lo que "
+        "sobrevive en `.loop/logs/` hoy, no necesariamente el histórico "
+        "completo de corridas anteriores a la corrección — por eso este "
+        "archivo se comitea como snapshot en vez de regenerarse solo desde "
+        "disco."
     )
     L.append("")
     L.append("## Resumen por agente y modo")
