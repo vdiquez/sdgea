@@ -1,33 +1,31 @@
-OK: 6d364a1 siembra T-49..T-52 para Enriquecimiento sin violaciones detectadas de la constitución.
+OK: el commit `eab6e8b` cumple la spec aplicable y no presenta violaciones de P-01, P-03 ni P-08.
 
-Alcance revisado: `git show HEAD` modifica únicamente `TODO.md` (122 líneas); no hay
-código, pruebas ni archivos bajo `specs/` modificados. El contexto aplicable es
-`specs/004-enriquecimiento/spec.md` y el contrato de infraestructura existente.
+Revisión del commit `eab6e8b` — `fix: RF-EN-009 (segundo VETO de Codex) -- evaluar_texto() produce la marca real`.
 
-- P-01: conforme en el plan. T-49 declara valores y sugerencias FICTICIOS,
-  recibidos ya calculados; prohíbe materialización y conserva esta última en
-  Records/Custodia tras decisión humana. T-50 solo reenvía la sugerencia a
-  `POST /sugerencias` por la capa anticorrupción.
-- P-03: conforme en el plan. La dependencia externa hacia Records/Custodia queda
-  explícitamente detrás del puerto/`Protocol` `EnviadorDeSugerencias`; el
-  orquestador no se tipa contra el cliente HTTP concreto. No se introduce una
-  nueva capacidad externa directa.
-- P-08: conforme con el límite del contexto definido por la spec: Enriquecimiento
-  no mantiene agregado ni transición persistida propia; la recepción de cada
-  sugerencia en Records/Custodia emite el evento de auditoría. T-52 exige además
-  comprobar el ciclo real contra ese receptor.
-- Ambigüedades: los dos `[CLARIFICAR]` de la spec (esquema de metadatos y su
-  relación con clasificación) se preservan. El plan recibe campo/valor/razón del
-  llamador y no fija taxonomías ni umbrales.
-- Referencias/umbrales: el chequeo reforzado no aplica porque el commit no toca
-  `specs/`. Aun así, el diff no añade Acuerdos, Leyes, Decretos, ISO ni umbrales
-  regulatorios; los números que aparecen son identificadores de RF/tareas,
-  puertos o cobertura propuesta de Postman, no requisitos normativos nuevos.
-- Honestidad de tests: no hay pruebas añadidas o alteradas en este commit, por lo
-  que no existe una prueba que pueda estar amañada ni una ejecución que atribuirle.
-  Las tareas futuras sí exigen TDD contra Dado/Cuando/Entonces, MockTransport que
-  compruebe método/URL/cuerpo y validación Docker/Newman real; su honestidad debe
-  revisarse cuando el código y las pruebas existan.
+Contexto contrastado: `specs/004-enriquecimiento/spec.md` (§§3--5, en especial invariante 5 y RF-EN-009), `.specify/memory/constitution.md`, `STATE.md` y `git show HEAD`.
 
-No se añadieron tareas a TODO.md: el commit ya contiene la cola derivada de la
-spec existente y esta revisión no descubrió trabajo adicional.
+Hallazgo y criterio de aceptación
+
+- El flujo nuevo `evaluar_texto()` cubre la bifurcación que faltaba: con valores o campos marcados genera una `SugerenciaDeMetadatos`; sin señal y con razón declarada produce para el mismo `TextoDisponible` una `MarcaNoEnriquecible` que conserva documento, razón, actor y fecha. Esto satisface literalmente el Entonces de RF-EN-009 y elimina la pérdida silenciosa que motivó los dos vetos anteriores.
+- El rechazo cuando no se suministran ni valores ni razón es una entrada malformada, no el caso de aceptación de RF-EN-009. No sustituye la marca en el caso especificado.
+
+Principios solicitados
+
+- P-01: conforme. El contexto continúa siendo puramente propositivo: no escribe ni materializa metadatos de `DocumentoDeArchivo`. `MarcaNoEnriquecible` tampoco muta el documento.
+- P-03: conforme en el alcance del commit. No se incorpora ni consume una capacidad externa; la entrega a Records/Custodia sigue fuera de este cambio (T-50) y deberá usar su puerto propio.
+- P-08: conforme. El cambio no introduce una transición persistida de estado de documento o expediente. La futura recepción de una sugerencia por Records/Custodia sigue siendo la frontera que emite auditoría; la marca se reporta al Operador y no altera el documento.
+
+Honestidad de pruebas
+
+- Las tres pruebas añadidas no están amañadas: invocan `evaluar_texto()`, no construyen directamente la marca para demostrar el caso de aceptación. Verifican la marca con razón, el camino alternativo de sugerencia y el rechazo de la entrada malformada. La primera prueba observa exactamente el resultado exigido por RF-EN-009.
+- Los valores ficticios de confianza y evidencia son entradas declaradas por el llamador; no implementan ni simulan un componente probabilístico real, consistente con el alcance constitucional y el arnés ficticio.
+
+Control de specs, referencias y umbrales
+
+- El commit no modifica `specs/`; no aplica el control reforzado de referencias normativas y umbrales. Tampoco añade citas normativas ni umbrales nuevos en el código o pruebas.
+- `git diff HEAD^ HEAD --check` no reporta errores de espacio.
+
+Verificación ejecutada
+
+- `uv run --directory contexts/enriquecimiento pytest -q`: 19 passed. Solo quedó una advertencia no bloqueante por permisos de escritura de `.pytest_cache`.
+- `bash ./test.sh` no pudo completar Gradle en este entorno: la caché por defecto está denegada y, al redirigirla a una caché temporal, el wrapper no pudo descargar Gradle por la restricción de red (`Permission denied: getsockopt`). El script previo de `run_id` pasó. Es una limitación del entorno de revisión, no un fallo atribuido al commit.
