@@ -84,6 +84,10 @@ commit_count() { git rev-list --count HEAD 2>/dev/null || echo 0; }
 # rate limit de cuenta (ventana de varias horas) no se resuelve reintentando
 # unos minutos más, a diferencia de un "overloaded"/429 transitorio, que sí
 # suele resolverse en el primer o segundo reintento.
+# Prueba reproducible de los tres códigos de retorno (0/2/1) y del punto
+# exacto de handoff: ./test-run-claude.sh (no está en test.sh a propósito —
+# toma ~90s por los backoffs reales de la rama de fallo genérico; correr
+# a mano tras tocar run_claude()/cmd_loop()).
 run_claude() { # run_claude <prompt> <etiqueta>
   local prompt="$1" tag="$2" out sid="" wait="$BACKOFF_START" attempt=0 rl_attempts=0
   local -a flags=(--output-format json
