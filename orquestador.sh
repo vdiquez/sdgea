@@ -76,6 +76,17 @@ is_rate_limited() { grep -qiE 'rate.?limit|overloaded|429|usage limit|quota' "$1
 
 commit_count() { git rev-list --count HEAD 2>/dev/null || echo 0; }
 
+# Identificador único por invocación de cmd_loop/cmd_preflight, para prefijar
+# los tags de log (iter1, preflight, ...) y que dos corridas nunca sobrescriban
+# los logs de la otra en .loop/logs/ (hallazgo real, 2026-08-29). Solo la marca
+# de tiempo (precisión de segundo) NO basta -- dos invocaciones que arranquen
+# en el mismo segundo producirían el mismo run_id y volverían a colisionar
+# (VETO real de Codex sobre un primer intento con solo `date`). $$ es el PID
+# del propio proceso de orquestador.sh: dos invocaciones son siempre dos
+# procesos distintos, así que el sufijo es único incluso ante colisión exacta
+# de reloj. Ver test-run-id.sh para la prueba reproducible.
+nuevo_run_id() { echo "$(date +%Y%m%d-%H%M%S)-$$"; }
+
 # ------------------------------------------------------- llamadas a los agentes
 # Claude Code headless. Captura session_id; ante rate limit hace backoff y
 # reanuda LA MISMA sesión con --resume, hasta RATE_LIMIT_HANDOFF_ATTEMPTS
@@ -351,11 +362,7 @@ EOF
 # ------------------------------------------------------------------- preflight
 cmd_preflight() {
   mkdir -p "$LOG_DIR"
-  # run_id único por invocación: sin él, dos corridas de preflight en
-  # sesiones distintas reusan el tag "preflight" y la segunda sobrescribe en
-  # disco los logs de la primera (hallazgo real, 2026-08-29 — ver el mismo
-  # problema documentado abajo para cmd_loop).
-  local run_id; run_id="$(date +%Y%m%d-%H%M%S)"
+  local run_id; run_id="$(nuevo_run_id)"
   log "F0: Claude propone las correcciones de corpus (sin comitear)."
   run_claude "$PREFLIGHT_PROMPT" "${run_id}-preflight" || die "Pre-vuelo falló; revisa $LOG_DIR."
   echo; echo "================ REVISIÓN HUMANA REQUERIDA ================"
@@ -374,13 +381,7 @@ cmd_loop() {
   local prompt="${CLAUDE_STEP_PROMPT//__TEST_CMD__/$TEST_CMD}"
   local codex_lead_prompt="${CODEX_LEAD_PROMPT//__TEST_CMD__/$TEST_CMD}"
   local stale=0 prev_count fail_streak=0 codex_led rc_claude
-  # run_id único por invocación de cmd_loop: los tags "iter$i" por sí solos
-  # se reinician en cada corrida y NO son únicos entre sesiones -- una
-  # corrida nueva puede sobrescribir en disco los logs claude-iterN-*/
-  # codex-iterN-* de una corrida anterior que llegó a la misma iteración N
-  # (hallazgo real, 2026-08-29: pasó de verdad entre el corte vertical
-  # T-01..T-22 y una corrida posterior para T-48, ver tokens/CONTEO-TOKENS.md).
-  local run_id; run_id="$(date +%Y%m%d-%H%M%S)"
+  local run_id; run_id="$(nuevo_run_id)"
   prev_count=$(commit_count)
   notify "Loop iniciado ($(git branch --show-current 2>/dev/null || echo '?'))"
 
