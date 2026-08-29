@@ -2403,6 +2403,21 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   entrada original de esta sección decía "T-49 ... cerrada" implicando que
   RF-EN-006 (entrega real a Records/Custodia) también quedaba resuelto —
   corregido arriba a "dominio PARCIAL", ya que la entrega HTTP real es T-50.
+  **Codex mantuvo el VETO sobre esa primera corrección (`09409d6`), con un
+  motivo más fino**: rechazar `valores=[]` con `ErrorDeDominio` no basta —
+  el Dado/Cuando/Entonces de RF-EN-009 exige que evaluar el texto TERMINE en
+  una `MarcaNoEnriquecible` con razón registrada, no que el llamador deba
+  atrapar un error y decidir por su cuenta invocar `marcar_no_enriquecible`
+  aparte. Corregido en `eab6e8b`: `evaluar_texto()` nueva, única operación de
+  evaluación — bifurca hacia `SugerenciaDeMetadatos` (hay al menos un
+  valor/campo) o hacia `MarcaNoEnriquecible` (no hay ninguno, con la razón
+  que declara el llamador); solo rechaza con `ErrorDeDominio` la llamada
+  genuinamente malformada (sin valores Y sin razón).
+  `generar_sugerencia_de_metadatos`/`marcar_no_enriquecible` se mantienen
+  como bloques de construcción de más bajo nivel. TDD: 3 tests nuevos que
+  observan la salida real desde el mismo `TextoDisponible` (marca con razón,
+  sugerencia con valores, rechazo sin ninguno), 19/19 en el módulo. Codex
+  confirmó OK sobre este segundo fix — RF-EN-009 satisfecho literalmente.
   Siguiente paso: T-50 (servicio HTTP FastAPI para Enriquecimiento, sin
   persistencia propia, `specs/spec-infra-servicios.md` §13 nueva) es la
   próxima tarea abierta en TODO.md.
