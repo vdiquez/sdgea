@@ -1,14 +1,10 @@
 # STATE
 Fase: F3 — siete bounded contexts completos de punta a punta (captura-ingesta,
 records-custodia, seguridad-acceso, validación humana, normalización,
-extracción, clasificación). T-47 (ciclo completo de Clasificación en Postman)
-y T-48 (P-08: `GET /eventos-auditoria` en records-custodia) cerradas
-(2026-08-28/29), incluida su verificación real con Docker/Newman — 76/76
-peticiones, 121/121 aserciones, dos corridas seguidas sin fallos. No queda
-ninguna tarea `- [ ]` ni `- [?]` abierta en TODO.md: el corte vertical de los
-siete contextos está completo; lo que sigue es decidir la próxima prioridad
-(un octavo contexto — Enriquecimiento o Indexación y Búsqueda — u otra opción
-del checklist de abajo). Ver plan-ejecucion-agentica.md.
+extracción, clasificación); un octavo (Enriquecimiento) en construcción. T-49
+(dominio de Enriquecimiento en Python) cerrada (2026-08-29). Próxima tarea
+abierta: T-50 (servicio HTTP FastAPI para Enriquecimiento). Ver
+plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -2340,3 +2336,48 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   121/121 aserciones**, limpio desde la primera corrida. `postman/README.md`
   actualizado (49/57 endpoints cubiertos). Stack bajado al terminar. T-48
   marcada `- [x]` en TODO.md.
+
+# Enriquecimiento
+
+- 2026-08-29 — T-49 (RF-EN-001..010, dominio de Enriquecimiento en Python)
+  cerrada, mismo patrón que `contexts/clasificacion/dominio.py` (T-44):
+  `contexts/enriquecimiento/dominio.py` — `recibir_texto_extraido` (RF-EN-001,
+  única puerta de entrada, misma precondición defensiva "Extraído" que
+  clasificacion); `ValorPropuesto` (campo, valor_original, valor_normalizado,
+  confianza, evidencia — RF-EN-002/003/004, componente FICTICIO: el llamador
+  entrega todo ya calculado) y `CampoNoEncontrado` (RF-EN-005, tipo distinto
+  de `ValorPropuesto` en vez de un valor con campos vacíos, para que la
+  ausencia de evidencia sea estructural); `SugerenciaDeMetadatos` (agregado
+  raíz sin persistencia propia, spec §3, `valores: list[ValorPropuesto |
+  CampoNoEncontrado]`); `a_sugerencia_saliente` (RF-EN-006/008/010) traduce
+  cada `ValorPropuesto`/`CampoNoEncontrado` a su propia `SugerenciaSaliente`
+  (`tipo="metadato"`, un elemento por campo — no un bloque único — para que
+  cada campo sea revisable/aprobable/consultable de forma independiente),
+  pura, sin llamada HTTP (eso es T-50); campo no encontrado se traduce con
+  `contenido_propuesto="{campo}=NO_ENCONTRADO"`, `confianza=0.0`,
+  `evidencia=[]` (representación estructural de "sin evidencia", no un umbral
+  inventado); `marcar_no_enriquecible` (RF-EN-009, razón declarada por el
+  llamador, mismo criterio que `MarcaNoClasificable`); `exigir_al_menos_un_valor`
+  aplica desde el inicio la lección de RF-CL-010/VETO de Codex sobre
+  clasificacion (commit `17642a7`): una lista de valores vacía se rechaza en
+  vez de permitir una sugerencia sin ninguna salida explícita. Test
+  estructural para RF-EN-007 (el módulo no expone ninguna operación de
+  materialización), mismo criterio que T-09/T-44. Sin agregado persistido, sin
+  `EventoAuditoria` propio — records-custodia ya emite el evento de recepción
+  al recibir la sugerencia (mismo criterio que Clasificación, spec §4).
+  `pyproject.toml` ganó el grupo `dev` (`pytest`) y `[tool.pytest.ini_options]`
+  (`pythonpath = ["."]`); `uv run --directory contexts/enriquecimiento pytest`
+  agregado a `test.sh` en este mismo commit (lección de T-40). No se añadió
+  `fastapi`/`httpx` todavía — son de T-50 (servicio HTTP), no de esta tarea.
+  TDD: 15 tests nuevos (`tests/test_dominio.py`), uno por rama de cada
+  Dado/Cuando/Entonces de RF-EN-001..010; confirmado el fallo real
+  (`ModuleNotFoundError: No module named 'dominio'`) renombrando
+  `dominio.py` antes de escribirlo, restaurado en verde después. `./test.sh`
+  completo del repo en verde (Gradle BUILD SUCCESSFUL — 25 tareas up-to-date;
+  pytest: eval-harness 4, normalizacion 40, extraccion 55, clasificacion 27,
+  enriquecimiento 15, todos passed). No se tocó ningún `[CLARIFICAR]` de la
+  spec (esquema de metadatos y su relación con clasificación siguen
+  pendientes, §8).
+  Siguiente paso: T-50 (servicio HTTP FastAPI para Enriquecimiento, sin
+  persistencia propia, `specs/spec-infra-servicios.md` §13 nueva) es la
+  próxima tarea abierta en TODO.md.

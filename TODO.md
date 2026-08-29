@@ -810,7 +810,7 @@ deben repetirse aquí** (ver STATE.md para el detalle completo de cada una):
   (ver arriba) — recíbelos como parámetro del llamador o déjalos fuera de
   alcance, nunca un valor fijo inventado.
 
-- [ ] T-49 RF-EN-001..010 — dominio de Enriquecimiento en Python
+- [x] T-49 RF-EN-001..010 — dominio de Enriquecimiento en Python
       (`contexts/enriquecimiento/dominio.py`), mismo patrón que
       `contexts/clasificacion/dominio.py` (T-44): `recibir_texto_extraido`
       (RF-EN-001) como única puerta de entrada; `ValorPropuesto` (campo,
