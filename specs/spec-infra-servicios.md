@@ -96,14 +96,19 @@ tablas, sin cambiar el contrato de los métodos.
 | `GET /sugerencias/pendientes` | `CapaAnticorrupcionSugerencias.sugerenciasPendientes()` | RF-VH-001 (T-28) |
 | `POST /trd` | `RegistroTrd.publicar(trd)` | RF-RC-006 |
 | `GET /trd/{version}` | `RegistroTrd.version(numero)` | RF-RC-006 |
+| `GET /eventos-auditoria` | `CustodiaOriginales.eventosDeAuditoria` | P-08 (T-48) |
 
-Intentar modificar un original (`intentarModificar`) y los eventos de
-auditoría de solo-anexado (`BitacoraAuditoria.anexar` /
+Intentar modificar un original (`intentarModificar`) y las operaciones de
+escritura de la bitácora de solo-anexado (`BitacoraAuditoria.anexar` /
 `intentarModificar`/`intentarBorrar`) **no se exponen como endpoints**: son
 invariantes que el dominio ya hace cumplir internamente (RF-RC-001, RF-RC-005),
-no operaciones que un cliente HTTP deba invocar. La bitácora se expone
-solo para lectura, si una tarea de implementación la necesita para auditoría
-externa — no está en este contrato mínimo porque ningún RF lo pide todavía.
+no operaciones que un cliente HTTP deba invocar. La lectura de la bitácora sí
+se expone (`GET /eventos-auditoria`, T-48): mismo criterio que `GET
+/eventos-auditoria` en normalización/extracción y `GET /eventos-seguridad` en
+seguridad-acceso — devuelve todos los eventos de la `BitacoraAuditoria`
+compartida (T-20) entre `CustodiaOriginales` y `CapaAnticorrupcionSugerencias`,
+incluidos los `SUGERENCIA_RECIBIDA` que otros contextos (p. ej. Clasificación)
+generan al enviar una sugerencia vía `POST /sugerencias`.
 
 Mapeo de persistencia (estructura, no DDL):
 - `OriginalInmutable` → tabla `originales_inmutables`, escritura de una sola

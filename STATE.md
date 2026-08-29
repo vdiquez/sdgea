@@ -1,14 +1,14 @@
 # STATE
-Fase: F3 — seis bounded contexts completos de punta a punta (captura-ingesta,
+Fase: F3 — siete bounded contexts completos de punta a punta (captura-ingesta,
 records-custodia, seguridad-acceso, validación humana, normalización,
-extracción); Clasificación en curso: T-44 (dominio), T-45 (servicio HTTP) y
-T-46 (Dockerfile + wiring en docker-compose) completas. T-47 (Postman) tiene
-la colección ya redactada sin comitear (carpeta "8. Clasificacion") pero
-bloqueada por falta de aprobación de `docker compose`/`npx` — sexta sesión
-consecutiva con el mismo bloqueo (2026-08-28) — sigue siendo la próxima tarea
-`- [ ]` abierta en TODO.md hasta que una sesión con esa aprobación disponible
-(por allowlist en `.claude/settings.local.json` o un humano presente) la
-verifique con Docker/Newman reales y la comitee. Ver plan-ejecucion-agentica.md.
+extracción, clasificación). T-47 (ciclo completo de Clasificación en Postman)
+y T-48 (P-08: `GET /eventos-auditoria` en records-custodia) cerradas
+(2026-08-28/29), incluida su verificación real con Docker/Newman — 76/76
+peticiones, 121/121 aserciones, dos corridas seguidas sin fallos. No queda
+ninguna tarea `- [ ]` ni `- [?]` abierta en TODO.md: el corte vertical de los
+siete contextos está completo; lo que sigue es decidir la próxima prioridad
+(un octavo contexto — Enriquecimiento o Indexación y Búsqueda — u otra opción
+del checklist de abajo). Ver plan-ejecucion-agentica.md.
 
 Hecho:
 - F0: correcciones de corpus aplicadas y comiteadas (A.1-A.3); constitución
@@ -2251,3 +2251,92 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   cuanto la ventana se reinicie, a cambio de ese costo fijo por iteración
   durante el apagón; si en la práctica resulta molesto, ajustar es sencillo
   (guardar un timestamp de "no reintentar antes de X").
+
+- 2026-08-29 — VETO de Codex sobre `4eb7497` corregido (encontrado por el
+  loop headless al auditar `STATE.md` antes de tomar T-48, per
+  `CLAUDE_STEP_PROMPT`). `4eb7497` ("loop: entrega la iteracion a Codex
+  (autorrevision) cuando Claude agota su ventana de uso") modificó
+  `run_claude()`/`cmd_loop()` en `orquestador.sh` (el mecanismo
+  `RATE_LIMIT_HANDOFF_ATTEMPTS` que ya describen los comentarios de este
+  mismo archivo) en un turno anterior de esta sesión, antes de un `/clear` —
+  quedó sin revisar por Codex hasta que el loop lo encontró. VETO real: el
+  commit afirmaba una verificación manual "con un claude simulado (éxito,
+  rate-limit sostenido, fallo genérico)" que nunca quedó como prueba
+  reproducible versionada.
+  Corregido sin escalar a Victor (no es ambigüedad de negocio, es una
+  corrección de consistencia — "falta una prueba", igual que T-19/T-20/T-40):
+  `test-run-claude.sh` (nuevo, raíz del repo) sustituye el binario `claude`
+  por un doble ejecutable en PATH que produce las mismas señales que
+  `is_rate_limited()` ya evalúa contra la salida real (texto con "rate
+  limit"/"429"/etc.), y cubre los tres códigos de retorno de `run_claude()`:
+  éxito (rc=0, 1 invocación), rate-limit sostenido (rc=2, exactamente
+  `RATE_LIMIT_HANDOFF_ATTEMPTS`=2 invocaciones — ni antes ni después) y
+  fallo genérico (rc=1, agota los 3 reintentos). El doble no está amañado:
+  al escribir el mensaje de fallo genérico de prueba se detectó en rojo que
+  contenía sin querer la subcadena "rate limit" y `is_rate_limited()` lo
+  clasificaba mal — corregido el mensaje, confirmando que la prueba
+  realmente ejerce la lógica, no solo la inspecciona. No wireado a
+  `test.sh`: la rama de fallo genérico duerme los backoffs reales (~90s
+  totales) y esto prueba la herramienta de orquestación, no un RF de
+  producto — documentado en un comentario junto a `run_claude()`.
+  Codex confirmó OK sobre el commit de corrección (`6fd0497`): sin
+  violaciones de P-01/P-03/P-08, no toca `specs/`. El loop se detuvo ahí
+  (comportamiento correcto: un VETO pendiente bloquea todo el loop, no solo
+  la tarea en curso) sin haber comiteado nada de T-48 todavía; el trabajo de
+  T-48 (ver entrada siguiente) ya estaba en el árbol de trabajo cuando el
+  loop se detuvo, retomado interactivamente después de resolver el VETO.
+
+- 2026-08-28/29 — T-48 (P-08, records-custodia) cerrada. El loop headless
+  (`./orquestador.sh loop`, lanzado en modo no interactivo) completó el
+  código en el árbol de trabajo pero lo dejó sin comitear — mismo límite real
+  que bloqueó T-43 y seis sesiones de T-47 (`docker compose`/`npx` fuera del
+  `allow` de `.claude/settings.local.json`, esta vez confirmado también en
+  sesión no interactiva, sin humano presente para conceder la aprobación en
+  el momento). No es una ambigüedad de negocio/legal, así que no aplicó
+  `- [?]` ni pregunta en QUESTIONS.md.
+  Lo verificado y completado:
+  - (1) Método de consulta: ya existía — `BitacoraAuditoria.todos`/
+    `AlmacenDeEventos.todos()` (desde T-10) y
+    `CustodiaOriginales.eventosDeAuditoria` (getter público desde T-10) ya
+    exponían todos los eventos de la bitácora compartida. No hizo falta
+    añadir nada aquí; la premisa original de T-48 (que faltaba un método de
+    consulta) era parcialmente incorrecta — solo faltaba el endpoint HTTP.
+  - (2) Endpoint nuevo: `EventosAuditoriaController` (`GET
+    /eventos-auditoria`, sin path bajo `/documentos`, mismo patrón que
+    `EventosSeguridadController` de seguridad-acceso) devuelve
+    `custodia.eventosDeAuditoria` — como `RecordsCustodiaConfig` conecta una
+    única `BitacoraAuditoria` a `CustodiaOriginales` y a
+    `CapaAnticorrupcionSugerencias` (T-20), la respuesta incluye tanto los
+    eventos de custodia propios (`ORIGINAL_CUSTODIADO`,
+    `DECISION_HUMANA_MATERIALIZADA`, etc.) como los `SUGERENCIA_RECIBIDA` que
+    genera cualquier contexto que reenvíe una sugerencia vía `POST
+    /sugerencias` (Clasificación, T-44..T-47).
+    TDD: 1 test nuevo en `RecordsCustodiaHttpTest.kt` (confirmado en rojo con
+    `HttpMessageNotReadableException` antes de crear el controlador, verde
+    después) que custodia un documento, envía una sugerencia de Clasificación
+    y verifica que `GET /eventos-auditoria` trae tanto
+    `ORIGINAL_CUSTODIADO` (actor `sistema-ingesta`) como `SUGERENCIA_RECIBIDA`
+    (actor `emisor-ficticio-clasificacion-v0`). `./test.sh` completo del repo
+    en verde (Gradle: 39 tests en records-custodia, BUILD SUCCESSFUL; pytest:
+    eval-harness 4, normalizacion 40, extraccion 55, clasificacion 27, todos
+    passed).
+  - `specs/spec-infra-servicios.md` §4 actualizada: fila nueva `GET
+    /eventos-auditoria` en la tabla de endpoints; el párrafo que decía que la
+    bitácora "no se expone... porque ningún RF lo pide todavía" se corrigió
+    para reflejar que ahora sí se expone para lectura, y por qué.
+  - Colección Postman: petición nueva 75 en la carpeta "8. Clasificacion"
+    (después de la 74, T-47) — `GET
+    {{records_custodia_base_url}}/eventos-auditoria`, mismo patrón que la
+    petición 67 de la carpeta 7 (Extracción); verifica que los eventos
+    `SUGERENCIA_RECIBIDA` de las peticiones 69 (clasificar,
+    `clasificador-ficticio-v1`) y 71 (agrupar, `agrupador-ficticio-v1`)
+    aparecen con actor y fecha no vacíos.
+  Retomado interactivamente (Docker disponible en esta sesión):
+  `./gradlew :contexts:records-custodia:test --rerun-tasks` en verde: stack
+  Docker real de los siete servicios levantado
+  (`docker compose -f docker-compose.saas.yml -f
+  docker-compose.local-ports.yml up -d --build`) y verificado con
+  `npx newman run` dos corridas seguidas sin fallos: **76/76 peticiones,
+  121/121 aserciones**, limpio desde la primera corrida. `postman/README.md`
+  actualizado (49/57 endpoints cubiertos). Stack bajado al terminar. T-48
+  marcada `- [x]` en TODO.md.

@@ -1,6 +1,6 @@
 # Colección Postman — corte vertical
 
-Cubre 48 de los 56 endpoints reales de `specs/spec-infra-servicios.md`
+Cubre 49 de los 57 endpoints reales de `specs/spec-infra-servicios.md`
 (captura-ingesta + records-custodia + seguridad-acceso + validacion-humana +
 normalizacion + extraccion + clasificacion), en el orden en que se probaron
 manualmente con `curl` — los 8 que faltan ya tienen su propia cobertura fuera
@@ -60,7 +60,14 @@ consultando `GET /documentos/{id}/sugerencias` en records-custodia; agrupar
 a un expediente propuesto (RF-CL-005/006) y verificar el mismo endpoint;
 marcar un texto como no clasificable (RF-CL-010) y verificar que el conteo
 de sugerencias en records-custodia **no cambia** — su destino es el
-"Operador" (reporte), no Records/Custodia.
+"Operador" (reporte), no Records/Custodia; y la petición 75 (T-48) —
+records-custodia no exponía lectura de su propia bitácora de auditoría (a
+diferencia de normalización/extracción, que sí tenían `GET
+/eventos-auditoria`) — consulta el `GET /eventos-auditoria` nuevo y verifica
+que los eventos `SUGERENCIA_RECIBIDA` que generaron las peticiones 69
+(clasificar) y 71 (agrupar) aparecen atribuibles a
+`clasificador-ficticio-v1`/`agrupador-ficticio-v1`, con actor y fecha no
+vacíos.
 
 ## Levantar el stack (con puertos locales para Postman)
 
@@ -141,6 +148,12 @@ servicios corriendo a la vez): 75/75 peticiones, 120/120 aserciones, dos
 corridas seguidas sin fallos desde la primera corrida — incluido el orden
 descendente por confianza (RF-CL-003) y que `POST /no-clasificables` no
 agrega ninguna `Sugerencia` nueva en records-custodia (RF-CL-010).
+Reverificado (2026-08-29, tras T-48/`GET /eventos-auditoria` nuevo en
+records-custodia, con los siete servicios corriendo a la vez): 76/76
+peticiones, 121/121 aserciones, dos corridas seguidas sin fallos desde la
+primera corrida — incluida la petición 75, que confirma que las sugerencias
+de Clasificación quedan en la bitácora de auditoría de records-custodia,
+atribuibles a su modelo ficticio de origen.
 
 ## Bajar el stack
 

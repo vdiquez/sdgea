@@ -702,22 +702,46 @@ re-descubrirlo o inventar persistencia que la spec no pide):
       records-custodia no cambia. Segundo flujo end-to-end real de solo dos
       servicios (Clasificación no tiene persistencia propia). `postman/
       README.md` actualizado (conteo de endpoints, carpeta 8, verificación).
-- [ ] T-48 P-08 — records-custodia todavía NO expone ningún endpoint para
-      consultar su propia bitácora de auditoría (a diferencia de
+- [x] T-48 P-08 — records-custodia no exponía ningún endpoint para consultar
+      su propia bitácora de auditoría (a diferencia de
       normalizacion/extraccion, que sí tienen `GET /eventos-auditoria` sobre
-      su propio contexto — verificado: no existe ningún `@GetMapping` de
-      eventos ni un método de lectura sobre `AlmacenDeEventosJpa` en
-      `contexts/records-custodia`). Codex propuso originalmente esta tarea
-      como "extender la colección Postman para consultar
-      `GET /eventos-auditoria`" asumiendo que ese endpoint ya existía en
-      records-custodia — no es así; corregido aquí el alcance real: (1)
-      añadir un método de consulta a `BitacoraAuditoria`/`AlmacenDeEventosJpa`
-      (2) nuevo endpoint HTTP `GET /eventos-auditoria` en records-custodia,
-      TDD contra un test de Gradle nuevo (3) extender la colección Postman
-      (carpeta 8, después de la petición 74) para verificar que los eventos
-      `SUGERENCIA_RECIBIDA` de clasificación/agrupamiento aparecen
-      atribuibles al `modeloId` ficticio correspondiente. Deriva de P-08 de
-      la constitución y de `specs/003-clasificacion/spec.md` §4 (la capa
-      anticorrupción ya emite el evento; falta poder leerlo). No bloquea
-      T-47 (ya cerrada y verificada) — es una tarea de records-custodia, no
-      de Clasificación.
+      su propio contexto). Alcance real corregido respecto a la propuesta
+      original de Codex (asumía que ya existía un método de consulta y solo
+      faltaba el endpoint HTTP; en realidad `BitacoraAuditoria`/
+      `CustodiaOriginales.eventosDeAuditoria` ya exponían la lista completa
+      desde T-10 — no hizo falta tocarlos): (1) `EventosAuditoriaController`
+      nuevo (`GET /eventos-auditoria`, mismo patrón que
+      `EventosSeguridadController` de seguridad-acceso) devuelve
+      `custodia.eventosDeAuditoria` — como `RecordsCustodiaConfig` comparte
+      una única `BitacoraAuditoria` entre `CustodiaOriginales` y
+      `CapaAnticorrupcionSugerencias` (T-20), incluye también los
+      `SUGERENCIA_RECIBIDA` que otros contextos generan al reenviar una
+      sugerencia vía `POST /sugerencias` (Clasificación, T-44..T-47). TDD: 1
+      test nuevo en `RecordsCustodiaHttpTest.kt` (rojo con
+      `HttpMessageNotReadableException` antes del controlador, verde
+      después). (2) `specs/spec-infra-servicios.md` §4 actualizada. (3)
+      Colección Postman: petición 75 en la carpeta "8. Clasificacion",
+      verifica que las sugerencias de clasificación/agrupamiento (peticiones
+      69/71) aparecen en la bitácora atribuibles a
+      `clasificador-ficticio-v1`/`agrupador-ficticio-v1`.
+      Implementado por el loop headless (código + tests + spec + borrador de
+      Postman), dejado sin comitear a propósito por el mismo límite real que
+      T-41/T-43/T-47 (`docker compose`/`npx` fuera del `allow` de
+      `.claude/settings.local.json`, sin humano presente para aprobar).
+      Retomado interactivamente: `./gradlew :contexts:records-custodia:test
+      --rerun-tasks` en verde; stack Docker real de los siete servicios
+      levantado y verificado con Newman dos corridas seguidas sin fallos:
+      **76/76 peticiones, 121/121 aserciones**. `postman/README.md`
+      actualizado (49/57 endpoints cubiertos, conteo real de la
+      reverificación).
+      **De paso, corregido un VETO real de Codex sobre un commit previo y no
+      relacionado** (`4eb7497`, cambio en `orquestador.sh` del mecanismo de
+      handoff a Codex por rate limit sostenido, hecho antes de esta sesión y
+      nunca revisado): el commit afirmaba una verificación manual "con un
+      claude simulado" sin dejar ninguna prueba reproducible. Corregido con
+      `test-run-claude.sh` (doble real de `claude` en PATH, no amañado —
+      detectó y corrigió un bug propio del doble antes de pasar en verde),
+      cubre los tres códigos de retorno de `run_claude()` (0/2/1) y el punto
+      exacto del handoff; no wireado a `test.sh` (toma ~90s por los backoffs
+      reales de la rama de fallo genérico). Codex confirmó OK sobre el
+      commit de corrección.

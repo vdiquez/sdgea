@@ -261,4 +261,26 @@ class RecordsCustodiaHttpTest {
         val getResponse = restTemplate.getForEntity(url("/trd/8"), Map::class.java)
         assertEquals(fecha, getResponse.body!!["vigenteDesde"])
     }
+
+    @Test
+    fun `GET eventos-auditoria expone los eventos de custodia y de recepcion de sugerencias - P-08, T-48`() {
+        custodiarDocumento("doc-http-009")
+        val entrada = mapOf(
+            "documentoId" to "doc-http-009",
+            "tipo" to "clasificacion",
+            "contenidoPropuesto" to "serie-1",
+            "modeloId" to "emisor-ficticio-clasificacion-v0",
+            "evidencia" to listOf("pagina-1"),
+            "confianza" to 0.9,
+            "fecha" to fecha,
+        )
+        restTemplate.postForEntity(url("/sugerencias"), entrada, Map::class.java)
+
+        val response = restTemplate.getForEntity(url("/eventos-auditoria"), List::class.java)
+
+        assertEquals(HttpStatus.OK, response.statusCode)
+        val eventos = (response.body as List<*>).map { it as Map<*, *> }
+        assertTrue(eventos.any { it["tipo"] == "ORIGINAL_CUSTODIADO" && it["actor"] == "sistema-ingesta" })
+        assertTrue(eventos.any { it["tipo"] == "SUGERENCIA_RECIBIDA" && it["actor"] == "emisor-ficticio-clasificacion-v0" })
+    }
 }

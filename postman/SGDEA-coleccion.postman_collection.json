@@ -3306,6 +3306,45 @@
               }
             }
           ]
+        },
+        {
+          "name": "75 Consultar bitacora de auditoria en records-custodia -- sugerencias de Clasificacion atribuibles (P-08, T-48)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/eventos-auditoria",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "eventos-auditoria"
+              ]
+            },
+            "description": "T-48: records-custodia no exponia lectura de su propia bitacora (a diferencia de normalizacion/extraccion). GET /eventos-auditoria expone la BitacoraAuditoria compartida (T-20) entre CustodiaOriginales y CapaAnticorrupcionSugerencias, asi que incluye tambien los SUGERENCIA_RECIBIDA que Clasificacion genero al reenviar la clasificacion (peticion 69) y el agrupamiento (peticion 71) via POST /sugerencias."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, las sugerencias de clasificacion y agrupamiento quedan en la bitacora, atribuibles\", () => {",
+                  "  const eventos = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  const recibidas = eventos.filter((e) => e.tipo === \"SUGERENCIA_RECIBIDA\");",
+                  "  const actores = recibidas.map((e) => e.actor);",
+                  "  pm.expect(actores).to.include(\"clasificador-ficticio-v1\");",
+                  "  pm.expect(actores).to.include(\"agrupador-ficticio-v1\");",
+                  "  recibidas.forEach((e) => {",
+                  "    pm.expect(e.actor).to.be.a(\"string\").and.not.be.empty;",
+                  "    pm.expect(e.fecha).to.be.a(\"string\").and.not.be.empty;",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     }
