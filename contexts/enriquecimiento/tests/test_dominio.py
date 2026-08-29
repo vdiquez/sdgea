@@ -11,6 +11,7 @@ from dominio import (
     TextoDisponible,
     ValorPropuesto,
     a_sugerencia_saliente,
+    evaluar_texto,
     exigir_al_menos_un_valor,
     generar_sugerencia_de_metadatos,
     marcar_campo_no_encontrado,
@@ -217,6 +218,42 @@ class TestCeroPerdidaSilenciosa:
 
         with pytest.raises(ErrorDeDominio):
             generar_sugerencia_de_metadatos(texto, [], "enriquecedor-ficticio-v1", FECHA)
+
+    def test_evaluar_texto_sin_senal_produce_marca_no_enriquecible_con_razon(self):
+        # Segundo VETO real de Codex sobre T-49 (ver REVIEW.md/STATE.md):
+        # rechazar la lista vacía con un error no basta -- el
+        # Dado/Cuando/Entonces de RF-EN-009 exige que evaluar el texto
+        # TERMINE en una MarcaNoEnriquecible con razón, para el mismo
+        # TextoDisponible, sin invocar el constructor de la marca aparte.
+        texto = _texto_disponible()
+
+        resultado = evaluar_texto(
+            texto,
+            [],
+            "enriquecedor-ficticio-v1",
+            actor="enriquecedor-ficticio-v1",
+            fecha=FECHA,
+            razon_no_enriquecible="Texto extraído vacío.",
+        )
+
+        assert resultado == MarcaNoEnriquecible(
+            documento_id="documento-1", razon="Texto extraído vacío.", actor="enriquecedor-ficticio-v1", fecha=FECHA
+        )
+
+    def test_evaluar_texto_con_valores_produce_sugerencia_de_metadatos(self):
+        texto = _texto_disponible()
+        valor = proponer_valor("asunto", "Factura No. 123", "factura-123", 0.9, ["página 1"])
+
+        resultado = evaluar_texto(texto, [valor], "enriquecedor-ficticio-v1", actor="actor-1", fecha=FECHA)
+
+        assert isinstance(resultado, SugerenciaDeMetadatos)
+        assert resultado.valores == [valor]
+
+    def test_evaluar_texto_sin_valores_ni_razon_se_rechaza(self):
+        texto = _texto_disponible()
+
+        with pytest.raises(ErrorDeDominio):
+            evaluar_texto(texto, [], "enriquecedor-ficticio-v1", actor="actor-1", fecha=FECHA)
 
 
 # RF-EN-010 · Consulta de sugerencias de metadatos por documento

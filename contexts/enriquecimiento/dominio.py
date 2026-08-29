@@ -183,3 +183,32 @@ class MarcaNoEnriquecible:
 
 def marcar_no_enriquecible(texto: TextoDisponible, razon: str, actor: str, fecha: datetime) -> MarcaNoEnriquecible:
     return MarcaNoEnriquecible(documento_id=texto.documento_id, razon=razon, actor=actor, fecha=fecha)
+
+
+# RF-EN-009 (segundo VETO real de Codex sobre T-49, ver STATE.md): rechazar
+# valores=[] con un error no basta -- el Dado/Cuando/Entonces exige que
+# evaluar un texto sin señal TERMINE en una MarcaNoEnriquecible con razón
+# registrada, no que el llamador deba saber atrapar un error y decidir por su
+# cuenta invocar marcar_no_enriquecible por separado. evaluar_texto() es la
+# única operación de evaluación: bifurca hacia SugerenciaDeMetadatos (si hay
+# al menos un valor/campo) o hacia MarcaNoEnriquecible (si no hay ninguno,
+# con la razón que declara el llamador -- el dominio no la infiere, mismo
+# criterio que el resto de "condiciones declaradas" del proyecto). Solo
+# rechaza con ErrorDeDominio la llamada genuinamente malformada: sin valores
+# Y sin razón declarada.
+def evaluar_texto(
+    texto: TextoDisponible,
+    valores: list[ValorPropuesto | CampoNoEncontrado],
+    modelo_id: str,
+    actor: str,
+    fecha: datetime,
+    razon_no_enriquecible: str | None = None,
+) -> SugerenciaDeMetadatos | MarcaNoEnriquecible:
+    if valores:
+        return generar_sugerencia_de_metadatos(texto, valores, modelo_id, fecha)
+    if razon_no_enriquecible is None:
+        raise ErrorDeDominio(
+            "No se recibió ningún valor propuesto ni campo marcado, y no se declaró una razón "
+            "de 'no enriquecible'; declare al menos uno de los dos."
+        )
+    return marcar_no_enriquecible(texto, razon_no_enriquecible, actor, fecha)
