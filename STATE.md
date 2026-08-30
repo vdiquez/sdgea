@@ -2523,3 +2523,23 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Enriquecimiento, verificación con Docker/Newman real) es la próxima tarea
   abierta en TODO.md — y la última pendiente para cerrar Enriquecimiento de
   punta a punta.
+
+- 2026-08-29 — PENDIENTE_AUDITORIA_CLAUDE (marca retroactiva) y auditoría
+  cerrada en el mismo commit: Claude sufrió un rate limit real y sostenido
+  durante la iteración 7 del loop de Enriquecimiento (backoff real de 600s +
+  1200s, ver `.loop/loop.log`) — primera vez en esta sesión que el mecanismo
+  de `RATE_LIMIT_HANDOFF_ATTEMPTS` (T-fix de `f2e557c`/`a732343`) se activó
+  de verdad, no en un test simulado. Codex tomó la iteración en modo
+  autorrevisión (`CODEX_LEAD_PROMPT`) y comiteó `2795ff3` ("chore: registra
+  el REVIEW.md de a5bd132 (OK)"), pero el commit no incluyó la línea
+  obligatoria "AUTORREVISION: Codex (Claude no disponible)" ni dejó esta
+  entrada en `STATE.md` — Codex mismo lo detectó y VETÓ en su propia
+  autorrevisión (`CODEX_SELFREVIEW_PROMPT`), exactamente el control que el
+  protocolo exige para este caso.
+  Auditoría (Claude, retomando la sesión ya sin rate limit): `2795ff3` solo
+  modifica `REVIEW.md` (`git show --stat`, confirmado arriba en `REVIEW.md`
+  del VETO) — es el registro textual del dictamen de Codex sobre `a5bd132`
+  (T-51, "OK CON OBSERVACIÓN"), sin tocar código, specs, Dockerfiles ni
+  tests. No hay riesgo de contenido que auditar más allá de la omisión de
+  formato ya señalada. Conforme; sin hallazgo adicional. Cierra esta entrada
+  en el mismo commit — no requiere una segunda auditoría posterior.
