@@ -2654,3 +2654,75 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   rompiendo deliberadamente la constante `PENDIENTE_AUDITORIA_CLAUDE` en
   `orquestador.sh` (el test lo detectó) antes de restaurarla y confirmar
   verde. `./test.sh` completo del repo en verde.
+
+- 2026-08-30 — T-54 RF-IB-001..010 (dominio de Indexación y Búsqueda en
+  Python, `contexts/indexacion-busqueda/dominio.py`) implementado contra la
+  siembra ya corregida dos veces por VETO real de Codex (commits `c8f47d7` →
+  `e356158` → `3793486`, ver REVIEW.md; T-54 seguía sin código hasta ahora,
+  solo la siembra de TODO.md). Primer contexto Python del proyecto que
+  declara los cuatro puertos P-03 completos desde el primer commit (lección
+  explícita del VETO): `IndiceLexico`/`IndiceVectorial` (Protocol, REALES,
+  T-55 les dará dos implementaciones de despliegue) y
+  `GeneradorDeEmbeddings`/`ModeloDeLenguaje` (Protocol, FICTICIOS, nunca
+  invocados por ningún código de este contexto). Ninguna función pura de
+  `dominio.py` llama a estos puertos directamente — reciben ya resueltos los
+  candidatos/embeddings/respuestas que la capa HTTP (T-55) obtendrá a través
+  de ellos, mismo criterio que `EnviadorDeSugerencias` en
+  clasificacion/enriquecimiento.
+  Modelo: `EstadoEntradaDeIndice` (`PENDIENTE_DE_INDEXACION`, `INDEXADA`).
+  `recibir_documento_materializado` devuelve un `DocumentoParaIndexar` (dato
+  crudo, sin agregado — mismo patrón que `TextoDisponible`); ajuste real
+  sobre la siembra: se añadió `crear_entrada_pendiente` como paso explícito
+  que construye el agregado `EntradaDeIndice` en `PENDIENTE_DE_INDEXACION`
+  (la siembra sugería que `recibir_documento_materializado` ya construía el
+  agregado directo, pero eso habría dejado el estado `Pendiente de
+  indexación` del modelo de dominio, spec §3, sin ninguna representación real
+  — solo nombrado). `indexar` transiciona a `INDEXADA` con el embedding
+  FICTICIO ya calculado (RF-IB-001/002/003 en una sola transición, tal como
+  lo describe el Dado/Cuando/Entonces de RF-IB-001). `actualizar_entrada`
+  (RF-IB-004) exige estado `Indexada` y trata cada campo como opcional
+  ("`None` = sin cambio").
+  `aplicar_permisos_y_construir_evento` (RF-IB-008, REAL, determinística) es
+  la única fuente del filtrado de permisos, compartida por `buscar`,
+  `recuperar_por_relevancia` y `responder_qa` — para que RNF-IB-003
+  (consistencia de permisos entre las tres rutas) sea estructural y no una
+  coincidencia de tres implementaciones repetidas. Nunca reordena: preserva
+  el orden que recibe, crítico para RF-IB-006 (el ranking de relevancia ya
+  llega calculado por el llamador). `buscar` (RF-IB-005, REAL) hace
+  contención de subcadena sobre el texto ya indexado más un filtro genérico
+  contra el dict `metadatos` (nunca se fija un nombre de campo real — mismo
+  criterio que Enriquecimiento). `responder_qa` (RF-IB-007/010, FICTICIO
+  real) es la única operación de evaluación: bifurca entre `RespuestaQA` (con
+  al menos una cita ya filtrada por permiso) y `NegativaApropiada` — aplica
+  desde el primer commit la lección de los dos VETOs reales de Codex sobre
+  `evaluar_texto` en Enriquecimiento (T-49): si el filtrado de permisos deja
+  `citas` vacía, la única salida honesta es una negativa apropiada, aunque el
+  modelo ficticio hubiera propuesto una `respuesta` con evidencia no
+  permitida — nunca se deja pasar una respuesta sin cita real como válida.
+  RF-IB-009 introdujo un segundo tipo de evento, `EventoDeAcceso` (actor,
+  fecha, tipo, documentos_accedidos), distinto de `EventoAuditoria` (actor,
+  fecha, tipo, estado_anterior, estado_posterior): una consulta de solo
+  lectura no transiciona ningún estado, así que forzar el shape de
+  `EventoAuditoria` habría exigido inventar un estado ficticio sin sentido —
+  ambos cuentan como "evento de auditoría" a efectos de P-08, `GET
+  /eventos-auditoria` (T-55) expondrá los dos tipos juntos. El evento de
+  acceso se construye siempre dentro de `aplicar_permisos_y_construir_evento`
+  — nunca una función aparte que un test pudiera invocar aislada de la
+  operación real, corrigiendo por diseño desde el inicio el defecto que el
+  VETO de Codex señaló sobre la siembra original.
+  `uv run --directory contexts/indexacion-busqueda pytest` agregado a
+  `test.sh` en este mismo commit.
+  TDD: 23 tests nuevos (`tests/test_dominio.py`), uno por cada
+  Dado/Cuando/Entonces de RF-IB-001..010 (incluidos permiso denegado,
+  RF-IB-008, y negativa apropiada, RF-IB-010, ejercidos a través de la
+  operación real) más los casos de rechazo estructural (transición inválida,
+  cita sin permiso que intenta colarse en una respuesta). El módulo no
+  existía antes de este commit, así que el `ImportError` inicial al correr
+  los tests fue la confirmación en rojo antes de escribir `dominio.py`.
+  `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL; pytest:
+  eval-harness 4, normalizacion 40, extraccion 55, clasificacion 27,
+  enriquecimiento 29, indexacion-busqueda 23).
+  Siguiente paso: T-55 (servicio HTTP + persistencia Postgres para
+  Indexación y Búsqueda, con las dos variantes de despliegue reales por cada
+  uno de los cuatro puertos P-03, spec RNF-IB-002) es la próxima tarea
+  abierta en TODO.md.

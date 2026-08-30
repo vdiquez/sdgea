@@ -1058,7 +1058,7 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
   embeddings, el LLM de Q&A, ni el umbral de "negativa apropiada" — los
   cuatro siguen `[CLARIFICAR]` en la spec §8.
 
-- [ ] T-54 RF-IB-001..010 — dominio de Indexación y Búsqueda en Python
+- [x] T-54 RF-IB-001..010 — dominio de Indexación y Búsqueda en Python
       (`contexts/indexacion-busqueda/dominio.py`), mismo patrón de agregado
       persistido que `contexts/normalizacion/dominio.py`/
       `contexts/extraccion/dominio.py` (T-33/T-40), **corregido tras VETO
@@ -1126,6 +1126,32 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       (RF-IB-010) ejercidas a través de la operación real, y el evento de
       acceso observado como salida de esa misma operación, no de un
       guardia aislado.
+      **Implementado.** Un ajuste real sobre la siembra: en vez de que
+      `recibir_documento_materializado` construya directamente la
+      `EntradaDeIndice`, se dividió en dos pasos —
+      `recibir_documento_materializado` devuelve un `DocumentoParaIndexar`
+      (dato crudo, sin agregado, mismo patrón que `TextoDisponible` en
+      clasificacion/enriquecimiento) y `crear_entrada_pendiente` es quien
+      construye el agregado en `PENDIENTE_DE_INDEXACION` — necesario para que
+      el estado `Pendiente de indexación` del modelo de dominio (spec §3) sea
+      real y observable, no solo nombrado, antes de que `indexar` lo
+      transicione a `INDEXADA`. El test de RF-IB-001 ejercita las tres
+      llamadas en secuencia (recibir → crear entrada pendiente → indexar) y
+      verifica el estado final `Indexada`, honrando el Dado/Cuando/Entonces
+      literal sin perder la máquina de estados de dos pasos.
+      Se agregó también un tipo `EventoDeAcceso` (actor, fecha, tipo,
+      documentos_accedidos) distinto de `EventoAuditoria` (que sí tiene
+      estado_anterior/posterior): RF-IB-009 pide literalmente "actor, fecha y
+      los documentos accedidos" para una operación de solo lectura que no
+      transiciona ningún estado — forzar el shape de `EventoAuditoria` habría
+      exigido inventar un estado ficticio sin sentido. Ambos son "evento de
+      auditoría" a efectos de P-08; `GET /eventos-auditoria` (T-55) expondrá
+      los dos tipos. TDD real: 23 tests nuevos (`tests/test_dominio.py`),
+      verdes en el primer intento (el módulo no existía antes de este commit,
+      así que el `ImportError` inicial fue la confirmación en rojo).
+      `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL; pytest:
+      eval-harness 4, normalizacion 40, extraccion 55, clasificacion 27,
+      enriquecimiento 29, indexacion-busqueda 23).
 - [ ] T-55 RF-IB-001..010 — Servicio HTTP (FastAPI) + persistencia
       (SQLAlchemy + Postgres) para Indexación y Búsqueda, mismo patrón que
       T-34/T-41 (Normalización/Extracción) — SÍ con Postgres propio, a
