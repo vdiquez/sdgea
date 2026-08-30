@@ -949,3 +949,184 @@ deben repetirse aquí** (ver STATE.md para el detalle completo de cada una):
       spec-infra-servicios.md` §4/§13 y `specs/004-enriquecimiento/spec.md`
       §8 actualizadas (brecha cerrada). No se fijó ningún campo obligatorio
       ni umbral: los `[CLARIFICAR]` de la spec siguen abiertos.
+
+# Indexación y Búsqueda
+
+Decisión de Victor, 2026-08-30 ("Sigamos con Indexación y Búsqueda"). Sigue
+`specs/005-indexacion-busqueda/spec.md` (RF-IB-001..010). Noveno y último
+contexto del alcance original — con este se cierran los nueve.
+
+**Este contexto es distinto y más grande que los tres anteriores (Normalización/
+Extracción/Clasificación/Enriquecimiento), léelo completo antes de tocar
+código**:
+
+1. **SÍ tiene persistencia real** (a diferencia de Clasificación/
+   Enriquecimiento): `Entrada de índice` es un agregado con estado
+   (`Pendiente de indexación` → `Indexada`, actualizable — RF-IB-004), mismo
+   patrón que Normalización/Extracción (Postgres propio, `guardar_con_evento`
+   atómico desde el primer commit — lección de T-37).
+2. **Tiene DOS componentes probabilísticos distintos**, no uno: Recuperación
+   (ranking por relevancia semántica, RF-IB-006) y Q&A conversacional
+   (RF-IB-007/010) — cada uno gobernado por EDD por separado (`edd-harness.md`
+   §2/§4). No los confundas ni los fusiones en un solo "componente ficticio".
+3. **Frontera real vs. FICTICIO — la más delicada de todo el proyecto, y la
+   más fácil de malinterpretar (léela dos veces)**:
+   - RF-IB-001/002/004/005 (recibir documento materializado, indexar
+     léxicamente, actualizar la entrada, buscar por palabra clave + filtros
+     de metadatos) son **REALES y deterministas** — la spec §1 lo dice
+     explícito: "la construcción y el mantenimiento del índice en sí...
+     es una operación determinística, especificada bajo SDD (P-06)". No hace
+     falta ningún motor externo para esto: una búsqueda por palabra clave
+     (substring/contención sobre el texto ya indexado) y un filtro por campos
+     de metadatos ya declarados son código real, implementable sin inventar
+     Elasticsearch/Postgres-FTS/lo que sea — la decisión de motor concreto es
+     el `[CLARIFICAR]` de la spec §8 ("Etapa 1, informada por el arnés"), no
+     algo que esta tarea deba resolver ni fingir.
+   - RF-IB-003 (indexación vectorial): la ENTRADA guarda un campo para el
+     embedding, pero el valor del embedding en sí es FICTICIO — igual que
+     `confianza`/`evidencia` en `Sugerencia`, el llamador lo entrega YA
+     CALCULADO; el dominio nunca invoca un modelo de embeddings real (P-03,
+     una de las tres capacidades externas que la spec §1 nombra
+     explícitamente para este contexto).
+   - RF-IB-006 (recuperación por relevancia semántica) es el componente
+     FICTICIO real: el llamador entrega el orden/score de relevancia YA
+     CALCULADO (mismo criterio que `ordenar_por_confianza` en clasificación,
+     salvo que aquí el ranking completo llega ya resuelto, no se recalcula
+     nada) — el dominio nunca calcula similitud de embeddings.
+   - RF-IB-007/010 (Q&A) es FICTICIO igual que Recuperación: el llamador
+     entrega el texto de la respuesta y las citas YA CALCULADOS (o declara
+     que no hay evidencia suficiente). **Aplica desde el primer commit la
+     lección de los DOS VETOs reales de Codex sobre `evaluar_texto` en
+     Enriquecimiento (T-49, ver STATE.md 2026-08-29)**: una única operación
+     de evaluación que bifurca entre "respuesta con cita(s)" y "negativa
+     apropiada" (RF-IB-010) — nunca una función que acepte una respuesta sin
+     ninguna cita y la deje pasar como si fuera válida (eso es exactamente la
+     alucinación que invariante 3/RF-IB-007 prohíbe). No repitas el error de
+     escribir el guardia aislado del test conectado a nada: la prueba de
+     aceptación debe observar la salida real de esa única operación.
+   - RF-IB-008 (cero exposición sin permiso) y RF-IB-009 (auditoría de
+     acceso) son **REALES**: filtrar una lista de candidatos contra un
+     conjunto de documentos permitidos, y anexar un evento de auditoría, son
+     operaciones deterministas — nada de esto es FICTICIO, aunque dependan de
+     un dato (permisos) que sí viene de una capacidad externa real
+     (Seguridad y Acceso).
+4. **P-03 — el dominio NUNCA llama a Seguridad y Acceso.** `POST
+   /autorizacion` de seguridad-acceso (specs/spec-infra-servicios.md §5) es
+   una verificación POR RECURSO (`identidadId, accion, tipoRecurso,
+   nivelClasificacion, recurso, fecha` → permitido/denegado), no una lista
+   masiva — no existe un endpoint de "dame todos los documentos permitidos
+   de este usuario" y esta tarea NO debe inventar uno. El filtrado de
+   permisos en el dominio (`buscar`/`responder_qa`) recibe un parámetro YA
+   RESUELTO (`documentos_permitidos: set[...]` o equivalente) — quien arma
+   ese conjunto (llamando `/autorizacion` una vez por candidato, mismo
+   patrón que `VerificadorDeAutorizacion` en extracción/T-41b) es la capa
+   HTTP (T-55), nunca el dominio.
+5. **[CLARIFICAR] real de la spec §8, NO resuelto aquí — sortéalo igual que
+   los anteriores**: si Records/Custodia reenvía el texto extraído junto con
+   el estado materializado, o si Indexación lo correlaciona por su cuenta.
+   Se sortea con el mismo criterio de siempre: el llamador entrega AMBOS
+   (documento materializado + texto extraído) ya correlacionados a la
+   operación de recepción — el dominio no decide cómo se obtuvieron.
+6. **Otros dos `[CLARIFICAR]` de la spec §8 que tampoco se resuelven aquí**:
+   el umbral/mecanismo exacto de "negativa apropiada" (por eso RF-IB-010 se
+   sortea con una razón/condición declarada por el llamador, no un umbral de
+   confianza inventado) y si la reindexación ante un cambio materializado es
+   inmediata o asíncrona (esta tarea implementa la operación de actualizar
+   una entrada ya existente — RF-IB-004 — sin decidir el disparador ni la
+   cadencia, igual que T-12 dejó la ejecución "programada" de
+   `verificarTodos` fuera de alcance por ser responsabilidad de un disparador
+   externo).
+
+**Lecciones ya aprendidas en los contextos anteriores, aplícalas desde el
+primer commit** (ver STATE.md para el detalle completo de cada una):
+- P-08 desde el inicio (T-37): cada función de transición de dominio
+  devuelve también un `EventoAuditoria`.
+- En FastAPI/Starlette, cualquier ruta GET literal debe declararse ANTES que
+  su ruta hermana con `{id}` (T-39/T-41).
+- Persistencia atómica agregado+evento en una sola transacción con rollback
+  explícito (`guardar_con_evento`, T-37).
+- Toda capacidad externa detrás de un puerto/`Protocol` propio desde el
+  inicio, nunca contra la clase HTTP concreta (T-45-corrección).
+- Nunca una operación que acepte una entrada "vacía" (sin resultados, sin
+  citas) y la deje pasar sin una salida explícita — RF-CL-010 y los dos
+  VETOs de RF-EN-009 lo enseñaron dos veces ya.
+- Migraciones: una columna nueva `NOT NULL` sin `columnDefinition` con
+  default real falla contra una tabla con filas existentes (T-39/`es_correccion`)
+  — cualquier columna nueva aquí debe traer su propio default real si no es
+  nullable, o ser nullable si no aplica a todas las filas.
+- Nunca inventar el motor de índice léxico/vectorial, el modelo de
+  embeddings, el LLM de Q&A, ni el umbral de "negativa apropiada" — los
+  cuatro siguen `[CLARIFICAR]` en la spec §8.
+
+- [ ] T-54 RF-IB-001..010 — dominio de Indexación y Búsqueda en Python
+      (`contexts/indexacion-busqueda/dominio.py`), mismo patrón de agregado
+      persistido que `contexts/normalizacion/dominio.py`/
+      `contexts/extraccion/dominio.py` (T-33/T-40): `EstadoEntradaDeIndice`
+      (`PENDIENTE_DE_INDEXACION`, `INDEXADA` — spec §3, sin estado de
+      eliminación en esta etapa); `recibir_documento_materializado(...)`
+      única puerta de entrada (documento_id, clasificación/metadatos YA
+      MATERIALIZADOS, texto extraído — todo declarado por el llamador, ver
+      punto 5 arriba); `indexar(...)` REAL (RF-IB-001/002, no FICTICIO):
+      guarda el texto para búsqueda léxica y los campos filtrables
+      (serie/subserie, fecha, metadatos de Enriquecimiento); campo de
+      embedding FICTICIO (RF-IB-003, YA CALCULADO por el llamador, nunca
+      computado); `actualizar_entrada(...)` REAL (RF-IB-004); `buscar(...)`
+      REAL (RF-IB-005: palabra clave + filtros, sin motor externo — ver
+      punto 3 arriba) que además filtra por `documentos_permitidos` REAL
+      (RF-IB-008); `recuperar_por_relevancia(...)` FICTICIO (RF-IB-006, el
+      orden ya viene calculado del llamador) con el mismo filtro de permisos
+      aplicado; `responder_qa(...)` única operación de evaluación FICTICIO
+      que bifurca entre `RespuestaQA` (con al menos una cita, RF-IB-007) y
+      `NegativaApropiada` (RF-IB-010) — aplicando desde el inicio la lección
+      de los dos VETOs de `evaluar_texto` (punto 3 arriba), con las citas
+      también filtradas por permiso (RF-IB-008/RNF-IB-003: ni siquiera como
+      referencia si no hay permiso); `emitir_evento_de_acceso(...)` REAL
+      (RF-IB-009, actor + fecha + documentos accedidos, mismo criterio que
+      RF-RC-009/RF-RC-010 en records-custodia). Cada función de transición
+      devuelve también su `EventoAuditoria` (P-08 desde el inicio, T-37).
+      `uv run --directory contexts/indexacion-busqueda pytest` agregado a
+      `test.sh` en este mismo commit. TDD contra cada Dado/Cuando/Entonces
+      de RF-IB-001..010, incluidas las ramas de permiso denegado (RF-IB-008)
+      y de negativa apropiada (RF-IB-010) ejercidas a través de la operación
+      real, no de un guardia aislado.
+- [ ] T-55 RF-IB-001..010 — Servicio HTTP (FastAPI) + persistencia
+      (SQLAlchemy + Postgres) para Indexación y Búsqueda, mismo patrón que
+      T-34/T-41 (Normalización/Extracción) — SÍ con Postgres propio, a
+      diferencia de clasificación/enriquecimiento/validación-humana.
+      `guardar_con_evento(entrada, evento)` en una única transacción con
+      rollback explícito (T-37). `GET /eventos-auditoria` desde el
+      principio (P-08). Puerto `VerificadorDePermisos` (P-03, dominio.py) +
+      implementación HTTP real contra `POST /autorizacion` de
+      seguridad-acceso (mismo patrón que `VerificadorDeAutorizacionHttp` en
+      extracción, T-41b) — la capa HTTP arma `documentos_permitidos` antes
+      de invocar `buscar`/`recuperar_por_relevancia`/`responder_qa` del
+      dominio (punto 4 arriba); variable de entorno
+      `SEGURIDAD_ACCESO_BASE_URL`. Cualquier ruta GET literal (p. ej.
+      `/entradas/pendientes-de-indexacion` si aplica) declarada ANTES que su
+      ruta hermana con `{id}` (T-39/T-41). `specs/spec-infra-servicios.md`
+      §14 (nueva) con el contrato HTTP mínimo completo.
+- [ ] T-56 Dockerfile real de indexacion-busqueda + wiring en
+      `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que
+      normalizacion/extraccion (T-35/T-42) — CON Postgres propio (a
+      diferencia de clasificacion/enriquecimiento, T-46/T-51); verificar
+      `main.py` real antes de escribir el `ENTRYPOINT` (hallazgo real de
+      T-46: el stub "Hello from..." nunca se tocó); siguiente puerto
+      disponible en `docker-compose.local-ports.yml`;
+      `depends_on: [postgres, seguridad-acceso]`.
+- [ ] T-57 Colección Postman con el ciclo completo de Indexación y
+      Búsqueda, mismo patrón que T-36/T-43/T-47/T-52 — flujo end-to-end
+      real: custodiar y materializar un documento en records-custodia
+      (decisión humana real, RF-RC-004) → recibir su texto extraído
+      (FICTICIO) → indexar → buscar por palabra clave y filtro (RF-IB-005,
+      real) → recuperar por relevancia con orden FICTICIO ya calculado
+      (RF-IB-006) → responder una pregunta con cita FICTICIO (RF-IB-007) →
+      una pregunta sin evidencia suficiente → negativa apropiada (RF-IB-010)
+      → un usuario sin permiso sobre el documento → verificar que no
+      aparece en resultados ni citas (RF-IB-008, con una identidad real de
+      seguridad-acceso sin el permiso correspondiente) → verificar
+      `GET /eventos-auditoria` con el evento de acceso (RF-IB-009).
+      Verificar con el stack Docker real de los nueve servicios (primera vez
+      con `indexacion-busqueda`) y dos corridas de Newman seguidas sin
+      fallos; actualizar `postman/README.md` con el conteo real.
+      **Con esto se completan los nueve bounded contexts del alcance
+      original del corte vertical.**
