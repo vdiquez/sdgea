@@ -120,6 +120,38 @@ class RecordsCustodiaHttpTest {
         val sugerencias = getResponse.body as List<*>
         assertEquals(1, sugerencias.size)
         assertEquals("emisor-ficticio-v0", (sugerencias[0] as Map<*, *>)["modeloId"])
+        // T-53: formaOriginal es opcional -- una sugerencia sin ese campo (como esta,
+        // estilo Clasificacion) queda null en vez de fallar o inventar un valor.
+        assertEquals(null, (sugerencias[0] as Map<*, *>)["formaOriginal"])
+    }
+
+    @Test
+    fun `POST sugerencias con formaOriginal la conserva y expone al consultar - T-53, RF-EN-003`() {
+        // T-53 (VETO real de Codex sobre T-52, ver STATE.md): la forma genérica de
+        // Sugerencia no tenía campo para la forma original de un valor propuesto
+        // (Enriquecimiento la calcula a nivel de dominio pero se perdía al cruzar
+        // hacia records-custodia). formaOriginal es opcional (nullable) para no
+        // romper a Clasificación, que no tiene un concepto de "forma original".
+        custodiarDocumento("doc-http-013")
+        val entrada = mapOf(
+            "documentoId" to "doc-http-013",
+            "tipo" to "metadato",
+            "contenidoPropuesto" to "fecha_documento=2026-01-12",
+            "formaOriginal" to "12 de enero de 2026",
+            "modeloId" to "enriquecedor-ficticio-v1",
+            "evidencia" to listOf("pagina-1"),
+            "confianza" to 0.88,
+            "fecha" to fecha,
+        )
+
+        val postResponse = restTemplate.postForEntity(url("/sugerencias"), entrada, Map::class.java)
+        assertEquals(HttpStatus.CREATED, postResponse.statusCode)
+        assertEquals("12 de enero de 2026", postResponse.body!!["formaOriginal"])
+
+        val getResponse = restTemplate.getForEntity(url("/documentos/doc-http-013/sugerencias"), List::class.java)
+        val sugerencias = getResponse.body as List<*>
+        assertEquals(1, sugerencias.size)
+        assertEquals("12 de enero de 2026", (sugerencias[0] as Map<*, *>)["formaOriginal"])
     }
 
     @Test

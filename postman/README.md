@@ -185,7 +185,14 @@ records-custodia) desde el mismo endpoint `POST /enriquecimientos`.
 Reverificado de nuevo el mismo día (petición 81 añadida tras observación de
 Codex sobre la primera revisión de T-52 — P-08 no se verificaba para el
 flujo de Enriquecimiento): 82/82 peticiones, 127/127 aserciones, dos
-corridas seguidas sin fallos.
+corridas seguidas sin fallos. Reverificado (2026-08-30, tras T-53 —
+`formaOriginal` nuevo en el contrato compartido `Sugerencia`, RF-EN-003):
+82/82 peticiones, 127/127 aserciones (mismo conteo — T-53 amplía
+aserciones existentes en las peticiones 77/78, no agrega peticiones
+nuevas), dos corridas seguidas sin fallos, confirmando que la forma
+original de un valor propuesto sobrevive de punta a punta: Enriquecimiento
+→ `POST /sugerencias` → records-custodia → `GET /documentos/{id}/
+sugerencias`.
 
 ## Bajar el stack
 

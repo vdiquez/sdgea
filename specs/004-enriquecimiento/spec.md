@@ -242,17 +242,11 @@ exacta de cadena de texto.
   de clasificación (`specs/eval/eval-clasificacion.md` §4.5) — un umbral de
   confianza que permita aceptar en bloque los valores de alta confianza, o si todo
   valor de metadato exige revisión campo por campo sin importar la confianza.
-- **Brecha de implementación detectada (no de spec, encontrada en la revisión de
-  Codex sobre T-52):** la forma genérica de `Sugerencia`/`SugerenciaEntrante` en
-  records-custodia (`contenidoPropuesto`, `evidencia`, `confianza` — T-08, mismo
-  contrato que usa Clasificación) no tiene un campo dedicado para la "forma
-  original" que exige RF-EN-003. El dominio de Enriquecimiento sí conserva y
-  expone ambas formas (`ValorPropuesto.valor_original`/`valor_normalizado`,
-  probado a nivel de dominio), pero `a_sugerencia_saliente()` solo traduce la
-  forma normalizada dentro de `contenido_propuesto` — la forma original nunca
-  llega a records-custodia ni es consultable desde `GET /documentos/{id}/
-  sugerencias`. No es una decisión de negocio: es una limitación real del
-  contrato compartido de `Sugerencia`, fuera de alcance de T-49..T-52. Si la
-  revisión humana llega a necesitar ver ambas formas desde records-custodia (no
-  solo desde el propio Enriquecimiento), una futura tarea debe extender ese
-  contrato — no inventarlo aquí.
+- **Brecha de implementación cerrada (T-53, 2026-08-30):** la forma genérica de
+  `Sugerencia`/`SugerenciaEntrante` en records-custodia no tenía un campo
+  dedicado para la "forma original" que exige RF-EN-003 — se perdía al cruzar
+  hacia records-custodia y no era consultable desde `GET /documentos/{id}/
+  sugerencias`. Corregido extendiendo el contrato compartido con
+  `formaOriginal: String?` (opcional, nulo por defecto — Clasificación no lo
+  declara y no tuvo que cambiar nada). Ver `specs/spec-infra-servicios.md` §4
+  y §13 para el contrato exacto.

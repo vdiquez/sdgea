@@ -130,6 +130,8 @@ class TestEnvioDeSugerenciasAMetadatos:
                 evidencia=["e1"],
                 confianza=0.8,
                 fecha=FECHA,
+                # T-53: la forma original (RF-EN-003) viaja junto a la normalizada.
+                forma_original="Juan Pérez",
             )
         ]
 
@@ -149,6 +151,9 @@ class TestEnvioDeSugerenciasAMetadatos:
                 evidencia=[],
                 confianza=0.0,
                 fecha=FECHA,
+                # T-53: un campo no encontrado no tiene forma original que conservar
+                # -- no hay evidencia de ninguna forma, ni normalizada ni original.
+                forma_original=None,
             )
         ]
 

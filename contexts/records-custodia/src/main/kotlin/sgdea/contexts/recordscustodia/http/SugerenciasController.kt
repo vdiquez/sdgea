@@ -38,6 +38,7 @@ class SugerenciasController(
                 modeloId = request.modeloId,
                 evidencia = request.evidencia,
                 confianza = request.confianza,
+                formaOriginal = request.formaOriginal,
             ),
             fecha = request.fecha,
         )

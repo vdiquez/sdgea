@@ -19,6 +19,7 @@ def _sugerencia() -> SugerenciaSaliente:
         evidencia=["Firma: Juan Pérez"],
         confianza=0.82,
         fecha=FECHA,
+        forma_original="Juan Pérez",
     )
 
 
@@ -53,6 +54,7 @@ class TestEnviarSugerencia:
             "evidencia": ["Firma: Juan Pérez"],
             "confianza": 0.82,
             "fecha": "2026-08-29T00:00:00+00:00",
+            "formaOriginal": "Juan Pérez",
         }
 
     def test_enviar_lanza_servicio_no_disponible_si_records_custodia_responde_error(self):

@@ -3421,7 +3421,7 @@
                 "enriquecimientos"
               ]
             },
-            "description": "RF-EN-002..004: valor FICTICIO ya calculado por el llamador. RF-EN-005: campo 'remitente' marcado explicitamente 'no encontrado'. RF-EN-008: cada elemento debe quedar distinguible y revisable por separado en la respuesta.",
+            "description": "RF-EN-002..004: valor FICTICIO ya calculado por el llamador. RF-EN-005: campo 'remitente' marcado explicitamente 'no encontrado'. RF-EN-008: cada elemento debe quedar distinguible y revisable por separado en la respuesta. RF-EN-003/T-53: 'valor_original' viaja como 'forma_original' en la respuesta y llega hasta records-custodia (peticion 78).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"texto\": {\n    \"texto_extraido_id\": \"texto-en-postman-1\",\n    \"documento_id\": \"{{documento_id_en}}\",\n    \"contenido\": \"contenido extraido de prueba (postman)\",\n    \"estado\": \"EXTRAIDO\"\n  },\n  \"valores_propuestos\": [\n    {\n      \"campo\": \"fecha_documento\",\n      \"valor_original\": \"12 de enero de 2026\",\n      \"valor_normalizado\": \"2026-01-12\",\n      \"confianza\": 0.88,\n      \"evidencia\": [\n        \"heuristica-postman-fecha\"\n      ]\n    }\n  ],\n  \"campos_no_encontrados\": [\n    \"remitente\"\n  ],\n  \"modelo_id\": \"enriquecedor-ficticio-v1\",\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-29T16:00:00Z\"\n}",
@@ -3444,8 +3444,10 @@
                   "  pm.expect(body.length).to.eql(2);",
                   "  pm.expect(body[0].contenido_propuesto).to.eql(\"fecha_documento=2026-01-12\");",
                   "  pm.expect(body[0].confianza).to.eql(0.88);",
+                  "  pm.expect(body[0].forma_original).to.eql(\"12 de enero de 2026\");",
                   "  pm.expect(body[1].contenido_propuesto).to.eql(\"remitente=NO_ENCONTRADO\");",
                   "  pm.expect(body[1].confianza).to.eql(0);",
+                  "  pm.expect(body[1].forma_original).to.eql(null);",
                   "});"
                 ]
               }
@@ -3482,6 +3484,10 @@
                   "  pm.expect(metadatos.length).to.eql(2);",
                   "  const contenidos = metadatos.map((s) => s.contenidoPropuesto).sort();",
                   "  pm.expect(contenidos).to.eql([\"fecha_documento=2026-01-12\", \"remitente=NO_ENCONTRADO\"]);",
+                  "  const fechaDoc = metadatos.find((s) => s.contenidoPropuesto === \"fecha_documento=2026-01-12\");",
+                  "  pm.expect(fechaDoc.formaOriginal).to.eql(\"12 de enero de 2026\");",
+                  "  const remitente = metadatos.find((s) => s.contenidoPropuesto === \"remitente=NO_ENCONTRADO\");",
+                  "  pm.expect(remitente.formaOriginal).to.eql(null);",
                   "  pm.environment.set(\"sugerencias_count_en\", sugerencias.length);",
                   "});"
                 ]

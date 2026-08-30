@@ -1,13 +1,12 @@
 # STATE
 Fase: F3 — ocho bounded contexts completos de punta a punta (captura-ingesta,
 records-custodia, seguridad-acceso, validación humana, normalización,
-extracción, clasificación, enriquecimiento). T-49..T-52 (Enriquecimiento)
-cerradas (2026-08-29/30), incluida su verificación real con Docker/Newman —
-82/82 peticiones, 127/127 aserciones, dos corridas seguidas sin fallos (tras
-la petición 81 añadida por la observación de Codex sobre T-52). T-53
-(extender el contrato compartido de `Sugerencia` con la forma original,
-RF-EN-003/010) es la única tarea `- [ ]` abierta en TODO.md — no bloquea
-nada más; Indexación y Búsqueda sigue pendiente para completar los nueve
+extracción, clasificación, enriquecimiento). T-49..T-53 (Enriquecimiento,
+incluida la extensión del contrato compartido `Sugerencia` con
+`formaOriginal`, RF-EN-003) cerradas (2026-08-29/30), verificadas con
+Docker/Newman real — 82/82 peticiones, 127/127 aserciones, dos corridas
+seguidas sin fallos. No queda ninguna tarea `- [ ]` ni `- [?]` abierta en
+TODO.md: solo falta Indexación y Búsqueda para completar los nueve
 contextos originales. Ver
 plan-ejecucion-agentica.md.
 
@@ -2589,3 +2588,32 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   de `Sugerencia` (afecta también a Clasificación, no es un cambio aislado
   de Enriquecimiento). **Queda T-53 como única tarea abierta `- [ ]` en
   TODO.md.**
+
+- 2026-08-30 — T-53 cerrada: extendido el contrato compartido
+  `Sugerencia`/`SugerenciaEntrante` de records-custodia con
+  `formaOriginal: String?` (opcional, nulo por defecto). TDD-first en ambos
+  lados: `RecordsCustodiaHttpTest.kt` (1 test nuevo, confirmado en rojo
+  antes del cambio de contrato) y `enriquecimiento` (2 tests de dominio + 1
+  de integración actualizados, confirmados en rojo con `TypeError:
+  unexpected keyword argument 'forma_original'`, más 1 aserción nueva en
+  `test_api.py`). Kotlin: `Sugerencia`/`SugerenciaEntrante`/
+  `CapaAnticorrupcionSugerencias.recibir`, `RecibirSugerenciaRequest`,
+  `SugerenciasController`, `SugerenciaEntity` (columna `forma_original`
+  nullable — segura sobre tabla con filas existentes, a diferencia de
+  `es_correccion` en T-39 que era `not null`), `AlmacenDeSugerenciasJpa`.
+  Python (enriquecimiento): `SugerenciaSaliente.forma_original`,
+  `a_sugerencia_saliente` lo puebla desde `ValorPropuesto.valor_original`
+  (`None` para `CampoNoEncontrado`, que no tiene ninguna forma que
+  conservar), `EnviadorDeSugerenciasHttp` lo envía como `formaOriginal`.
+  Clasificación no necesitó ningún cambio — el campo es opcional
+  precisamente para eso. `./test.sh` completo del repo en verde (40 tests
+  en records-custodia, 29 en enriquecimiento).
+  Colección Postman: peticiones 77/78 ampliadas (mismo conteo de
+  peticiones, más aserciones), verificado con el stack Docker real de los
+  ocho servicios y dos corridas de Newman seguidas sin fallos: **82/82
+  peticiones, 127/127 aserciones**, confirmando que la forma original
+  sobrevive de punta a punta (Enriquecimiento → `POST /sugerencias` →
+  records-custodia → `GET /documentos/{id}/sugerencias`).
+  `specs/spec-infra-servicios.md` §4/§13 y `specs/004-enriquecimiento/
+  spec.md` §8 actualizadas (brecha cerrada, no queda como `[CLARIFICAR]`).
+  **No queda ninguna tarea `- [ ]` ni `- [?]` abierta en TODO.md.**

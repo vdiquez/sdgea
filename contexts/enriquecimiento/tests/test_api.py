@@ -75,6 +75,10 @@ class TestEnriquecerConValoresPropuestos:
         assert enviador.enviadas[0].tipo == "metadato"
         assert enviador.enviadas[0].documento_id == "documento-1"
         assert response.json()[0]["contenido_propuesto"] == "remitente=JUAN PEREZ"
+        # T-53: la forma original (RF-EN-003) viaja tanto en la respuesta HTTP
+        # como en lo que se reenvía a records-custodia.
+        assert response.json()[0]["forma_original"] == "Juan Pérez"
+        assert enviador.enviadas[0].forma_original == "Juan Pérez"
 
     def test_post_enriquecimientos_sobre_texto_no_extraido_responde_409_y_no_reenvia_nada(self, client, enviador):
         response = client.post(

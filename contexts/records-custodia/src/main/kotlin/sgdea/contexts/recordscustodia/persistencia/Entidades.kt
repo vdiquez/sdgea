@@ -148,6 +148,10 @@ class SugerenciaEntity(
 
     @Column(nullable = false)
     var fecha: Instant = Instant.EPOCH,
+
+    // T-53: opcional -- solo Enriquecimiento la declara (RF-EN-003).
+    @Column(name = "forma_original", nullable = true, columnDefinition = "text")
+    var formaOriginal: String? = null,
 )
 
 // specs/spec-infra-servicios.md §4: "Trd / RegistroTrd -> tabla

@@ -110,6 +110,15 @@ compartida (T-20) entre `CustodiaOriginales` y `CapaAnticorrupcionSugerencias`,
 incluidos los `SUGERENCIA_RECIBIDA` que otros contextos (p. ej. Clasificación)
 generan al enviar una sugerencia vía `POST /sugerencias`.
 
+`Sugerencia`/`SugerenciaEntrante` ganan `formaOriginal: String?` (T-53, VETO
+real de Codex sobre T-52): campo opcional, nulo por defecto. Solo
+Enriquecimiento lo declara (RF-EN-003 exige conservar la forma tal como
+aparece en el documento, además de la normalizada que ya viaja en
+`contenidoPropuesto`); Clasificación no tiene un concepto de "forma
+original" distinto del valor propuesto y sigue sin declararlo, sin que el
+contrato se lo exija — el campo es opcional precisamente para no forzar esa
+distinción sobre un productor que no la tiene.
+
 Mapeo de persistencia (estructura, no DDL):
 - `OriginalInmutable` → tabla `originales_inmutables`, escritura de una sola
   vez (RF-RC-001, invariante 1 de `spec-records-custodia.md` §3) — la tarea
@@ -120,6 +129,9 @@ Mapeo de persistencia (estructura, no DDL):
 - `EventoAuditoria` (vía `BitacoraAuditoria`) → tabla `eventos_auditoria`, de
   solo inserción (RF-RC-005) — mismo tratamiento que `originales_inmutables`.
 - `Sugerencia` → tabla `sugerencias`, con `documento_id` como llave foránea.
+  `forma_original` (T-53) es columna nullable — `ALTER TABLE ADD COLUMN`
+  nullable sin `DEFAULT` es seguro sobre una tabla con filas existentes
+  (a diferencia de `es_correccion` en T-39, que era `not null`).
 - `Trd` / `RegistroTrd` → tabla `trd_versiones`, con `version` como parte de
   la llave (RF-RC-006: nunca se sobrescribe una versión publicada).
 
@@ -676,3 +688,9 @@ Wireado en `deploy/docker-compose.{saas,onprem}.yml` (variables
 `RECORDS_CUSTODIA_BASE_URL`, `SERVER_PORT`, `depends_on: records-custodia`,
 sin `ports:`) y en `deploy/docker-compose.local-ports.yml` (`8088:8088`, solo
 para Postman/curl desde el host).
+
+`formaOriginal` (T-53, §4): `SugerenciaSaliente.forma_original` viaja en el
+cuerpo de `POST /sugerencias` — `valor.valor_original` para un
+`ValorPropuesto`, `None` para un `CampoNoEncontrado` (no hay ninguna forma
+que conservar). Cierra la brecha real que documentaba
+`specs/004-enriquecimiento/spec.md` §8 sobre RF-EN-003.

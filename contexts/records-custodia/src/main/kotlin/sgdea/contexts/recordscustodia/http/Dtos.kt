@@ -54,4 +54,6 @@ data class RecibirSugerenciaRequest(
     val evidencia: List<String>,
     val confianza: Double,
     val fecha: Instant,
+    // T-53: opcional -- solo Enriquecimiento lo declara (RF-EN-003).
+    val formaOriginal: String? = null,
 )

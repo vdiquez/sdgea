@@ -39,6 +39,7 @@ class EnviadorDeSugerenciasHttp(EnviadorDeSugerencias):
                     "evidencia": sugerencia.evidencia,
                     "confianza": sugerencia.confianza,
                     "fecha": sugerencia.fecha.isoformat(),
+                    "formaOriginal": sugerencia.forma_original,
                 },
                 timeout=5.0,
             )

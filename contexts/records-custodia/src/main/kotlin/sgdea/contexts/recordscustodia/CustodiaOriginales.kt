@@ -310,6 +310,10 @@ class CustodiaOriginales(
 // probabilístico (Clasificación, Enriquecimiento); porta modelo, evidencia y
 // confianza. No es estado: nunca modifica la clasificación, los metadatos ni
 // el estado de un documento (spec §3 invariante 2 / P-01).
+// formaOriginal (T-53, VETO real de Codex sobre T-52): opcional -- solo
+// Enriquecimiento tiene un concepto de "forma tal como aparece en el
+// documento" distinto del valor propuesto (RF-EN-003); Clasificación no lo
+// tiene y sigue enviando null, sin que el contrato se lo exija.
 data class Sugerencia(
     val documentoId: String,
     val tipo: String,
@@ -318,6 +322,7 @@ data class Sugerencia(
     val evidencia: List<String>,
     val confianza: Double,
     val fecha: Instant,
+    val formaOriginal: String? = null,
 )
 
 // Entrada cruda proveniente de un contexto probabilístico (spec §4, entradas
@@ -333,6 +338,7 @@ data class SugerenciaEntrante(
     val modeloId: String,
     val evidencia: List<String>,
     val confianza: Double,
+    val formaOriginal: String? = null,
 )
 
 // Decisión humana (spec §2/§3, RF-RC-004): acto explícito de un usuario que
@@ -389,6 +395,7 @@ class CapaAnticorrupcionSugerencias(
             evidencia = entrada.evidencia,
             confianza = entrada.confianza,
             fecha = fecha,
+            formaOriginal = entrada.formaOriginal,
         )
         almacen.guardar(sugerencia)
         // P-08: la recepción de una sugerencia es una transición que exige evento de

@@ -139,6 +139,11 @@ class SugerenciaSaliente:
     evidencia: list[str]
     confianza: float
     fecha: datetime
+    # RF-EN-003 / T-53 (VETO real de Codex sobre T-52, ver STATE.md): la
+    # forma tal como aparece en el documento, además de la normalizada que ya
+    # viaja en contenido_propuesto. None para un campo no encontrado (no hay
+    # ninguna forma que conservar, ni original ni normalizada).
+    forma_original: str | None = None
 
 
 def a_sugerencia_saliente(sugerencia: SugerenciaDeMetadatos) -> list[SugerenciaSaliente]:
@@ -154,6 +159,7 @@ def a_sugerencia_saliente(sugerencia: SugerenciaDeMetadatos) -> list[SugerenciaS
                     evidencia=valor.evidencia,
                     confianza=valor.confianza,
                     fecha=sugerencia.fecha,
+                    forma_original=valor.valor_original,
                 )
             )
         else:
@@ -166,6 +172,7 @@ def a_sugerencia_saliente(sugerencia: SugerenciaDeMetadatos) -> list[SugerenciaS
                     evidencia=[],
                     confianza=0.0,
                     fecha=sugerencia.fecha,
+                    forma_original=None,
                 )
             )
     return salientes

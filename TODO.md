@@ -915,20 +915,37 @@ deben repetirse aquí** (ver STATE.md para el detalle completo de cada una):
       STATE.md) → servicio HTTP (T-50) → Dockerfile/wiring (T-51) →
       Postman/Newman (T-52) — octavo bounded
       context del proyecto con el mismo ciclo completo.**
-- [ ] T-53 Completar la trazabilidad E2E de Enriquecimiento contra
+- [x] T-53 Trazabilidad E2E de Enriquecimiento contra
       `specs/004-enriquecimiento/spec.md` RF-EN-003/004/010 y P-08. Añadida
-      por Codex durante la revisión de T-52; **la mitad de P-08 ya quedó
-      cerrada en el mismo commit de T-52** (petición 81, `GET
-      /eventos-auditoria`, verificada con Docker/Newman real: 82/82
-      peticiones, 127/127 aserciones) — queda solo la parte de RF-EN-003/
-      004/010: preservar y exponer por sugerencia la forma original (además
-      de la normalizada, evidencia y confianza que ya viajan en
-      `contenidoPropuesto`/`evidencia`/`confianza`). Esto exige extender el
-      contrato compartido `Sugerencia`/`SugerenciaEntrante` de
-      records-custodia (T-08) con un campo nuevo — afecta también a
-      Clasificación, que usa el mismo contrato — así que no es un cambio
-      aislado de Enriquecimiento; documentado como brecha real (no
-      `[CLARIFICAR]`) en `specs/004-enriquecimiento/spec.md` §8. Ampliar
-      después la colección Postman para verificar la forma original tras
-      `GET /documentos/{id}/sugerencias`. No fijar campos obligatorios ni
-      umbrales: continúan `[CLARIFICAR]` en la spec.
+      por Codex durante la revisión de T-52; la mitad de P-08 ya había
+      cerrado en el mismo commit de T-52 (petición 81). Esta tarea cierra el
+      resto: extendido el contrato compartido `Sugerencia`/
+      `SugerenciaEntrante` de records-custodia (T-08) con `formaOriginal:
+      String?` — opcional, nulo por defecto, así que Clasificación (que usa
+      el mismo contrato y no tiene concepto de "forma original") no tuvo
+      que cambiar nada. Cambios: `CustodiaOriginales.kt`
+      (`Sugerencia`/`SugerenciaEntrante`/`CapaAnticorrupcionSugerencias.
+      recibir`), `http/Dtos.kt` (`RecibirSugerenciaRequest`),
+      `http/SugerenciasController.kt`, `persistencia/Entidades.kt`
+      (`SugerenciaEntity`, columna `forma_original` nullable — segura sobre
+      tabla con filas existentes, a diferencia de `es_correccion` en T-39
+      que era `not null`), `persistencia/Almacenes.kt`
+      (`AlmacenDeSugerenciasJpa`). Del lado de Enriquecimiento:
+      `dominio.py` (`SugerenciaSaliente.forma_original`,
+      `a_sugerencia_saliente` lo puebla desde `ValorPropuesto.
+      valor_original`, `None` para `CampoNoEncontrado`) e
+      `integracion.py` (`formaOriginal` en el cuerpo JSON saliente).
+      TDD: 1 test HTTP nuevo en `RecordsCustodiaHttpTest.kt` (confirmado en
+      rojo antes del cambio de contrato) + 2 tests de dominio y 1 de
+      integración actualizados en `enriquecimiento` (confirmados en rojo,
+      `TypeError: unexpected keyword argument`) + 1 aserción nueva en
+      `test_api.py`. `./test.sh` completo del repo en verde (40 tests en
+      records-custodia, 29 en enriquecimiento). Colección Postman:
+      peticiones 77/78 ampliadas para verificar que la forma original
+      sobrevive de punta a punta; verificado con el stack Docker real de
+      los ocho servicios y dos corridas de Newman seguidas sin fallos:
+      **82/82 peticiones, 127/127 aserciones** (mismo conteo — se amplían
+      aserciones existentes, no se agregan peticiones). `specs/
+      spec-infra-servicios.md` §4/§13 y `specs/004-enriquecimiento/spec.md`
+      §8 actualizadas (brecha cerrada). No se fijó ningún campo obligatorio
+      ni umbral: los `[CLARIFICAR]` de la spec siguen abiertos.

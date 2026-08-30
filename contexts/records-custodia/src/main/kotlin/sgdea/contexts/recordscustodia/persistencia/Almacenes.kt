@@ -170,6 +170,7 @@ class AlmacenDeSugerenciasJpa(
                 evidenciaJson = objectMapper.writeValueAsString(sugerencia.evidencia),
                 confianza = sugerencia.confianza,
                 fecha = sugerencia.fecha,
+                formaOriginal = sugerencia.formaOriginal,
             ),
         )
     }
@@ -184,6 +185,7 @@ class AlmacenDeSugerenciasJpa(
                 evidencia = objectMapper.readValue(entity.evidenciaJson),
                 confianza = entity.confianza,
                 fecha = entity.fecha,
+                formaOriginal = entity.formaOriginal,
             )
         }
 }
