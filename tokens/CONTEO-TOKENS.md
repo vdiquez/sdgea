@@ -4,7 +4,7 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 
 **Modo** = rol jugado en esa invocación, no el nombre del agente: Claude Code siempre implementa ("desarrollador"); Codex revisa ("validador") salvo cuando el tag de la invocación trae `-lead` (Codex implementó porque Claude estaba en rate limit sostenido, ver `CODEX_LEAD_PROMPT` en `orquestador.sh`) — ahí también cuenta como "desarrollador". Ver el docstring del script para la definición exacta de `total_tokens` en cada CLI (los buckets NO son comparables 1:1 entre Claude y Codex — ver nota al pie).
 
-**Total general (todas las invocaciones registradas): 37.162.681 tokens.**
+**Total general (todas las invocaciones registradas): 73.328.420 tokens.**
 
 **Nota histórica:** hasta el 2026-08-29 los tags `iterN` de `orquestador.sh` se reiniciaban en cada corrida y colisionaban entre sesiones — la corrida de T-48 sobrescribió en disco los logs originales `iter1`/`iter2` del corte vertical T-01..T-22. Corregido ese mismo día (`run_id` único por invocación, ver el docstring del script). Los totales de aquí reflejan lo que sobrevive en `.loop/logs/` hoy, no necesariamente el histórico completo de corridas anteriores a la corrección — por eso este archivo se comitea como snapshot en vez de regenerarse solo desde disco.
 
@@ -12,9 +12,9 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 
 | Agente | Modo | Invocaciones | Sin datos de uso | Input | Cache creation | Cache read | Output | Total | Costo USD |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| claude | desarrollador | 27 | 0 | 492 | 1.669.822 | 24.267.854 | 189.251 | 26.127.419 | $13.6960 |
-| codex | desarrollador | 0 | 0 | 0 | 0 | 0 | 0 | 0 | — |
-| codex | validador | 28 | 5 | 10.939.380 | n/a | n/a | 95.882 | 11.035.262 | — |
+| claude | desarrollador | 36 | 0 | 928 | 2.560.304 | 50.224.849 | 323.915 | 53.109.996 | $23.8103 |
+| codex | desarrollador | 1 | 0 | 822.814 | n/a | n/a | 7.112 | 829.926 | — |
+| codex | validador | 44 | 5 | 19.222.881 | n/a | n/a | 165.617 | 19.388.498 | — |
 
 `n/a` en Codex: `cached_input_tokens` es un subconjunto informativo de `input_tokens` (no un bucket aditivo), así que no aplica una columna de cache separada aditiva como en Claude — ver docstring.
 
@@ -22,6 +22,15 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 
 | Archivo | Agente | Modo | Tag | Input | Output | Total | Costo USD |
 |---|---|---|---|---:|---:|---:|---:|
+| claude-20260829-102030-37721-iter1-1.json | claude | desarrollador | 20260829-102030-37721-iter1-1 | 4.111.181 | 25.280 | 4.136.461 | $1.5475 |
+| claude-20260829-104214-44377-iter1-1.json | claude | desarrollador | 20260829-104214-44377-iter1-1 | 5.558.745 | 29.838 | 5.588.583 | $1.9406 |
+| claude-20260829-104214-44377-iter2-1.json | claude | desarrollador | 20260829-104214-44377-iter2-1 | 4.541.136 | 19.210 | 4.560.346 | $1.5550 |
+| claude-20260829-104214-44377-iter3-1.json | claude | desarrollador | 20260829-104214-44377-iter3-1 | 755.226 | 2.559 | 757.785 | $0.4445 |
+| claude-20260829-104214-44377-iter4-1.json | claude | desarrollador | 20260829-104214-44377-iter4-1 | 6.388.860 | 26.072 | 6.414.932 | $2.0565 |
+| claude-20260829-104214-44377-iter5-1.json | claude | desarrollador | 20260829-104214-44377-iter5-1 | 1.847.427 | 8.658 | 1.856.085 | $0.8224 |
+| claude-20260829-104214-44377-iter6-1.json | claude | desarrollador | 20260829-104214-44377-iter6-1 | 1.900.512 | 10.798 | 1.911.310 | $0.9131 |
+| claude-20260829-104214-44377-iter7-1.json | claude | desarrollador | 20260829-104214-44377-iter7-1 | 1.744.826 | 12.249 | 1.757.075 | $0.8348 |
+| claude-20260829-104214-44377-iter7-2.json | claude | desarrollador | 20260829-104214-44377-iter7-2 | 0 | 0 | 0 | $0.0000 |
 | claude-iter1-1.json | claude | desarrollador | iter1-1 | 6.449.812 | 26.255 | 6.476.067 | $2.1466 |
 | claude-iter1-2.json | claude | desarrollador | iter1-2 | 0 | 0 | 0 | $0.0000 |
 | claude-iter1-3.json | claude | desarrollador | iter1-3 | 0 | 0 | 0 | $0.0000 |
@@ -49,6 +58,15 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 | claude-preflight-1.json | claude | desarrollador | preflight-1 | 567.261 | 14.228 | 581.489 | $0.7451 |
 | claude-preflight-2.json | claude | desarrollador | preflight-2 | 0 | 0 | 0 | $0.0000 |
 | claude-preflight-3.json | claude | desarrollador | preflight-3 | 0 | 0 | 0 | $0.0000 |
+| codex-20260829-102030-37721-iter1-1.log | codex | validador | 20260829-102030-37721-iter1-1 | 511.862 | 5.091 | 516.953 | — |
+| codex-20260829-104214-44377-iter1-1.log | codex | validador | 20260829-104214-44377-iter1-1 | 1.010.840 | 6.354 | 1.017.194 | — |
+| codex-20260829-104214-44377-iter2-1.log | codex | validador | 20260829-104214-44377-iter2-1 | 633.879 | 5.138 | 639.017 | — |
+| codex-20260829-104214-44377-iter3-1.log | codex | validador | 20260829-104214-44377-iter3-1 | 554.334 | 5.594 | 559.928 | — |
+| codex-20260829-104214-44377-iter4-1.log | codex | validador | 20260829-104214-44377-iter4-1 | 354.751 | 3.146 | 357.897 | — |
+| codex-20260829-104214-44377-iter5-1.log | codex | validador | 20260829-104214-44377-iter5-1 | 268.238 | 3.430 | 271.668 | — |
+| codex-20260829-104214-44377-iter6-1.log | codex | validador | 20260829-104214-44377-iter6-1 | 256.495 | 2.937 | 259.432 | — |
+| codex-20260829-104214-44377-iter7-lead-1.log | codex | desarrollador | 20260829-104214-44377-iter7-lead-1 | 822.814 | 7.112 | 829.926 | — |
+| codex-20260829-104214-44377-iter7-selfreview-1.log | codex | validador | 20260829-104214-44377-iter7-selfreview-1 | 303.549 | 3.322 | 306.871 | — |
 | codex-f1-close-1.log | codex | validador | f1-close-1 | — | — | — | — |
 | codex-f1-close-2.log | codex | validador | f1-close-2 | 521.527 | 6.211 | 527.738 | — |
 | codex-iter1-1.log | codex | validador | iter1-1 | 323.246 | 4.045 | 327.291 | — |
@@ -71,11 +89,19 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 | codex-iter8-1.log | codex | validador | iter8-1 | 283.619 | 2.749 | 286.368 | — |
 | codex-iter9-1.log | codex | validador | iter9-1 | 310.444 | 2.743 | 313.187 | — |
 | codex-review-acumulado.json | codex | validador | review-acumulado | 2.239.220 | 12.302 | 2.251.522 | — |
+| codex-review-audit-ratelimit-1.log | codex | validador | review-audit-ratelimit-1 | 289.800 | 2.698 | 292.498 | — |
+| codex-review-runid-fix-1.log | codex | validador | review-runid-fix-1 | 312.399 | 3.207 | 315.606 | — |
+| codex-review-runid-fix2-1.log | codex | validador | review-runid-fix2-1 | 430.274 | 4.015 | 434.289 | — |
+| codex-review-seed-enriquecimiento-1.log | codex | validador | review-seed-enriquecimiento-1 | 351.050 | 3.256 | 354.306 | — |
 | codex-review-t16-17-18.log | codex | validador | review-t16-17-18 | 698.464 | 8.459 | 706.923 | — |
 | codex-review-t19-fix.log | codex | validador | review-t19-fix | 479.235 | 5.295 | 484.530 | — |
 | codex-review-t40-fix.json | codex | validador | review-t40-fix | 283.017 | 4.863 | 287.880 | — |
 | codex-review-t40-fix2.json | codex | validador | review-t40-fix2 | 816.926 | 6.331 | 823.257 | — |
 | codex-review-t48-1.log | codex | validador | review-t48-1 | 663.060 | 4.163 | 667.223 | — |
+| codex-review-t49-fix-1.log | codex | validador | review-t49-fix-1 | 354.252 | 3.776 | 358.028 | — |
+| codex-review-t49-fix2-1.log | codex | validador | review-t49-fix2-1 | 907.589 | 5.394 | 912.983 | — |
+| codex-review-t52-1.log | codex | validador | review-t52-1 | 1.291.090 | 8.086 | 1.299.176 | — |
+| codex-review-t52-fix-1.log | codex | validador | review-t52-fix-1 | 453.099 | 4.291 | 457.390 | — |
 | codex-review-veto-4eb7497-fix-1.log | codex | validador | review-veto-4eb7497-fix-1 | 695.147 | 3.619 | 698.766 | — |
 
 ## Adjuntos sin datos de uso (intentos fallidos, rate limit, etc.)
