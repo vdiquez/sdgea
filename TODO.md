@@ -877,16 +877,24 @@ deben repetirse aquí** (ver STATE.md para el detalle completo de cada una):
       alguien la corra en un entorno con Docker disponible.
       `specs/spec-infra-servicios.md` §9 (trazabilidad) y §13 (nota de
       Dockerfile) actualizadas.
-- [ ] T-52 Colección Postman con el ciclo completo de Enriquecimiento,
-      mismo patrón que T-47 (Clasificación): carpeta nueva "9.
-      Enriquecimiento", flujo end-to-end real de dos servicios (custodiar
-      documento en records-custodia → enviar sugerencia de metadatos con
-      al menos dos campos, uno con valor propuesto y otro marcado "no
-      encontrado" → verificar en `GET /documentos/{id}/sugerencias` que
-      ambos llegan distinguibles por campo, RF-EN-008/010 → marcar un
-      texto "no enriquecible" y verificar que el conteo de sugerencias no
-      cambia, RF-EN-009). Verificar con el stack Docker real levantado y
-      dos corridas de Newman seguidas sin fallos, actualizar
-      `postman/README.md` con el conteo real. `specs/spec-infra-servicios.md`
-      §10 actualizada (Enriquecimiento deja de aparecer como servicio que
-      no existe).
+- [x] T-52 Colección Postman con el ciclo completo de Enriquecimiento
+      (carpeta "9. Enriquecimiento", peticiones 76-80), mismo patrón que
+      T-47 (Clasificación): flujo end-to-end real de dos servicios —
+      custodiar documento en records-custodia → enriquecer con un valor
+      propuesto FICTICIO y un campo marcado "no encontrado" en la misma
+      llamada (`evaluar_texto` bifurca internamente, un único endpoint
+      `POST /enriquecimientos`) → verificar en
+      `GET /documentos/{id}/sugerencias` que ambos llegan distinguibles por
+      campo (RF-EN-002..006/008) → marcar un texto "no enriquecible" con
+      razón (RF-EN-009) y verificar que el conteo de sugerencias no cambia.
+      Verificado con el stack Docker real de los ocho servicios y dos
+      corridas de Newman seguidas sin fallos desde la primera: **81/81
+      peticiones, 126/126 aserciones**. `postman/README.md` actualizado
+      (50/58 endpoints cubiertos). `specs/spec-infra-servicios.md` §10
+      actualizada por el loop durante T-51 (Enriquecimiento deja de
+      aparecer como servicio que no existe para RF-VH-001).
+      **Con esto, Enriquecimiento (specs/004-enriquecimiento/spec.md) queda
+      completo de punta a punta: dominio (T-49, dos rondas de VETO real de
+      Codex sobre RF-EN-009, ver STATE.md) → servicio HTTP (T-50) →
+      Dockerfile/wiring (T-51) → Postman/Newman (T-52) — octavo bounded
+      context del proyecto con el mismo ciclo completo.**

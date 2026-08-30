@@ -1,6 +1,6 @@
 # Colección Postman — corte vertical
 
-Cubre 49 de los 57 endpoints reales de `specs/spec-infra-servicios.md`
+Cubre 50 de los 58 endpoints reales de `specs/spec-infra-servicios.md`
 (captura-ingesta + records-custodia + seguridad-acceso + validacion-humana +
 normalizacion + extraccion + clasificacion), en el orden en que se probaron
 manualmente con `curl` — los 8 que faltan ya tienen su propia cobertura fuera
@@ -67,7 +67,18 @@ diferencia de normalización/extracción, que sí tenían `GET
 que los eventos `SUGERENCIA_RECIBIDA` que generaron las peticiones 69
 (clasificar) y 71 (agrupar) aparecen atribuibles a
 `clasificador-ficticio-v1`/`agrupador-ficticio-v1`, con actor y fecha no
-vacíos.
+vacíos; y la carpeta 9 (T-52, peticiones 76-80) ejercita el ciclo completo
+de Enriquecimiento — **tercer flujo end-to-end real de solo dos servicios**
+(Enriquecimiento tampoco tiene persistencia propia,
+`specs/004-enriquecimiento/spec.md` §3, mismo criterio que Clasificación):
+custodiar un documento en records-custodia; enriquecer con un valor
+propuesto FICTICIO y un campo marcado "no encontrado" en la misma llamada
+(`evaluar_texto` bifurca internamente, un único endpoint
+`POST /enriquecimientos` en vez de rutas separadas) y verificar que ambos
+llegan distinguibles por campo (RF-EN-002..006/008) consultando
+`GET /documentos/{id}/sugerencias` en records-custodia; marcar un texto
+"no enriquecible" con razón (RF-EN-009) y verificar que el conteo de
+sugerencias en records-custodia **no cambia**.
 
 ## Levantar el stack (con puertos locales para Postman)
 
@@ -94,7 +105,8 @@ docker compose -f ../deploy/docker-compose.saas.yml -f ../deploy/docker-compose.
    `unidad_id_vh_limites`/`lote_id_vh_limites`/`documento_id_vh_correccion`
    (carpeta 6, T-39),
    `rol_ex`/`actor_ex`/`identidad_id_ex`/`lote_id_ex`/`texto_id_ex`/`texto_id_ex_2`/`texto_id_ex_3`
-   (carpeta 7, T-43), `documento_id_cl`/`sugerencias_count_cl` (carpeta 8, T-47)
+   (carpeta 7, T-43), `documento_id_cl`/`sugerencias_count_cl` (carpeta 8, T-47),
+   `documento_id_en`/`sugerencias_count_en` (carpeta 9, T-52)
    — generadas con timestamp en la primera petición de cada flujo, así que correr la
    colección varias veces no colisiona. La huella de contenido de
    Normalización también necesita timestamp: sin él, la segunda corrida
@@ -153,7 +165,14 @@ records-custodia, con los siete servicios corriendo a la vez): 76/76
 peticiones, 121/121 aserciones, dos corridas seguidas sin fallos desde la
 primera corrida — incluida la petición 75, que confirma que las sugerencias
 de Clasificación quedan en la bitácora de auditoría de records-custodia,
-atribuibles a su modelo ficticio de origen.
+atribuibles a su modelo ficticio de origen. Reverificado (2026-08-30, tras
+T-49..T-52/ciclo completo de Enriquecimiento, con los ocho servicios
+corriendo a la vez — octavo bounded context del proyecto): 81/81
+peticiones, 126/126 aserciones, dos corridas seguidas sin fallos desde la
+primera corrida — incluido que `evaluar_texto()` bifurca correctamente
+entre sugerencia (valor propuesto + campo no encontrado, distinguibles por
+campo) y `MarcaNoEnriquecible` (RF-EN-009, sin reenviar nada a
+records-custodia) desde el mismo endpoint `POST /enriquecimientos`.
 
 ## Bajar el stack
 

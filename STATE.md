@@ -1,10 +1,11 @@
 # STATE
-Fase: F3 — siete bounded contexts completos de punta a punta (captura-ingesta,
+Fase: F3 — ocho bounded contexts completos de punta a punta (captura-ingesta,
 records-custodia, seguridad-acceso, validación humana, normalización,
-extracción, clasificación); un octavo (Enriquecimiento) en construcción. T-51
-(Dockerfile real de enriquecimiento + wiring en docker-compose) cerrada
-(2026-08-29). Próxima tarea abierta: T-52 (colección Postman con el ciclo
-completo de Enriquecimiento, verificación con Docker/Newman real). Ver
+extracción, clasificación, enriquecimiento). T-49..T-52 (Enriquecimiento)
+cerradas (2026-08-29/30), incluida su verificación real con Docker/Newman —
+81/81 peticiones, 126/126 aserciones, dos corridas seguidas sin fallos. No
+queda ninguna tarea `- [ ]` ni `- [?]` abierta en TODO.md: solo falta
+Indexación y Búsqueda para completar los nueve contextos originales. Ver
 plan-ejecucion-agentica.md.
 
 Hecho:
@@ -2543,3 +2544,19 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   tests. No hay riesgo de contenido que auditar más allá de la omisión de
   formato ya señalada. Conforme; sin hallazgo adicional. Cierra esta entrada
   en el mismo commit — no requiere una segunda auditoría posterior.
+
+- 2026-08-30 — T-52 (colección Postman, ciclo completo de Enriquecimiento)
+  cerrada, retomada interactivamente (Docker disponible en esta sesión):
+  el borrador de la carpeta "9. Enriquecimiento" (peticiones 76-80) ya
+  estaba escrito por el loop headless durante T-51 pero sin verificar.
+  `./gradlew`/`./test.sh` completos en verde; stack Docker real de los ocho
+  servicios levantado (`docker compose -f docker-compose.saas.yml -f
+  docker-compose.local-ports.yml up -d --build`, primera vez con
+  `enriquecimiento` — octavo contenedor) y verificado con `npx newman run`
+  dos corridas seguidas sin fallos desde la primera: **81/81 peticiones,
+  126/126 aserciones**. `postman/README.md` actualizado (50/58 endpoints
+  cubiertos). Stack bajado al terminar. T-52 marcada `- [x]` en TODO.md.
+  **Con esto, Enriquecimiento queda completo de punta a punta (T-49..T-52)
+  — octavo bounded context del proyecto con el ciclo íntegro dominio →
+  servicio HTTP → Dockerfile/wiring → Postman/Newman.** No queda ninguna
+  tarea `- [ ]` ni `- [?]` abierta en TODO.md.

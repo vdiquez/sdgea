@@ -429,12 +429,17 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
   §3). `POST /unidades` de Normalización funciona hoy con los datos que le
   pase el llamador directamente.
 - RF-VH-001 (T-39, parcial): las colas de clasificación (records-custodia) y
-  de límites (Normalización) ya agregan sugerencias reales; Extracción y
-  Enriquecimiento quedan pendientes **porque ninguno de los dos existe
-  todavía como servicio** (`contexts/extraccion`/`contexts/enriquecimiento`
-  son solo andamiaje) — no es una decisión de negocio ni un `[CLARIFICAR]`,
-  es una dependencia real que no existe. Se completará cuando esos contextos
-  tengan dominio y HTTP.
+  de límites (Normalización) ya agregan sugerencias reales; Extracción
+  (T-40/T-41, 2026-08-27) y Enriquecimiento (T-49/T-50, 2026-08-29) ya
+  existen como servicio (dominio + HTTP propios), así que la razón original
+  de esta brecha ("ninguno de los dos existe todavía como servicio") ya no
+  es cierta. Lo que sigue faltando es distinto: Validación Humana todavía no
+  tiene ninguna cola que agregue las sugerencias de OCR de Extracción ni las
+  de metadato de Enriquecimiento (ambas llegan igual a `records-custodia` vía
+  `POST /sugerencias`, consultables con `GET /documentos/{id}/sugerencias`,
+  pero sin una cola dedicada como `/colas/clasificacion` o `/colas/limites`).
+  No es una decisión de negocio ni un `[CLARIFICAR]` — es trabajo de
+  integración no hecho todavía, a diferenciar de una dependencia inexistente.
 - **[CLARIFICAR]** Mecanismo de re-revisión de correcciones (RF-VH-009):
   `GET /documentos/correcciones` en records-custodia (T-39) expone las
   correcciones marcadas `PENDIENTE_DE_REREVISION`, pero cómo se re-revisan y

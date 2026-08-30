@@ -3347,6 +3347,229 @@
           ]
         }
       ]
+    },
+    {
+      "name": "9. Enriquecimiento",
+      "item": [
+        {
+          "name": "76 [Setup] Custodiar documento en records-custodia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos"
+              ]
+            },
+            "description": "T-52: ciclo completo de Enriquecimiento (T-49..T-51). Enriquecimiento no tiene persistencia propia (specs/004-enriquecimiento/spec.md §3), así que el flujo empieza custodiando el documento destino en records-custodia, igual que las carpetas 4, 6 y 8.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{documento_id_en}}\",\n  \"bytesBase64\": \"SG9sYSBTR0RFQQ==\",\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-29T15:59:00Z\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-29T15:59:00Z\",\n    \"loteOFlujoId\": \"lote-en-postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"documento_id_en\", \"doc-en-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "77 Enriquecer -- un valor propuesto y un campo no encontrado (RF-EN-002..006/008)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{enriquecimiento_base_url}}/enriquecimientos",
+              "host": [
+                "{{enriquecimiento_base_url}}"
+              ],
+              "path": [
+                "enriquecimientos"
+              ]
+            },
+            "description": "RF-EN-002..004: valor FICTICIO ya calculado por el llamador. RF-EN-005: campo 'remitente' marcado explicitamente 'no encontrado'. RF-EN-008: cada elemento debe quedar distinguible y revisable por separado en la respuesta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": {\n    \"texto_extraido_id\": \"texto-en-postman-1\",\n    \"documento_id\": \"{{documento_id_en}}\",\n    \"contenido\": \"contenido extraido de prueba (postman)\",\n    \"estado\": \"EXTRAIDO\"\n  },\n  \"valores_propuestos\": [\n    {\n      \"campo\": \"fecha_documento\",\n      \"valor_original\": \"12 de enero de 2026\",\n      \"valor_normalizado\": \"2026-01-12\",\n      \"confianza\": 0.88,\n      \"evidencia\": [\n        \"heuristica-postman-fecha\"\n      ]\n    }\n  ],\n  \"campos_no_encontrados\": [\n    \"remitente\"\n  ],\n  \"modelo_id\": \"enriquecedor-ficticio-v1\",\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-29T16:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created, un valor propuesto y un campo no encontrado, distinguibles (RF-EN-002..006/008)\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(body.length).to.eql(2);",
+                  "  pm.expect(body[0].contenido_propuesto).to.eql(\"fecha_documento=2026-01-12\");",
+                  "  pm.expect(body[0].confianza).to.eql(0.88);",
+                  "  pm.expect(body[1].contenido_propuesto).to.eql(\"remitente=NO_ENCONTRADO\");",
+                  "  pm.expect(body[1].confianza).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "78 Verificar en records-custodia que las sugerencias de metadato llegaron, distinguibles por campo (RF-EN-008/010)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id_en}}/sugerencias",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id_en}}",
+                "sugerencias"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, las dos sugerencias de metadato llegaron como Sugerencia real, distinguibles por campo\", () => {",
+                  "  const sugerencias = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  const metadatos = sugerencias.filter((s) => s.tipo === \"metadato\");",
+                  "  pm.expect(metadatos.length).to.eql(2);",
+                  "  const contenidos = metadatos.map((s) => s.contenidoPropuesto).sort();",
+                  "  pm.expect(contenidos).to.eql([\"fecha_documento=2026-01-12\", \"remitente=NO_ENCONTRADO\"]);",
+                  "  pm.environment.set(\"sugerencias_count_en\", sugerencias.length);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "79 Marcar texto no enriquecible -- no reenvia nada (RF-EN-009)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{enriquecimiento_base_url}}/enriquecimientos",
+              "host": [
+                "{{enriquecimiento_base_url}}"
+              ],
+              "path": [
+                "enriquecimientos"
+              ]
+            },
+            "description": "RF-EN-009: sin valores propuestos ni campos no encontrados, con razon declarada -- evaluar_texto() debe bifurcar hacia MarcaNoEnriquecible, no producir un cuerpo vacio silencioso. Esta peticion no debe agregar ninguna Sugerencia nueva (verificado en la 80).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": {\n    \"texto_extraido_id\": \"texto-en-postman-2\",\n    \"documento_id\": \"{{documento_id_en}}\",\n    \"contenido\": \"\",\n    \"estado\": \"EXTRAIDO\"\n  },\n  \"modelo_id\": \"enriquecedor-ficticio-v1\",\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-29T16:01:00Z\",\n  \"razon_no_enriquecible\": \"contenido sin campos reconocibles (postman)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, marca no enriquecible devuelta\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.documento_id).to.eql(pm.environment.get(\"documento_id_en\"));",
+                  "  pm.expect(body.razon).to.eql(\"contenido sin campos reconocibles (postman)\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "80 Verificar que no-enriquecible no agrego ninguna sugerencia nueva (RF-EN-009)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id_en}}/sugerencias",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id_en}}",
+                "sugerencias"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, el conteo de sugerencias no cambio (RF-EN-009 no reenvia nada)\", () => {",
+                  "  const sugerencias = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(sugerencias.length).to.eql(pm.environment.get(\"sugerencias_count_en\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }
