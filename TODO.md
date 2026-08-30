@@ -1130,26 +1130,73 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       (SQLAlchemy + Postgres) para Indexación y Búsqueda, mismo patrón que
       T-34/T-41 (Normalización/Extracción) — SÍ con Postgres propio, a
       diferencia de clasificación/enriquecimiento/validación-humana.
-      `guardar_con_evento(entrada, evento)` en una única transacción con
-      rollback explícito (T-37). `GET /eventos-auditoria` desde el
-      principio (P-08). Implementaciones reales de los puertos declarados
-      en T-54: `IndiceLexicoEnMemoria`/`IndiceLexicoSql` (búsqueda por
-      término sobre el texto ya persistido — Postgres ya es la base
-      decidida desde F1.D1, no es un motor nuevo inventado) e
-      `IndiceVectorialEnMemoria`/`IndiceVectorialSql` (almacena/recupera el
-      campo de embedding FICTICIO, sin similitud real — RF-IB-006 sigue
-      recibiendo el orden ya calculado del llamador); `api.py` invoca estos
-      puertos para obtener candidatos y se los pasa a las funciones puras
-      de `dominio.py` (T-54, punto 1). Puerto `VerificadorDePermisos`
-      (P-03, dominio.py) + implementación HTTP real contra `POST
-      /autorizacion` de seguridad-acceso (mismo patrón que
+      **Corregido tras SEGUNDO VETO real de Codex (commit `e356158`, ver
+      STATE.md): el primer intento de corrección seguía incompleto en dos
+      puntos — ambos aplicados aquí desde el primer commit.**
+      **(1) P-03 — dos variantes de DESPLIEGUE por cada una de las cuatro
+      capacidades, no un doble en memoria + una implementación real.** Un
+      adaptador `EnMemoria` es un doble de prueba, no una alternativa de
+      despliegue (RNF-IB-002 exige explícitamente "operando idéntico en
+      SaaS y on-premise... incluyendo entornos sin conectividad saliente" —
+      la razón real por la que este contexto necesita DOS variantes reales
+      y no solo "mismo contenedor, dos compose" como el resto del proyecto:
+      SaaS puede usar un servicio gestionado externo, on-premise no puede
+      salir a internet). Sin nombrar motores ni modelos concretos (el
+      `[CLARIFICAR]` de motor/modelo sigue abierto, spec §8):
+      - `IndiceLexico`: `IndiceLexicoAutoalojado` (consulta real contra el
+        texto ya persistido en Postgres — la base ya decidida desde F1.D1,
+        sin salir a red) e `IndiceLexicoGestionado` (cliente HTTP real
+        contra una URL configurable por variable de entorno
+        `INDICE_LEXICO_ENDPOINT_URL`, sin asumir ningún producto — igual
+        que `RECORDS_CUSTODIA_BASE_URL` es configuración, no una decisión
+        de producto). El contenedor real usa el autoalojado por defecto
+        (no hay ningún servicio gestionado desplegado en este proyecto);
+        el gestionado existe como clase real, intercambiable, aunque no se
+        active en `docker-compose.saas.yml` todavía.
+      - `IndiceVectorial`: mismo patrón —
+        `IndiceVectorialAutoalojado`/`IndiceVectorialGestionado` — ambos
+        solo almacenan/recuperan el campo de embedding FICTICIO (nunca
+        similitud real; RF-IB-006 sigue recibiendo el orden ya calculado
+        del llamador).
+      - `GeneradorDeEmbeddings`/`ModeloDeLenguaje` (los dos FICTICIOS):
+        también dos clases cada uno (`...Gestionado`/`...Autoalojado`),
+        pero NINGUNA calcula nada real — ambas existen solo para que el
+        seam de P-03 esté completo estructuralmente y lanzan un error
+        explícito y documentado si algo las invoca (nunca deberían
+        invocarse: el llamador entrega embedding/respuesta/citas ya
+        calculados como parámetro, disciplina constitucional de no
+        implementar un componente probabilístico real). No se conectan a
+        ningún compose — no hay nada que desplegar para un adaptador que
+        nunca se llama.
+      **(2) P-08/RF-IB-009 — el evento de acceso se PERSISTE de forma
+      solo-anexado, atómicamente, dentro de la MISMA petición HTTP de cada
+      consulta — no basta con que la función de dominio lo devuelva.**
+      `POST /busquedas`, `POST /recuperaciones` y `POST /preguntas`
+      (o los nombres de ruta que correspondan) llaman
+      `almacen.guardar_evento_de_acceso(evento)` (tabla `eventos_auditoria`
+      de solo inserción, `entityManager`/`session.add` sin update — mismo
+      criterio WORM que records-custodia, T-17) dentro del mismo request,
+      antes de responder. TDD: el test de aceptación de RF-IB-009 hace la
+      consulta real vía HTTP y DESPUÉS consulta `GET /eventos-auditoria`
+      para confirmar que el evento quedó ahí — nunca inspecciona solo el
+      valor devuelto por la función de dominio.
+      `guardar_con_evento(entrada, evento)` (para indexar/actualizar, no
+      para el evento de acceso de una consulta) en una única transacción
+      con rollback explícito (T-37). `GET /eventos-auditoria` desde el
+      principio (P-08) — expone tanto los eventos de indexación como los
+      de acceso por consulta. `api.py` invoca
+      `IndiceLexico`/`IndiceVectorial` para obtener candidatos y se los
+      pasa a las funciones puras de `dominio.py` (T-54, punto 1). Puerto
+      `VerificadorDePermisos` (P-03, dominio.py) + implementación HTTP real
+      contra `POST /autorizacion` de seguridad-acceso (mismo patrón que
       `VerificadorDeAutorizacionHttp` en extracción, T-41b) — la capa HTTP
       arma `documentos_permitidos` antes de invocar las funciones puras del
       dominio; variable de entorno `SEGURIDAD_ACCESO_BASE_URL`. Cualquier
       ruta GET literal (p. ej. `/entradas/pendientes-de-indexacion` si
       aplica) declarada ANTES que su ruta hermana con `{id}` (T-39/T-41).
       `specs/spec-infra-servicios.md` §14 (nueva) con el contrato HTTP
-      mínimo completo.
+      mínimo completo, incluidas las variables de entorno de las cuatro
+      capacidades.
 - [ ] T-56 Dockerfile real de indexacion-busqueda + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que
       normalizacion/extraccion (T-35/T-42) — CON Postgres propio (a
