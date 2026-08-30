@@ -1061,50 +1061,95 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
 - [ ] T-54 RF-IB-001..010 — dominio de Indexación y Búsqueda en Python
       (`contexts/indexacion-busqueda/dominio.py`), mismo patrón de agregado
       persistido que `contexts/normalizacion/dominio.py`/
-      `contexts/extraccion/dominio.py` (T-33/T-40): `EstadoEntradaDeIndice`
-      (`PENDIENTE_DE_INDEXACION`, `INDEXADA` — spec §3, sin estado de
-      eliminación en esta etapa); `recibir_documento_materializado(...)`
-      única puerta de entrada (documento_id, clasificación/metadatos YA
-      MATERIALIZADOS, texto extraído — todo declarado por el llamador, ver
-      punto 5 arriba); `indexar(...)` REAL (RF-IB-001/002, no FICTICIO):
-      guarda el texto para búsqueda léxica y los campos filtrables
-      (serie/subserie, fecha, metadatos de Enriquecimiento); campo de
-      embedding FICTICIO (RF-IB-003, YA CALCULADO por el llamador, nunca
-      computado); `actualizar_entrada(...)` REAL (RF-IB-004); `buscar(...)`
-      REAL (RF-IB-005: palabra clave + filtros, sin motor externo — ver
-      punto 3 arriba) que además filtra por `documentos_permitidos` REAL
-      (RF-IB-008); `recuperar_por_relevancia(...)` FICTICIO (RF-IB-006, el
-      orden ya viene calculado del llamador) con el mismo filtro de permisos
-      aplicado; `responder_qa(...)` única operación de evaluación FICTICIO
-      que bifurca entre `RespuestaQA` (con al menos una cita, RF-IB-007) y
-      `NegativaApropiada` (RF-IB-010) — aplicando desde el inicio la lección
-      de los dos VETOs de `evaluar_texto` (punto 3 arriba), con las citas
-      también filtradas por permiso (RF-IB-008/RNF-IB-003: ni siquiera como
-      referencia si no hay permiso); `emitir_evento_de_acceso(...)` REAL
-      (RF-IB-009, actor + fecha + documentos accedidos, mismo criterio que
-      RF-RC-009/RF-RC-010 en records-custodia). Cada función de transición
-      devuelve también su `EventoAuditoria` (P-08 desde el inicio, T-37).
-      `uv run --directory contexts/indexacion-busqueda pytest` agregado a
-      `test.sh` en este mismo commit. TDD contra cada Dado/Cuando/Entonces
-      de RF-IB-001..010, incluidas las ramas de permiso denegado (RF-IB-008)
-      y de negativa apropiada (RF-IB-010) ejercidas a través de la operación
-      real, no de un guardia aislado.
+      `contexts/extraccion/dominio.py` (T-33/T-40), **corregido tras VETO
+      real de Codex sobre la siembra original de esta tarea (commit
+      `c8f47d7`, ver STATE.md)** — dos hallazgos, ambos aplicados aquí desde
+      el primer commit, no como fix posterior:
+      **(1) P-03 — CUATRO puertos propios (`Protocol`), no solo
+      `VerificadorDePermisos`.** La spec §1 nombra explícitamente cuatro
+      capacidades externas para este contexto: índice léxico, índice
+      vectorial, embeddings e inferencia LLM. Que la búsqueda léxica sea
+      "determinista" (P-06) NO la exime de P-03 — P-03 abstrae la
+      capacidad externa en sí (mismo criterio que `AlmacenDeUnidades` en
+      normalización, que abstrae persistencia aunque persistir sea
+      determinista), no solo lo probabilístico. `IndiceLexico` e
+      `IndiceVectorial` (Protocol, declarados en `dominio.py`, mismo patrón
+      que `EnviadorDeSugerencias`) representan las dos capacidades REALES;
+      `GeneradorDeEmbeddings`/`ModeloDeLenguaje` (Protocol también) las dos
+      FICTICIAS — declarados por completitud de P-03 aunque esta tarea
+      nunca los invoque (el llamador entrega embedding/respuesta/citas YA
+      CALCULADOS, disciplina constitucional de nunca implementar un
+      componente probabilístico real; no hay ningún generador real que
+      llamar). Las funciones puras de `dominio.py` NUNCA llaman estos
+      puertos directamente (mismo patrón que `a_sugerencia_saliente` en
+      clasificación/enriquecimiento, que nunca invoca `EnviadorDeSugerencias`
+      — quien lo hace es `api.py`): `dominio.py` recibe ya resueltos los
+      candidatos que devolvió `IndiceLexico`/`IndiceVectorial` (T-55 los
+      invoca) y aplica sobre ellos la lógica pura (filtrado de permiso,
+      construcción de evento). Dos adaptadores intercambiables por puerto
+      real en T-55 (EnMemoria + uno real), sin nombrar motores ni modelos
+      concretos (el `[CLARIFICAR]` de motor/modelo sigue abierto).
+      **(2) P-08/RF-IB-009 — el evento de acceso NUNCA es una operación
+      separada.** Nada de `emitir_evento_de_acceso(...)` como función
+      aparte que un test pueda invocar aislada (eso permitiría que una
+      consulta real no genere el evento y el test igual pasara — mismo
+      defecto de raíz que los dos VETOs sobre `evaluar_texto`, aplicado
+      esta vez a "quién genera el evento" en vez de "quién produce la
+      salida"). Cada operación de consulta real (`buscar`,
+      `recuperar_por_relevancia`, `responder_qa`) devuelve tanto su
+      resultado como su propio `EventoAuditoria` de acceso, en la MISMA
+      llamada — el test de aceptación de RF-IB-009 ejerce `buscar`/etc.
+      directamente y observa que el evento sale de ahí, nunca de un
+      guardia aparte.
+      Resto del diseño (sin cambios respecto a la siembra original):
+      `EstadoEntradaDeIndice` (`PENDIENTE_DE_INDEXACION`, `INDEXADA` — spec
+      §3, sin estado de eliminación en esta etapa); `recibir_documento_
+      materializado(...)` única puerta de entrada (documento_id,
+      clasificación/metadatos YA MATERIALIZADOS, texto extraído — todo
+      declarado por el llamador, sortea el `[CLARIFICAR]` de correlación de
+      la spec §8); `indexar(...)` construye la `EntradaDeIndice` en
+      `INDEXADA` (RF-IB-001/002) con campo de embedding FICTICIO
+      (RF-IB-003, ya calculado); `actualizar_entrada(...)` (RF-IB-004);
+      `aplicar_permisos_y_construir_evento(candidatos, documentos_
+      permitidos, actor, fecha)` pura, REAL (RF-IB-008 — filtra la lista
+      recibida, nunca expone lo no permitido, ni siquiera como cita) —
+      compartida por `buscar`/`recuperar_por_relevancia`/`responder_qa`
+      para que RNF-IB-003 (consistencia de permisos entre las tres rutas)
+      sea estructural, no una coincidencia de implementación repetida tres
+      veces; `responder_qa(...)` única operación de evaluación FICTICIO que
+      bifurca entre `RespuestaQA` (con al menos una cita, RF-IB-007) y
+      `NegativaApropiada` (RF-IB-010), con las citas ya filtradas por
+      permiso antes de bifurcar. `uv run --directory
+      contexts/indexacion-busqueda pytest` agregado a `test.sh` en este
+      mismo commit. TDD contra cada Dado/Cuando/Entonces de RF-IB-001..010,
+      incluidas permiso denegado (RF-IB-008) y negativa apropiada
+      (RF-IB-010) ejercidas a través de la operación real, y el evento de
+      acceso observado como salida de esa misma operación, no de un
+      guardia aislado.
 - [ ] T-55 RF-IB-001..010 — Servicio HTTP (FastAPI) + persistencia
       (SQLAlchemy + Postgres) para Indexación y Búsqueda, mismo patrón que
       T-34/T-41 (Normalización/Extracción) — SÍ con Postgres propio, a
       diferencia de clasificación/enriquecimiento/validación-humana.
       `guardar_con_evento(entrada, evento)` en una única transacción con
       rollback explícito (T-37). `GET /eventos-auditoria` desde el
-      principio (P-08). Puerto `VerificadorDePermisos` (P-03, dominio.py) +
-      implementación HTTP real contra `POST /autorizacion` de
-      seguridad-acceso (mismo patrón que `VerificadorDeAutorizacionHttp` en
-      extracción, T-41b) — la capa HTTP arma `documentos_permitidos` antes
-      de invocar `buscar`/`recuperar_por_relevancia`/`responder_qa` del
-      dominio (punto 4 arriba); variable de entorno
-      `SEGURIDAD_ACCESO_BASE_URL`. Cualquier ruta GET literal (p. ej.
-      `/entradas/pendientes-de-indexacion` si aplica) declarada ANTES que su
-      ruta hermana con `{id}` (T-39/T-41). `specs/spec-infra-servicios.md`
-      §14 (nueva) con el contrato HTTP mínimo completo.
+      principio (P-08). Implementaciones reales de los puertos declarados
+      en T-54: `IndiceLexicoEnMemoria`/`IndiceLexicoSql` (búsqueda por
+      término sobre el texto ya persistido — Postgres ya es la base
+      decidida desde F1.D1, no es un motor nuevo inventado) e
+      `IndiceVectorialEnMemoria`/`IndiceVectorialSql` (almacena/recupera el
+      campo de embedding FICTICIO, sin similitud real — RF-IB-006 sigue
+      recibiendo el orden ya calculado del llamador); `api.py` invoca estos
+      puertos para obtener candidatos y se los pasa a las funciones puras
+      de `dominio.py` (T-54, punto 1). Puerto `VerificadorDePermisos`
+      (P-03, dominio.py) + implementación HTTP real contra `POST
+      /autorizacion` de seguridad-acceso (mismo patrón que
+      `VerificadorDeAutorizacionHttp` en extracción, T-41b) — la capa HTTP
+      arma `documentos_permitidos` antes de invocar las funciones puras del
+      dominio; variable de entorno `SEGURIDAD_ACCESO_BASE_URL`. Cualquier
+      ruta GET literal (p. ej. `/entradas/pendientes-de-indexacion` si
+      aplica) declarada ANTES que su ruta hermana con `{id}` (T-39/T-41).
+      `specs/spec-infra-servicios.md` §14 (nueva) con el contrato HTTP
+      mínimo completo.
 - [ ] T-56 Dockerfile real de indexacion-busqueda + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que
       normalizacion/extraccion (T-35/T-42) — CON Postgres propio (a
