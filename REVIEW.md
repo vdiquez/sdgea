@@ -1,30 +1,50 @@
-# Revisión de `3709352bee565141ad516d78abd3b50f2de41f4d`
+OK: T-55 corrige los dos motivos del VETO anterior; sin violaciones de P-01, P-03 ni P-08.
 
-**Veredicto: OK.** El cambio limita su alcance al orquestador de desarrollo: marca de forma determinista el commit que Codex acaba de producir en modo de autorrevisión y conserva la revisión adversarial posterior.
+# Revisión de `3793486bf8f5214f206eb20270d2c4bea0515190`
 
-## Contra el contexto correspondiente
+## Alcance y contexto
 
-El contexto aplicable es `plan-ejecucion-agentica.md` §§3–5 y la operación de `orquestador.sh`: Codex implementa solo durante el rate-limit sostenido de Claude, después se autorrevisa y un `VETO:` sigue deteniendo el loop. `cmd_loop` mide el número de commits antes de `run_codex`; solo llama a `garantizar_marca_autorrevision()` cuando aumentó. La función añade la marca en `STATE.md` y usa `git commit --amend`, por lo que la autorrevisión recibe el commit material —no un commit auxiliar— con la marca requerida.
+El commit modifica únicamente `TODO.md`: ajusta el diseño pendiente de T-55
+para el contexto [Indexación y Búsqueda](specs/005-indexacion-busqueda/spec.md).
+No incorpora código ni pruebas ejecutables, ni modifica archivos bajo `specs/`.
 
-## Principios revisados
+Por tanto, no aplica el control reforzado de referencias normativas y umbrales
+por ruta modificada. De todas formas, el diff no añade Acuerdos, Leyes,
+Decretos, ISO ni valores numéricos: RNF-IB-002, los cuatro componentes y el
+`[CLARIFICAR]` de motores/modelos ya existen en la spec. Postgres es parte del
+stack ya decidido en STATE.md; las URL de configuración no son una nueva
+referencia normativa ni un umbral.
 
-- **P-01 — conforme.** No cambia ningún contexto probabilístico ni el estado de documentos o expedientes. El cambio actúa exclusivamente sobre metadatos de coordinación de Git/`STATE.md`.
-- **P-03 — conforme.** No se introduce consumo de almacenamiento, OCR, embeddings, inferencia, índices ni otra capacidad externa del producto. Las invocaciones de Git y del sistema local son mecanismos del orquestador, no capacidades críticas del SGDEA.
-- **P-08 — conforme.** No se añade una transición de estado de documento o expediente. La marca de coordinación queda trazada en el commit amendado y en `STATE.md`; no sustituye ni altera la bitácora de auditoría del producto.
+## Principios constitucionales
 
-## Honestidad de las pruebas
+- **P-01 — conforme.** T-55 mantiene embeddings, orden semántico, respuesta y
+  citas como valores ficticios ya entregados por el llamador. Sus adaptadores
+  gestionado/autoalojado no calculan nada probabilístico y fallan de forma
+  explícita si se invocan; no hay una ruta planificada que escriba el estado de
+  Records/Custodia sin una decisión humana.
+- **P-03 — conforme.** La tarea ahora ordena una interfaz y dos variantes de
+  despliegue reales e intercambiables para índice léxico, índice vectorial,
+  generador de embeddings y modelo de lenguaje: autoalojada sin salida de red
+  y gestionada mediante endpoint configurable. Además, Seguridad y Acceso se
+  consume mediante `VerificadorDePermisos`, no directamente desde el dominio.
+  El hecho de que el compose actual use por defecto la variante autoalojada no
+  elimina la segunda implementación ni contradice la paridad exigida.
+- **P-08 — conforme.** Cada ruta de consulta debe guardar su evento de acceso
+  en la bitácora append-only, de forma atómica y antes de responder. Se
+  distingue correctamente de `guardar_con_evento` para indexación/actualización
+  y se exige exponer ambos tipos mediante `GET /eventos-auditoria`.
 
-`test-marca-autorrevision.sh` no está amañado: crea un repositorio Git aislado, ejecuta la función real extraída de `orquestador.sh` y comprueba efectos observables relevantes: el número de commits no aumenta, HEAD cambia pero conserva el padre, el mensaje anterior permanece y adquiere `AUTORREVISION`, `STATE.md` recibe la marca y el commit amendado incluye ese archivo. El fallo habría detectado una omisión de la marca, un commit adicional o el amend del commit equivocado. `test.sh` la integra en el árbitro del loop.
+## Honestidad de pruebas
 
-Queda como cobertura acotada —no hallazgo bloqueante— que esta prueba no simula `cmd_loop` completo; la guarda que condiciona la llamada se verificó por inspección y está suficientemente directa.
+No hay tests nuevos en este commit, por lo que no existe una prueba ejecutable
+que pueda estar amañada. La especificación de TDD corregida es honesta respecto
+a RF-IB-009: debe ejecutar la consulta HTTP real y luego consultar la bitácora;
+no permite satisfacer el criterio inspeccionando solo un evento devuelto ni una
+función auxiliar aislada. Al implementar T-55 habrá que comprobar que la prueba
+cubra las rutas efectivamente declaradas y que la persistencia sea transaccional.
 
-## Ejecución de verificación
+## Dictamen
 
-- `bash -n orquestador.sh test-marca-autorrevision.sh test.sh`: correcto.
-- `bash test-marca-autorrevision.sh`: todos los casos en verde.
-- `bash test.sh`: ambos tests Bash pasan; Gradle no pudo continuar porque el sandbox no permite crear `C:\\.gradle\\wrapper\\dists\\...\\gradle-9.7.0-bin.zip.lck`. No se reporta como suite completa verde.
-- `git diff --check HEAD^ HEAD`: sin errores.
-
-## Chequeo adicional de specs
-
-El commit no modifica archivos bajo `specs/`; por ello no hay referencias normativas ni umbrales nuevos que auditar.
+La modificación resuelve los dos hallazgos bloqueantes de `e356158`: ya no
+confunde dobles en memoria con variantes de despliegue y ya no confunde devolver
+un evento con emitirlo persistentemente. Sin VETO.
