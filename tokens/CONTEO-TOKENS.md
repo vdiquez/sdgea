@@ -4,7 +4,7 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 
 **Modo** = rol jugado en esa invocación, no el nombre del agente: Claude Code siempre implementa ("desarrollador"); Codex revisa ("validador") salvo cuando el tag de la invocación trae `-lead` (Codex implementó porque Claude estaba en rate limit sostenido, ver `CODEX_LEAD_PROMPT` en `orquestador.sh`) — ahí también cuenta como "desarrollador". Ver el docstring del script para la definición exacta de `total_tokens` en cada CLI (los buckets NO son comparables 1:1 entre Claude y Codex — ver nota al pie).
 
-**Total general (todas las invocaciones registradas): 74.180.445 tokens.**
+**Total general (todas las invocaciones registradas): 74.513.597 tokens.**
 
 **Nota histórica:** hasta el 2026-08-29 los tags `iterN` de `orquestador.sh` se reiniciaban en cada corrida y colisionaban entre sesiones — la corrida de T-48 sobrescribió en disco los logs originales `iter1`/`iter2` del corte vertical T-01..T-22. Corregido ese mismo día (`run_id` único por invocación, ver el docstring del script). Los totales de aquí reflejan lo que sobrevive en `.loop/logs/` hoy, no necesariamente el histórico completo de corridas anteriores a la corrección — por eso este archivo se comitea como snapshot en vez de regenerarse solo desde disco.
 
@@ -14,7 +14,7 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | claude | desarrollador | 36 | 0 | 928 | 2.560.304 | 50.224.849 | 323.915 | 53.109.996 | $23.8103 |
 | codex | desarrollador | 1 | 0 | 822.814 | n/a | n/a | 7.112 | 829.926 | — |
-| codex | validador | 45 | 5 | 20.069.924 | n/a | n/a | 170.599 | 20.240.523 | — |
+| codex | validador | 46 | 5 | 20.398.989 | n/a | n/a | 174.686 | 20.573.675 | — |
 
 `n/a` en Codex: `cached_input_tokens` es un subconjunto informativo de `input_tokens` (no un bucket aditivo), así que no aplica una columna de cache separada aditiva como en Claude — ver docstring.
 
@@ -90,6 +90,7 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 | codex-iter9-1.log | codex | validador | iter9-1 | 310.444 | 2.743 | 313.187 | — |
 | codex-review-acumulado.json | codex | validador | review-acumulado | 2.239.220 | 12.302 | 2.251.522 | — |
 | codex-review-audit-ratelimit-1.log | codex | validador | review-audit-ratelimit-1 | 289.800 | 2.698 | 292.498 | — |
+| codex-review-garantizar-marca-1.log | codex | validador | review-garantizar-marca-1 | 329.065 | 4.087 | 333.152 | — |
 | codex-review-runid-fix-1.log | codex | validador | review-runid-fix-1 | 312.399 | 3.207 | 315.606 | — |
 | codex-review-runid-fix2-1.log | codex | validador | review-runid-fix2-1 | 430.274 | 4.015 | 434.289 | — |
 | codex-review-seed-enriquecimiento-1.log | codex | validador | review-seed-enriquecimiento-1 | 351.050 | 3.256 | 354.306 | — |
