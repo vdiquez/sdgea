@@ -3568,6 +3568,43 @@
               }
             }
           ]
+        },
+        {
+          "name": "81 Consultar bitacora de auditoria en records-custodia -- sugerencias de Enriquecimiento atribuibles (P-08)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/eventos-auditoria",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "eventos-auditoria"
+              ]
+            },
+            "description": "Observacion de Codex sobre T-52 (ver REVIEW.md/STATE.md): la coleccion verificaba que las sugerencias de Enriquecimiento llegan a records-custodia (peticion 78) pero nunca comprobaba el evento de auditoria de esa recepcion para este flujo -- P-08 ya esta cubierto por codigo/tests de records-custodia (T-20), esta peticion cierra la misma brecha de evidencia end-to-end que la 75 cerro para Clasificacion (T-48)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, la sugerencia de metadato de Enriquecimiento queda en la bitacora, atribuible\", () => {",
+                  "  const eventos = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  const recibidas = eventos.filter((e) => e.tipo === \"SUGERENCIA_RECIBIDA\" && e.actor === \"enriquecedor-ficticio-v1\");",
+                  "  pm.expect(recibidas.length).to.be.above(0);",
+                  "  recibidas.forEach((e) => {",
+                  "    pm.expect(e.actor).to.be.a(\"string\").and.not.be.empty;",
+                  "    pm.expect(e.fecha).to.be.a(\"string\").and.not.be.empty;",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

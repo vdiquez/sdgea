@@ -78,7 +78,16 @@ propuesto FICTICIO y un campo marcado "no encontrado" en la misma llamada
 llegan distinguibles por campo (RF-EN-002..006/008) consultando
 `GET /documentos/{id}/sugerencias` en records-custodia; marcar un texto
 "no enriquecible" con razón (RF-EN-009) y verificar que el conteo de
-sugerencias en records-custodia **no cambia**.
+sugerencias en records-custodia **no cambia**; y la petición 81 —
+observación de Codex sobre T-52 — consulta `GET /eventos-auditoria` y
+verifica que la sugerencia de metadato queda en la bitácora, atribuible a
+`enriquecedor-ficticio-v1` (mismo cierre que la petición 75 le dio a
+Clasificación en T-48). **Limitación real documentada, no cerrada por
+T-52** (`specs/004-enriquecimiento/spec.md` §8): la forma genérica de
+`Sugerencia` en records-custodia no tiene un campo dedicado para "forma
+original" — Enriquecimiento la calcula y expone a nivel de dominio
+(RF-EN-003), pero se pierde al traducir a la forma saliente; no es
+consultable desde records-custodia, solo desde el propio Enriquecimiento.
 
 ## Levantar el stack (con puertos locales para Postman)
 
@@ -173,6 +182,10 @@ primera corrida — incluido que `evaluar_texto()` bifurca correctamente
 entre sugerencia (valor propuesto + campo no encontrado, distinguibles por
 campo) y `MarcaNoEnriquecible` (RF-EN-009, sin reenviar nada a
 records-custodia) desde el mismo endpoint `POST /enriquecimientos`.
+Reverificado de nuevo el mismo día (petición 81 añadida tras observación de
+Codex sobre la primera revisión de T-52 — P-08 no se verificaba para el
+flujo de Enriquecimiento): 82/82 peticiones, 127/127 aserciones, dos
+corridas seguidas sin fallos.
 
 ## Bajar el stack
 

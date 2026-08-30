@@ -878,7 +878,7 @@ deben repetirse aquí** (ver STATE.md para el detalle completo de cada una):
       `specs/spec-infra-servicios.md` §9 (trazabilidad) y §13 (nota de
       Dockerfile) actualizadas.
 - [x] T-52 Colección Postman con el ciclo completo de Enriquecimiento
-      (carpeta "9. Enriquecimiento", peticiones 76-80), mismo patrón que
+      (carpeta "9. Enriquecimiento", peticiones 76-81), mismo patrón que
       T-47 (Clasificación): flujo end-to-end real de dos servicios —
       custodiar documento en records-custodia → enriquecer con un valor
       propuesto FICTICIO y un campo marcado "no encontrado" en la misma
@@ -893,8 +893,42 @@ deben repetirse aquí** (ver STATE.md para el detalle completo de cada una):
       (50/58 endpoints cubiertos). `specs/spec-infra-servicios.md` §10
       actualizada por el loop durante T-51 (Enriquecimiento deja de
       aparecer como servicio que no existe para RF-VH-001).
+      **Revisión de Codex sobre este commit: "OK CON OBSERVACIONES" (no
+      VETO), dos hallazgos reales corregidos en el mismo día**: (1) P-08 no
+      se verificaba para el flujo de Enriquecimiento — petición nueva 81
+      (`GET /eventos-auditoria`, mismo cierre que la 75 le dio a
+      Clasificación en T-48), reverificada: **82/82 peticiones, 127/127
+      aserciones**, dos corridas seguidas sin fallos. (2) La frase "completo
+      de punta a punta" se pasaba de la evidencia real: la forma genérica de
+      `Sugerencia` en records-custodia no tiene campo para "forma original"
+      (RF-EN-003) — Enriquecimiento la calcula y expone a nivel de dominio,
+      pero se pierde al traducir a la salida; documentado como brecha real
+      (no `[CLARIFICAR]` de negocio) en `specs/004-enriquecimiento/spec.md`
+      §8, mismo tratamiento que la brecha de `DocumentoDeArchivo`/metadatos
+      ya documentada ahí.
       **Con esto, Enriquecimiento (specs/004-enriquecimiento/spec.md) queda
-      completo de punta a punta: dominio (T-49, dos rondas de VETO real de
-      Codex sobre RF-EN-009, ver STATE.md) → servicio HTTP (T-50) →
-      Dockerfile/wiring (T-51) → Postman/Newman (T-52) — octavo bounded
+      completo de punta a punta en el sentido del corte vertical del
+      proyecto (dominio → servicio HTTP → Dockerfile/wiring → Postman/
+      Newman verificado) — no en el sentido de que todo RF esté
+      perfectamente cerrado (ver la brecha de "forma original" arriba):
+      dominio (T-49, dos rondas de VETO real de Codex sobre RF-EN-009, ver
+      STATE.md) → servicio HTTP (T-50) → Dockerfile/wiring (T-51) →
+      Postman/Newman (T-52) — octavo bounded
       context del proyecto con el mismo ciclo completo.**
+- [ ] T-53 Completar la trazabilidad E2E de Enriquecimiento contra
+      `specs/004-enriquecimiento/spec.md` RF-EN-003/004/010 y P-08. Añadida
+      por Codex durante la revisión de T-52; **la mitad de P-08 ya quedó
+      cerrada en el mismo commit de T-52** (petición 81, `GET
+      /eventos-auditoria`, verificada con Docker/Newman real: 82/82
+      peticiones, 127/127 aserciones) — queda solo la parte de RF-EN-003/
+      004/010: preservar y exponer por sugerencia la forma original (además
+      de la normalizada, evidencia y confianza que ya viajan en
+      `contenidoPropuesto`/`evidencia`/`confianza`). Esto exige extender el
+      contrato compartido `Sugerencia`/`SugerenciaEntrante` de
+      records-custodia (T-08) con un campo nuevo — afecta también a
+      Clasificación, que usa el mismo contrato — así que no es un cambio
+      aislado de Enriquecimiento; documentado como brecha real (no
+      `[CLARIFICAR]`) en `specs/004-enriquecimiento/spec.md` §8. Ampliar
+      después la colección Postman para verificar la forma original tras
+      `GET /documentos/{id}/sugerencias`. No fijar campos obligatorios ni
+      umbrales: continúan `[CLARIFICAR]` en la spec.

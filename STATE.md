@@ -3,9 +3,12 @@ Fase: F3 — ocho bounded contexts completos de punta a punta (captura-ingesta,
 records-custodia, seguridad-acceso, validación humana, normalización,
 extracción, clasificación, enriquecimiento). T-49..T-52 (Enriquecimiento)
 cerradas (2026-08-29/30), incluida su verificación real con Docker/Newman —
-81/81 peticiones, 126/126 aserciones, dos corridas seguidas sin fallos. No
-queda ninguna tarea `- [ ]` ni `- [?]` abierta en TODO.md: solo falta
-Indexación y Búsqueda para completar los nueve contextos originales. Ver
+82/82 peticiones, 127/127 aserciones, dos corridas seguidas sin fallos (tras
+la petición 81 añadida por la observación de Codex sobre T-52). T-53
+(extender el contrato compartido de `Sugerencia` con la forma original,
+RF-EN-003/010) es la única tarea `- [ ]` abierta en TODO.md — no bloquea
+nada más; Indexación y Búsqueda sigue pendiente para completar los nueve
+contextos originales. Ver
 plan-ejecucion-agentica.md.
 
 Hecho:
@@ -2558,5 +2561,31 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   cubiertos). Stack bajado al terminar. T-52 marcada `- [x]` en TODO.md.
   **Con esto, Enriquecimiento queda completo de punta a punta (T-49..T-52)
   — octavo bounded context del proyecto con el ciclo íntegro dominio →
-  servicio HTTP → Dockerfile/wiring → Postman/Newman.** No queda ninguna
-  tarea `- [ ]` ni `- [?]` abierta en TODO.md.
+  servicio HTTP → Dockerfile/wiring → Postman/Newman.**
+
+- 2026-08-30 — Revisión de Codex sobre T-52 (`18c9e2d`): "OK CON
+  OBSERVACIONES" (no VETO), dos hallazgos reales corregidos el mismo día:
+  1. **P-08 no se verificaba para el flujo de Enriquecimiento** — la
+     colección probaba que la sugerencia de metadato llega a
+     records-custodia (petición 78) pero nunca consultaba
+     `GET /eventos-auditoria` para confirmar el evento `SUGERENCIA_RECIBIDA`
+     de ese flujo. Corregido: petición 81 nueva (mismo cierre que la 75 le
+     dio a Clasificación en T-48), reverificada con Docker/Newman real:
+     **82/82 peticiones, 127/127 aserciones**, dos corridas seguidas sin
+     fallos. `postman/README.md` actualizado.
+  2. **Encuadre impreciso**: la frase "completo de punta a punta" se pasaba
+     de la evidencia real — RF-EN-003 exige que un valor propuesto exponga
+     su forma original además de la normalizada, y eso es cierto a nivel de
+     dominio (probado), pero se pierde al cruzar hacia records-custodia: el
+     contrato genérico `Sugerencia`/`SugerenciaEntrante` (T-08, compartido
+     con Clasificación) solo tiene `contenidoPropuesto` — no hay campo para
+     la forma original. Documentado como brecha real (no `[CLARIFICAR]`,
+     mismo tratamiento que la brecha de `DocumentoDeArchivo`/metadatos ya
+     documentada) en `specs/004-enriquecimiento/spec.md` §8.
+  Codex también añadió **T-53** en `TODO.md` durante esa misma revisión
+  (tiene permiso explícito para eso en `CODEX_REVIEW_PROMPT`) pidiendo
+  cerrar ambos hallazgos; ajustado su texto para reflejar que la mitad de
+  P-08 ya quedó cerrada aquí — queda abierta solo la extensión del contrato
+  de `Sugerencia` (afecta también a Clasificación, no es un cambio aislado
+  de Enriquecimiento). **Queda T-53 como única tarea abierta `- [ ]` en
+  TODO.md.**
