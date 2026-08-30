@@ -3,6 +3,7 @@
 # --allowedTools lo autorice completo en modo no-contenido (ver TEST_BIN).
 set -euo pipefail
 bash test-run-id.sh
+bash test-marca-autorrevision.sh
 ./gradlew test --no-daemon
 uv run --directory eval-harness pytest
 uv run --directory contexts/normalizacion pytest

@@ -2617,3 +2617,40 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   `specs/spec-infra-servicios.md` §4/§13 y `specs/004-enriquecimiento/
   spec.md` §8 actualizadas (brecha cerrada, no queda como `[CLARIFICAR]`).
   **No queda ninguna tarea `- [ ]` ni `- [?]` abierta en TODO.md.**
+
+- 2026-08-30 — Ajuste de `orquestador.sh` pedido por Victor: evitar que un
+  VETO detenga el loop cuando Codex actúa como implementador Y validador de
+  la misma iteración (`CODEX_LEAD_PROMPT` + `CODEX_SELFREVIEW_PROMPT`), sin
+  apagar el control de calidad en sí. Decisión: no suprimir VETOs reales de
+  autorrevisión (eso quitaría la única red de seguridad cuando Claude no
+  está disponible) — en su lugar, eliminar la CAUSA del único VETO real que
+  ocurrió por este motivo hasta ahora (commit `2795ff3`, 2026-08-29): un
+  olvido de formato (falta la línea "AUTORREVISION: Codex (Claude no
+  disponible)" y la marca "PENDIENTE_AUDITORIA_CLAUDE" en STATE.md), no un
+  defecto de contenido.
+  `garantizar_marca_autorrevision()` (nueva, `orquestador.sh`): en vez de
+  pedirle a Codex que recuerde escribir ambos requisitos en prosa, el propio
+  orquestador los aplica de forma determinista sobre el commit que Codex
+  acaba de hacer — `git commit --amend` (no un commit nuevo aparte, para que
+  "el último commit" que la autorrevisión inspecciona siga siendo el commit
+  real de la tarea) añadiendo la línea al mensaje y la entrada a STATE.md.
+  Se invoca en `cmd_loop` justo después del commit de `CODEX_LEAD_PROMPT`,
+  con guarda explícita: si Codex no comiteó nada en esa iteración (p. ej.
+  encontró un `[CLARIFICAR]` y se detuvo en QUESTIONS.md), no hay ningún
+  commit que marcar y no se ejecuta el amend — evita amendar por error el
+  commit ajeno anterior.
+  `CODEX_LEAD_PROMPT`/`CODEX_SELFREVIEW_PROMPT` simplificados: ya no le
+  piden a Codex escribir ni verificar la línea/marca — el orquestador las
+  garantiza antes de invocarlo, así que esa clase específica de VETO ya no
+  puede volver a ocurrir. Un VETO real de autorrevisión sobre el CONTENIDO
+  (P-01/P-03/P-08, honestidad de pruebas, referencias inventadas) sigue
+  deteniendo el loop igual que siempre — eso no se tocó, es la red de
+  seguridad real.
+  TDD: `test-marca-autorrevision.sh` (nuevo, ~1s, wireado a `test.sh`)
+  ejerce la función real sobre un repo git aislado: confirma que amenda (no
+  crea un commit nuevo), que amenda el commit correcto sin tocar el
+  anterior, que el mensaje conserva el resumen original y añade la línea, y
+  que STATE.md queda marcado con la iteración correcta. Confirmado en rojo
+  rompiendo deliberadamente la constante `PENDIENTE_AUDITORIA_CLAUDE` en
+  `orquestador.sh` (el test lo detectó) antes de restaurarla y confirmar
+  verde. `./test.sh` completo del repo en verde.

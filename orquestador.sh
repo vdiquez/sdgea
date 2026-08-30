@@ -87,6 +87,34 @@ commit_count() { git rev-list --count HEAD 2>/dev/null || echo 0; }
 # de reloj. Ver test-run-id.sh para la prueba reproducible.
 nuevo_run_id() { echo "$(date +%Y%m%d-%H%M%S)-$$"; }
 
+# Garantiza, de forma determinista (sin depender de que Codex lo recuerde),
+# los dos requisitos que CODEX_LEAD_PROMPT le pide a Codex cuando actúa como
+# implementador por rate limit sostenido de Claude: la línea "AUTORREVISION:
+# Codex (Claude no disponible)" en el mensaje del commit y la entrada
+# "PENDIENTE_AUDITORIA_CLAUDE" en STATE.md. VETO real de Codex sobre el
+# commit `2795ff3` (2026-08-29, ver STATE.md): a Codex se le olvidó escribir
+# ambas cosas, su propia autorrevisión lo detectó y VETÓ, deteniendo el loop
+# entero para que un humano interviniera — un olvido de formato, no un
+# defecto de contenido, bastó para requerir intervención humana. En vez de
+# seguir pidiéndole a un LLM que recuerde una convención de texto en cada
+# corrida, el propio orquestador la aplica sobre el commit que Codex acaba
+# de hacer, ANTES de que se autorrevise: amend, no un commit nuevo aparte,
+# para que "el último commit" (lo que review/selfreview inspecciona) siga
+# siendo el commit real de la tarea, con ambos requisitos ya incluidos —
+# nunca más puede faltar ninguno de los dos porque ninguno depende de que un
+# agente lo recuerde. Ver test-marca-autorrevision.sh para la prueba
+# reproducible.
+garantizar_marca_autorrevision() { # garantizar_marca_autorrevision <iteración>
+  local iteracion="$1" mensaje_original
+  mensaje_original="$(git log -1 --format=%B)"
+  {
+    echo
+    echo "- $(date +%Y-%m-%d) — PENDIENTE_AUDITORIA_CLAUDE: este commit lo hizo Codex en modo autorrevisión (CODEX_LEAD_PROMPT) porque Claude estaba en rate limit sostenido durante la iteración $iteracion del loop. Claude debe auditarlo en su próxima corrida exitosa antes de tomar tarea nueva."
+  } >> STATE.md
+  git add STATE.md
+  git commit --amend --quiet -m "$(printf '%s\n\nAUTORREVISION: Codex (Claude no disponible)' "$mensaje_original")"
+}
+
 # ------------------------------------------------------- llamadas a los agentes
 # Claude Code headless. Captura session_id; ante rate limit hace backoff y
 # reanuda LA MISMA sesión con --resume, hasta RATE_LIMIT_HANDOFF_ATTEMPTS
@@ -241,14 +269,16 @@ auditoría), honestidad de los tests, y (si tocaste specs/) que ninguna referenc
 umbral es inventado. Si encuentras un problema, corrígelo antes de comitear — no comitees algo
 que tú mismo vetarías si lo revisaras de otro.
 Al terminar:
-4) Haz un commit atómico con mensaje "RF-XXX: <resumen>" / "spec: <resumen>" / "chore: ...", y
-   añade una línea "AUTORREVISION: Codex (Claude no disponible)". Puedes comitear specs/
-   directamente — SOLO .specify/memory/constitution.md (y su stub specs/00-constitution.md)
-   está bloqueado por el hook y requiere HUMAN=1.
-5) Marca la tarea "- [x]" en TODO.md y actualiza STATE.md: agrega la entrada de esta tarea
-   marcada explícitamente "PENDIENTE_AUDITORIA_CLAUDE" (para que Claude Code la audite cuando
-   su cuenta vuelva a estar disponible), con la misma información de siempre (decisiones
-   tomadas, siguiente paso).
+4) Haz un commit atómico con mensaje "RF-XXX: <resumen>" / "spec: <resumen>" / "chore: ...".
+   Puedes comitear specs/ directamente — SOLO .specify/memory/constitution.md (y su stub
+   specs/00-constitution.md) está bloqueado por el hook y requiere HUMAN=1. NO agregues tú la
+   línea "AUTORREVISION: ..." ni una marca de auditoría en STATE.md por esta razón — el
+   orquestador las agrega automáticamente sobre este mismo commit apenas termines
+   (garantizar_marca_autorrevision() en orquestador.sh), así que no dependen de que las
+   recuerdes.
+5) Marca la tarea "- [x]" en TODO.md y actualiza STATE.md con la información de siempre
+   (decisiones tomadas, siguiente paso) — la marca de auditoría de este commit la añade el
+   orquestador aparte, no la escribas tú.
 Si encuentras un [CLARIFICAR], una celda PENDIENTE o una ambigüedad real: NO la resuelvas
 inventando. Escribe la pregunta en QUESTIONS.md, marca la tarea "- [?]" y termina limpiamente.'
 
@@ -256,10 +286,12 @@ CODEX_SELFREVIEW_PROMPT="$CODEX_REVIEW_PROMPT"'
 
 Nota: este commit lo hiciste TÚ (Claude Code está en el límite de uso de su cuenta y no puede
 revisarte ahora) — no hay un segundo agente independiente revisándote en este momento, así que
-sé más exigente contigo mismo de lo habitual. Confirma además que el mensaje del commit incluye
-la línea "AUTORREVISION: Codex (Claude no disponible)" y que STATE.md deja la entrada de esta
-tarea marcada "PENDIENTE_AUDITORIA_CLAUDE". Si falta cualquiera de las dos, trátalo como hallazgo
-bloqueante y VETA hasta que se corrija.'
+sé más exigente contigo mismo de lo habitual sobre P-01/P-03/P-08 y la honestidad de las
+pruebas. La línea "AUTORREVISION: Codex (Claude no disponible)" en el mensaje y la marca
+"PENDIENTE_AUDITORIA_CLAUDE" en STATE.md ya las agregó el orquestador automáticamente sobre
+este mismo commit antes de invocarte (garantizar_marca_autorrevision() en orquestador.sh) — no
+verifiques ninguna de las dos ni las trates como hallazgo; céntrate en el contenido real del
+cambio.'
 
 PREFLIGHT_PROMPT='Fase F0 (pre-vuelo). Lee .specify/memory/constitution.md y luego aplica EN EL ÁRBOL DE
 TRABAJO, SIN COMITEAR, exactamente estas tres correcciones (Apéndice A del plan):
@@ -405,8 +437,17 @@ cmd_loop() {
       echo "Motivo: Claude falló (iter $i)" > BLOCKED.md; notify "Loop bloqueado: Claude falló."; return 1
     elif [ "$rc_claude" -eq 2 ]; then
       notify "Claude en límite de uso sostenido; Codex toma la iteración $i (implementa + autorrevisión)."
+      local commits_antes_de_lead; commits_antes_de_lead=$(commit_count)
       run_codex "$codex_lead_prompt" "${run_id}-iter$i-lead" || { echo "Motivo: Codex en modo autorrevisión falló (iter $i)" > BLOCKED.md; notify "Loop bloqueado: Codex en modo autorrevisión falló."; return 1; }
       codex_led=1
+      # Solo si Codex comiteó de verdad -- si no comiteó nada (p. ej. encontró un
+      # [CLARIFICAR] y se detuvo en QUESTIONS.md sin tocar código), no hay ningún
+      # commit que marcar y un amend aquí modificaría uno ajeno por error.
+      if [ "$(commit_count)" -gt "$commits_antes_de_lead" ]; then
+        garantizar_marca_autorrevision "$i"
+      else
+        log "Codex (modo autorrevisión) no comiteó nada en la iteración $i; nada que marcar."
+      fi
     fi
 
     if fitness; then
