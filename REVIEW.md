@@ -1,16 +1,22 @@
-OK: corrección de P-03 conforme; sin VETO.
+OK: sin violaciones P-01/P-03/P-08 ni referencias o umbrales inventados en `c7d225b2a0949b8be89430d2412acfd2ef972c97`.
 
-Commit revisado: `9f490e03767499bfa12a53fe497a03801c9964f6` — contexto `specs/005-indexacion-busqueda/spec.md` (RF-IB-003, RF-IB-004, RNF-IB-002; P-01/P-03/P-08).
+Commit revisado: `c7d225b` — corrección del aislamiento de persistencia de Indexación y Búsqueda, contra `specs/005-indexacion-busqueda/spec.md` y `specs/spec-infra-servicios.md` §2.
 
-Dictamen
+Hallazgo y conformidad
 
-- P-01: conforme. El cambio no incorpora inferencia, embeddings ni recuperación probabilística reales. Conserva el embedding ya entregado por el llamador y no escribe estado de Records/Custodia ni materializa sugerencias.
-- P-03: conforme. `AlmacenDeEntradas` e `IndiceLexicoAutoalojado` ya no conocen `VectorDeEntradaEntity`; el único ensamblaje de una entrada con su embedding está en `_con_embedding`, capa de orquestación que depende de `IndiceVectorial`. `IndiceVectorialAutoalojado` es ahora el único adaptador que accede a su propia tabla, y `IndiceVectorialGestionado` satisface el mismo puerto HTTP. No queda consumo directo del detalle de la variante autoalojada fuera de su adaptador.
-- P-08: conforme. La actualización sigue produciendo `ENTRADA_ACTUALIZADA`; `guardar_con_evento` persiste transición y evento en una transacción con rollback. Las consultas modificadas mantienen su evento de acceso append-only antes de responder; no se añadió una transición sin auditoría.
-- Tests: honestos respecto del cambio. La prueba de dominio verifica las invocaciones reales a ambos puertos al rectificar texto/embedding; la de API realiza una búsqueda posterior e independiente para comprobar que el embedding actualizado se recupera desde el puerto, y las pruebas de persistencia usan SQLAlchemy/SQLite real. No se limitan a inspeccionar el objeto de retorno de la actualización. La cobertura de la variante gestionada aún prueba su contrato HTTP de forma aislada, no el flujo API completo con esa variante inyectada; es una mejora de cobertura recomendable, pero no encubre ni contradice el criterio implementado.
-- `specs/` no fue modificado; no aplica el control adicional de referencias normativas ni umbrales.
+- La corrección es pertinente y suficiente para este contexto: las cuatro entidades pasan a `ib_entradas_de_indice`, `ib_indices_vectoriales`, `ib_eventos_auditoria` e `ib_eventos_de_acceso`. La búsqueda global de `__tablename__` confirma que ninguno de esos nombres es usado por otro contexto. Así, este servicio ya no lee ni escribe las tablas genéricas compartidas que originaron el veto anterior.
+- P-01: conforme. El cambio solo renombra tablas; no introduce inferencia ni permite que una salida probabilística escriba Records/Custodia. El contrato sigue recibiendo únicamente documentos materializados tras decisión humana.
+- P-03: conforme. No hay consumo directo nuevo de capacidades externas ni cambio de cableado: `IndiceLexico`, `IndiceVectorial` y `VerificadorDePermisos` continúan siendo puertos; las variantes autoalojadas siguen detrás de ellos.
+- P-08: conforme. `guardar_con_evento` conserva la escritura atómica de cada transición y `guardar_evento_de_acceso` conserva el anexo del evento de consulta. Al usar tablas exclusivas de este contexto, `GET /eventos-auditoria` ya no puede mezclar la bitácora de otros bounded contexts por esa colisión de nombres.
 
-Verificación ejecutada
+Honestidad de pruebas
 
-- `UV_CACHE_DIR=<temporal> uv run --directory contexts/indexacion-busqueda pytest`: 49 passed.
-- `bash ./test.sh`: pasaron ambos checks de scripts; la suite no alcanzó Gradle porque el wrapper intentó descargar Gradle 9.7.0 y el sandbox bloqueó la conexión (`Permission denied: getsockopt`). No hubo fallo atribuible al cambio revisado.
+- La prueba nueva no está amañada: importa las cuatro entidades realmente usadas por SQLAlchemy y falla si se restituye cualquiera de los nombres genéricos. Es una guarda de regresión directa para la modificación efectuada.
+- Su alcance es estructural: prueba el mapeo ORM, no levanta los otros servicios ni siembra una tabla ajena para demostrar el aislamiento completo del endpoint. Eso no invalida el criterio de este commit; la verificación integrada queda documentada en `STATE.md`/`TODO.md`. No pude repetirla porque el daemon Docker no es accesible en este entorno (`docker_engine: Access is denied`).
+- Las pruebas preexistentes relevantes sí ejercitan los criterios: transiciones con evento en la misma transacción, rollback si falla el anexo, persistencia posterior del evento de acceso y lectura por API. No hay dobles que oculten esas escrituras; usan SQLite/SQLAlchemy real para el adaptador autoalojado.
+
+Verificaciones ejecutadas
+
+- `UV_CACHE_DIR=<temporal> uv run --directory contexts/indexacion-busqueda pytest`: 50 passed.
+- `git diff HEAD^ HEAD --check`: sin errores de whitespace.
+- El commit no modifica archivos bajo `specs/`; por tanto no aplica el control adicional de referencias normativas o umbrales nuevos. No añadí tareas a `TODO.md`.
