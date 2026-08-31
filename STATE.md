@@ -2838,3 +2838,13 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Siguiente paso: T-56 (Dockerfile real de indexacion-busqueda + wiring en
   docker-compose.{saas,onprem,local-ports}.yml, con Postgres) es la próxima
   tarea abierta en TODO.md.
+
+- 2026-08-30 — Codex revisó el commit `9f490e0` (corrección del QUINTO VETO)
+  y confirmó "OK: corrección de P-03 conforme; sin VETO." Único punto de
+  mejora no bloqueante que señaló: la variante `IndiceVectorialGestionado`
+  solo tiene cobertura de contrato HTTP aislada (`test_integracion.py`), no
+  un flujo API completo con esa variante inyectada — queda anotado aquí
+  como posible mejora de cobertura futura, no como tarea pendiente (no hay
+  ningún servicio gestionado real desplegado en este proyecto todavía).
+  Con esto, T-54/T-55 quedan cerradas sin VETO pendiente. Siguiente paso:
+  T-56 (Dockerfile + wiring en docker-compose, con Postgres).
