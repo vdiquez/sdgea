@@ -31,9 +31,13 @@ class Base(DeclarativeBase):
 
 
 # specs/spec-infra-servicios.md §14: "EntradaDeIndice -> tabla
-# entradas_de_indice". `metadatos`/`embedding` se serializan a JSON en
-# columnas de texto, mismo criterio que `inventario` en captura-ingesta /
-# `evidencia` en records-custodia.
+# entradas_de_indice". `metadatos` se serializa a JSON en columna de texto,
+# mismo criterio que `inventario` en captura-ingesta / `evidencia` en
+# records-custodia. SIN columna de embedding a propósito (VETO real de Codex
+# sobre 5a9f822, ver STATE.md): el vector vive únicamente en
+# `indices_vectoriales`, detrás de `IndiceVectorialAutoalojado` -- guardarlo
+# también aquí sería la misma "ruta directa, no detrás de IndiceVectorial"
+# que Codex vetó.
 class EntradaDeIndiceEntity(Base):
     __tablename__ = "entradas_de_indice"
 
@@ -42,8 +46,20 @@ class EntradaDeIndiceEntity(Base):
     estado: Mapped[str] = mapped_column(String, nullable=False)
     texto_extraido: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadatos_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
-    embedding_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     fecha_indexacion: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# P-03 (VETO real de Codex sobre 5a9f822, ver STATE.md): tabla propia para
+# el vector -- antes vivía en `entradas_de_indice.embedding_json`, escrito
+# por `AlmacenDeEntradas` directamente, y `IndiceVectorialAutoalojado.
+# indexar()` era un `pass`: la capacidad nunca hacía trabajo real, y
+# "recuperar por similitud semántica" (RF-IB-003) no tenía ninguna operación
+# de lectura detrás del puerto. Ahora el vector SOLO vive aquí.
+class VectorDeEntradaEntity(Base):
+    __tablename__ = "indices_vectoriales"
+
+    entrada_id: Mapped[str] = mapped_column(String, primary_key=True)
+    embedding_json: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 # P-08: bitácora de solo anexado para transiciones de EntradaDeIndice
@@ -83,19 +99,22 @@ def _entrada_a_fila(entrada: EntradaDeIndice) -> EntradaDeIndiceEntity:
         estado=entrada.estado.value,
         texto_extraido=entrada.texto_extraido,
         metadatos_json=json.dumps(entrada.metadatos),
-        embedding_json=json.dumps(entrada.embedding) if entrada.embedding is not None else None,
         fecha_indexacion=entrada.fecha_indexacion,
     )
 
 
-def _fila_a_entrada(fila: EntradaDeIndiceEntity) -> EntradaDeIndice:
+# `embedding` ya no viene de esta fila (ver VectorDeEntradaEntity) -- lo
+# completa `AlmacenDeEntradas` con una consulta aparte a esa tabla, mismo
+# criterio de "el dueño del dato es el puerto P-03, no el agregado principal"
+# que motivó separar `indices_vectoriales`.
+def _fila_a_entrada(fila: EntradaDeIndiceEntity, embedding: list[float] | None = None) -> EntradaDeIndice:
     return EntradaDeIndice(
         id=fila.id,
         documento_id=fila.documento_id,
         estado=EstadoEntradaDeIndice(fila.estado),
         texto_extraido=fila.texto_extraido,
         metadatos=json.loads(fila.metadatos_json),
-        embedding=json.loads(fila.embedding_json) if fila.embedding_json is not None else None,
+        embedding=embedding,
         fecha_indexacion=fila.fecha_indexacion,
     )
 
@@ -120,6 +139,15 @@ def _evento_acceso_a_fila(evento: EventoDeAcceso) -> EventoDeAccesoEntity:
     return EventoDeAccesoEntity(
         actor=evento.actor, fecha=evento.fecha, tipo=evento.tipo, documentos_accedidos_json=json.dumps(list(evento.documentos_accedidos))
     )
+
+
+# El embedding se lee desde `indices_vectoriales` (`IndiceVectorial` es su
+# único dueño, ver VETO real de Codex sobre 5a9f822 en STATE.md) -- función
+# de módulo porque tanto `AlmacenDeEntradas` como `IndiceLexicoAutoalojado`
+# necesitan completar el `EntradaDeIndice` que devuelven con su embedding.
+def _embedding_de(session: Session, entrada_id: str) -> list[float] | None:
+    fila = session.get(VectorDeEntradaEntity, entrada_id)
+    return json.loads(fila.embedding_json) if fila else None
 
 
 def _fila_a_evento_acceso(fila: EventoDeAccesoEntity) -> EventoDeAcceso:
@@ -150,7 +178,7 @@ class AlmacenDeEntradas:
 
     def obtener(self, id: str) -> EntradaDeIndice | None:
         fila = self._session.get(EntradaDeIndiceEntity, id)
-        return _fila_a_entrada(fila) if fila else None
+        return _fila_a_entrada(fila, _embedding_de(self._session, id)) if fila else None
 
     def todas_indexadas(self) -> list[EntradaDeIndice]:
         filas = (
@@ -160,7 +188,7 @@ class AlmacenDeEntradas:
             .scalars()
             .all()
         )
-        return [_fila_a_entrada(fila) for fila in filas]
+        return [_fila_a_entrada(fila, _embedding_de(self._session, fila.id)) for fila in filas]
 
     def eventos_de_auditoria(self) -> list[EventoAuditoria]:
         filas = self._session.execute(select(EventoAuditoriaEntity).order_by(EventoAuditoriaEntity.id)).scalars().all()
@@ -194,11 +222,15 @@ class IndiceLexicoAutoalojado(IndiceLexico):
         self._session = session
 
     def indexar(self, entrada_id: str, contenido: str) -> None:
-        # El contenido ya queda persistido por AlmacenDeEntradas.guardar_con_evento
-        # (mismo `commit` que la transición de indexación) -- este método no
-        # hace una segunda escritura duplicada; existe para completar el seam
-        # P-03 (la variante gestionada SÍ necesitaría enviar el contenido a un
-        # servicio externo aparte, ver IndiceLexicoGestionado en integracion.py).
+        # El texto ya queda persistido por AlmacenDeEntradas.guardar_con_evento
+        # (mismo `commit` que la transición de indexación, misma tabla que
+        # `buscar()` consulta abajo) -- a diferencia del caso de
+        # IndiceVectorial (VETO real de Codex sobre 5a9f822, ver STATE.md),
+        # aquí SÍ hay una única fuente de verdad real y consultable: no se
+        # trata de "escribir en otro lado" sino de que la indexación léxica y
+        # el agregado principal comparten la misma columna a esta escala de
+        # referencia. `buscar()` demuestra la lectura real; no hace falta una
+        # segunda escritura duplicada para que la capacidad sea genuina.
         pass
 
     def buscar(self, termino: str) -> list[EntradaDeIndice]:
@@ -213,18 +245,29 @@ class IndiceLexicoAutoalojado(IndiceLexico):
             .scalars()
             .all()
         )
-        return [_fila_a_entrada(fila) for fila in filas]
+        return [_fila_a_entrada(fila, _embedding_de(self._session, fila.id)) for fila in filas]
 
 
-# P-03: implementación AUTOALOJADA real de `IndiceVectorial` -- el embedding
-# FICTICIO ya queda persistido por AlmacenDeEntradas (misma fila), este
-# adaptador solo completa el seam (la variante gestionada sí reenviaría el
-# vector a un servicio externo). RF-IB-006 (similitud real) sigue sin
+# P-03 (VETO real de Codex sobre 5a9f822, ver STATE.md): implementación
+# AUTOALOJADA real de `IndiceVectorial`, con almacenamiento y lectura
+# propios en `indices_vectoriales` -- ya no un `pass` que dejaba el embedding
+# persistiéndose por otra ruta. `indexar()` hace `session.add(...)` SIN
+# commit propio: comparte la misma `Session` que `AlmacenDeEntradas`
+# (inyectada desde la misma petición HTTP en api.py), así que la fila queda
+# en la MISMA transacción que confirma `guardar_con_evento()` después --
+# atómico con la entrada y su evento, sin necesitar un commit propio que
+# rompería esa atomicidad. RF-IB-006 (similitud real) sigue sin
 # implementarse aquí a propósito -- es el componente FICTICIO, el llamador
-# entrega el orden ya calculado.
+# entrega el orden ya calculado; este puerto solo guarda/recupera el vector.
 class IndiceVectorialAutoalojado(IndiceVectorial):
+    def __init__(self, session: Session):
+        self._session = session
+
     def indexar(self, entrada_id: str, embedding: list[float]) -> None:
-        pass
+        self._session.merge(VectorDeEntradaEntity(entrada_id=entrada_id, embedding_json=json.dumps(embedding)))
+
+    def obtener(self, entrada_id: str) -> list[float] | None:
+        return _embedding_de(self._session, entrada_id)
 
 
 def crear_fabrica_de_sesiones(url: str | None = None) -> sessionmaker[Session]:

@@ -78,6 +78,15 @@ class IndiceLexico(Protocol):
 
 class IndiceVectorial(Protocol):
     def indexar(self, entrada_id: str, embedding: list[float]) -> None: ...
+    # RF-IB-003 ("su contenido es recuperable por similitud semántica"):
+    # recuperar exige una operación de lectura real, no solo de escritura.
+    # VETO real de Codex sobre 5a9f822 (ver STATE.md): la primera versión de
+    # `IndiceVectorialAutoalojado.indexar()` era un `pass` -- el embedding se
+    # persistía por otra ruta (`AlmacenDeEntradas`), así que el puerto era una
+    # fachada vacía que nunca hacía trabajo real ni era genuinamente
+    # intercambiable. `obtener()` fuerza que la implementación real tenga
+    # almacenamiento propio y consultable.
+    def obtener(self, entrada_id: str) -> list[float] | None: ...
 
 
 # FICTICIO (constitución, disciplina de alcance) — ninguna implementación de

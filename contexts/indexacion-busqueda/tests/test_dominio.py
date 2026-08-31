@@ -42,9 +42,14 @@ class _IndiceLexicoFalso:
 class _IndiceVectorialFalso:
     def __init__(self) -> None:
         self.llamadas_indexar: list[tuple[str, list[float]]] = []
+        self._guardado: dict[str, list[float]] = {}
 
     def indexar(self, entrada_id: str, embedding: list[float]) -> None:
         self.llamadas_indexar.append((entrada_id, embedding))
+        self._guardado[entrada_id] = embedding
+
+    def obtener(self, entrada_id: str) -> list[float] | None:
+        return self._guardado.get(entrada_id)
 
 
 class _VerificadorDePermisosFalso:

@@ -14,7 +14,7 @@ from dominio import (
     indexar,
     recibir_documento_materializado,
 )
-from persistencia import AlmacenDeEntradas, Base, IndiceLexicoAutoalojado
+from persistencia import AlmacenDeEntradas, Base, IndiceLexicoAutoalojado, IndiceVectorialAutoalojado
 
 FECHA = datetime.fromisoformat("2026-08-30T00:00:00+00:00")
 
@@ -30,6 +30,9 @@ class _IndiceLexicoNoOp:
 class _IndiceVectorialNoOp:
     def indexar(self, entrada_id, embedding):
         pass
+
+    def obtener(self, entrada_id):
+        return None
 
 
 class _PermiteTodo:
@@ -161,3 +164,41 @@ class TestIndiceLexicoAutoalojado:
         indice = IndiceLexicoAutoalojado(sesion)
 
         assert indice.buscar("x") == []
+
+
+# P-03 (VETO real de Codex sobre 5a9f822, ver STATE.md): IndiceVectorialAutoalojado
+# tiene almacenamiento y lectura reales en su propia tabla -- ya no un doble
+# ni una fachada vacía. `indexar()` no comitea por su cuenta: comparte la
+# misma `Session` que `AlmacenDeEntradas.guardar_con_evento()`, así que este
+# test demuestra la atomicidad real (una sola transacción) además de la
+# capacidad de lectura.
+class TestIndiceVectorialAutoalojado:
+    def test_indexar_y_obtener_persisten_y_recuperan_el_embedding_real(self, sesion, almacen):
+        indice_vectorial = IndiceVectorialAutoalojado(sesion)
+        documento = recibir_documento_materializado(documento_id="documento-1", texto_extraido="x", metadatos={})
+        pendiente, _ = crear_entrada_pendiente("entrada-1", documento, actor="sistema", fecha=FECHA)
+        indexada, evento = indexar(
+            pendiente,
+            texto_extraido="x",
+            metadatos={},
+            embedding=[0.5, 0.25, 0.1],
+            indice_lexico=_IndiceLexicoNoOp(),
+            indice_vectorial=indice_vectorial,
+            actor="sistema",
+            fecha=FECHA,
+        )
+        # Todavía sin commit -- indice_vectorial.indexar() solo hizo
+        # session.merge(), staged en la MISMA transacción que guardar_con_evento
+        # confirma a continuación (atomicidad real, no una segunda escritura
+        # independiente).
+        almacen.guardar_con_evento(indexada, evento)
+
+        assert indice_vectorial.obtener("entrada-1") == [0.5, 0.25, 0.1]
+        # AlmacenDeEntradas reconstruye el agregado completo leyendo la tabla
+        # del puerto -- no una columna propia (ver VETO real de Codex).
+        assert almacen.obtener("entrada-1").embedding == [0.5, 0.25, 0.1]
+
+    def test_obtener_devuelve_none_si_nunca_se_indexo(self, sesion):
+        indice_vectorial = IndiceVectorialAutoalojado(sesion)
+
+        assert indice_vectorial.obtener("entrada-inexistente") is None

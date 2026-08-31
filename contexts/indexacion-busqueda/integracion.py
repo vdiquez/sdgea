@@ -64,6 +64,13 @@ class IndiceVectorialGestionado(IndiceVectorial):
         )
         respuesta.raise_for_status()
 
+    def obtener(self, entrada_id: str) -> list[float] | None:
+        respuesta = self._client.get(f"{self._base_url}/entradas/{entrada_id}", timeout=5.0)
+        if respuesta.status_code == 404:
+            return None
+        respuesta.raise_for_status()
+        return respuesta.json()["embedding"]
+
 
 # Dos capacidades FICTICIAS (P-03 completo, nunca invocadas en este vertical
 # slice -- ver ComponenteProbabilisticoNoImplementadoError arriba).

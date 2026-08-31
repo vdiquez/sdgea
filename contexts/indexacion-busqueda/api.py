@@ -48,8 +48,8 @@ def obtener_indice_lexico(sesion: Session = Depends(obtener_sesion)) -> dominio.
     return IndiceLexicoAutoalojado(sesion)
 
 
-def obtener_indice_vectorial() -> dominio.IndiceVectorial:
-    return IndiceVectorialAutoalojado()
+def obtener_indice_vectorial(sesion: Session = Depends(obtener_sesion)) -> dominio.IndiceVectorial:
+    return IndiceVectorialAutoalojado(sesion)
 
 
 def obtener_verificador() -> dominio.VerificadorDePermisos:
