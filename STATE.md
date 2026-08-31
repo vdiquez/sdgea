@@ -2863,17 +2863,53 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   (identidad no registrada en seguridad-acceso), confirmado en los logs del
   contenedor de seguridad-acceso (primera petición real que recibió). Stack
   detenido y removido al terminar.
-  **Hallazgo real, no introducido por este commit**: `GET /eventos-auditoria`
-  devolvió eventos de otros contextos (records-custodia/captura-ingesta/
-  normalizacion) — `eventos_auditoria` resultó ser UNA sola tabla física
-  compartida por accidente entre todos los contextos con Postgres propio
-  (confirmado con `psql \d eventos_auditoria`: tiene la columna
-  `es_correccion`, propia de records-custodia). Contradice
-  spec-infra-servicios.md §2 ("cada contexto mapea sus propios agregados a
-  sus propias tablas"). Registrado como T-58 (nueva, no se corrige aquí:
-  el alcance toca los seis contextos con persistencia propia, no solo
-  indexacion-busqueda). No bloquea T-56 ni T-57: los tests/Postman ya
-  filtran por `tipo`/actor propios del flujo, mismo patrón que
-  `test_api.py::TestBusqueda` de este mismo contexto.
+  **Hallazgo real**: `GET /eventos-auditoria` devolvió eventos de otros
+  contextos (records-custodia/captura-ingesta/normalizacion) —
+  `eventos_auditoria` resultó ser UNA sola tabla física compartida por
+  accidente entre todos los contextos con Postgres propio (confirmado con
+  `psql \d eventos_auditoria`: tiene la columna `es_correccion`, propia de
+  records-custodia). Contradice spec-infra-servicios.md §2 ("cada contexto
+  mapea sus propios agregados a sus propias tablas").
+
+- 2026-08-30 — SEXTO VETO real de Codex, esta vez sobre el propio commit de
+  T-56 (`4b8b849`) — el loop headless se detuvo ahí. Texto: "P-08 y
+  spec-infra-servicios.md §2: T-56 incorpora indexacion-busqueda al
+  Postgres compartido sin aislar `eventos_auditoria`, por lo que
+  `GET /eventos-auditoria` expone eventos de otros bounded contexts."
+  Codex rechazó explícitamente registrar el hallazgo como T-58 y seguir:
+  "Que el defecto existiera antes en servicios ya desplegados no salva
+  este commit [...] Debe aislarse por esquema o nombres de tabla por
+  contexto, y demostrarse que el endpoint solo devuelve su propia
+  bitácora, antes de aprobarlo." — ofreciendo explícitamente dos vías de
+  corrección válidas (esquema Postgres, o nombres de tabla por contexto).
+  Corregido con la segunda: las cuatro tablas de
+  `contexts/indexacion-busqueda/persistencia.py` (`entradas_de_indice`,
+  `indices_vectoriales`, `eventos_auditoria`, `eventos_de_acceso`) pasan a
+  `ib_entradas_de_indice`/`ib_indices_vectoriales`/`ib_eventos_auditoria`/
+  `ib_eventos_de_acceso` — nombres únicos en todo el proyecto, verificado
+  contra los otros ocho servicios. Se eligió el prefijo de tabla en vez de
+  un esquema Postgres propio por ser la corrección más simple y
+  autocontenida dentro de este contexto (un esquema exigiría además
+  `CREATE SCHEMA IF NOT EXISTS` antes de `create_all()` y complica el
+  `sqlite:///:memory:` de los tests, que no soporta esquemas Postgres sin
+  `ATTACH DATABASE`).
+  Prueba nueva `TestAislamientoDeTablasPorContexto` (guarda de regresión
+  sobre los cuatro `__tablename__`) — cumple la exigencia de Codex de
+  "demostrarse", aunque la demostración real y completa es la verificación
+  en vivo: se reconstruyó el stack Docker completo
+  (`docker compose -f saas.yml -f local-ports.yml up -d --build`) sobre el
+  MISMO volumen de Postgres que ya tenía las tablas viejas con datos de
+  otros contextos; `psql \dt` mostró las cuatro tablas `ib_*` NUEVAS junto
+  a las originales sin tocarlas; `POST /entradas` seguido de
+  `GET /eventos-auditoria` devolvió únicamente el evento propio recién
+  escrito, ningún evento ajeno (a diferencia de la corrida anterior sobre
+  el mismo volumen, que sí mezclaba). Stack detenido y removido al
+  terminar. `uv run --directory contexts/indexacion-busqueda pytest`:
+  50/50. `./test.sh` completo del repo en verde.
+  T-58 queda acotada: ya no incluye a indexacion-busqueda, solo a los
+  CUATRO contextos que siguen colisionando ENTRE ELLOS (captura-ingesta,
+  records-custodia, normalizacion, extraccion) — fuera del alcance de este
+  commit porque toca Kotlin/JPA y Python/SQLAlchemy de cuatro servicios
+  distintos, no solo uno.
   Siguiente paso: T-57 (colección Postman E2E, cierra los nueve contextos
   del corte vertical).

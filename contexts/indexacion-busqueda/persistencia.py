@@ -30,16 +30,30 @@ class Base(DeclarativeBase):
     pass
 
 
-# specs/spec-infra-servicios.md §14: "EntradaDeIndice -> tabla
-# entradas_de_indice". `metadatos` se serializa a JSON en columna de texto,
-# mismo criterio que `inventario` en captura-ingesta / `evidencia` en
-# records-custodia. SIN columna de embedding a propósito (VETO real de Codex
-# sobre 5a9f822, ver STATE.md): el vector vive únicamente en
-# `indices_vectoriales`, detrás de `IndiceVectorialAutoalojado` -- guardarlo
-# también aquí sería la misma "ruta directa, no detrás de IndiceVectorial"
-# que Codex vetó.
+# SEXTO VETO real de Codex, esta vez sobre el propio commit de T-56 (ver
+# STATE.md): al sumar indexacion-busqueda al mismo Postgres
+# compartido, `GET /eventos-auditoria` devolvía eventos de OTROS bounded
+# contexts (captura-ingesta/records-custodia/normalizacion) -- las cuatro
+# tablas de este módulo usaban nombres genéricos (`entradas_de_indice`,
+# `eventos_auditoria`...) que ya existían, con OTRO esquema de columnas,
+# creadas por esos contextos en el mismo `postgres:17` del compose.
+# spec-infra-servicios.md §2 exige "cada contexto mapea sus propios
+# agregados a sus propias tablas" -- las cuatro tablas de este archivo
+# llevan ahora el prefijo `ib_`, único en todo el proyecto (verificado con
+# `docker exec ... psql -c '\dt'` contra los otros ocho servicios, ver
+# STATE.md), para que ningún nombre de tabla vuelva a colisionar sin
+# necesitar un esquema de Postgres separado (T-58 sigue abierta para
+# aislar los CUATRO contextos previos que sí colisionan ENTRE ELLOS,
+# fuera del alcance de este commit).
+# "EntradaDeIndice -> tabla ib_entradas_de_indice". `metadatos` se
+# serializa a JSON en columna de texto, mismo criterio que `inventario` en
+# captura-ingesta / `evidencia` en records-custodia. SIN columna de
+# embedding a propósito (VETO real de Codex sobre 5a9f822, ver STATE.md):
+# el vector vive únicamente en `ib_indices_vectoriales`, detrás de
+# `IndiceVectorialAutoalojado` -- guardarlo también aquí sería la misma
+# "ruta directa, no detrás de IndiceVectorial" que Codex vetó.
 class EntradaDeIndiceEntity(Base):
-    __tablename__ = "entradas_de_indice"
+    __tablename__ = "ib_entradas_de_indice"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     documento_id: Mapped[str] = mapped_column(String, nullable=False)
@@ -56,7 +70,7 @@ class EntradaDeIndiceEntity(Base):
 # "recuperar por similitud semántica" (RF-IB-003) no tenía ninguna operación
 # de lectura detrás del puerto. Ahora el vector SOLO vive aquí.
 class VectorDeEntradaEntity(Base):
-    __tablename__ = "indices_vectoriales"
+    __tablename__ = "ib_indices_vectoriales"
 
     entrada_id: Mapped[str] = mapped_column(String, primary_key=True)
     embedding_json: Mapped[str] = mapped_column(Text, nullable=False)
@@ -65,9 +79,12 @@ class VectorDeEntradaEntity(Base):
 # P-08: bitácora de solo anexado para transiciones de EntradaDeIndice
 # (recepción/indexación/actualización) -- mismo tratamiento WORM que
 # `eventos_auditoria` en normalizacion/extraccion/records-custodia
-# (`session.add`, nunca `update`).
+# (`session.add`, nunca `update`), pero con nombre propio (`ib_` -- ver
+# VETO real de Codex sobre T-56 arriba): esas otras tablas comparten el
+# nombre genérico `eventos_auditoria` ENTRE ELLAS en el mismo Postgres
+# (defecto pre-existente, T-58); esta no participa de esa colisión.
 class EventoAuditoriaEntity(Base):
-    __tablename__ = "eventos_auditoria"
+    __tablename__ = "ib_eventos_auditoria"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     actor: Mapped[str] = mapped_column(String, nullable=False)
@@ -83,7 +100,7 @@ class EventoAuditoriaEntity(Base):
 # estado anterior/posterior -- una consulta no transiciona ningún estado.
 # También de solo anexado (`session.add`, nunca `update`).
 class EventoDeAccesoEntity(Base):
-    __tablename__ = "eventos_de_acceso"
+    __tablename__ = "ib_eventos_de_acceso"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     actor: Mapped[str] = mapped_column(String, nullable=False)

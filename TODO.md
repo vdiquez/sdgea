@@ -1288,14 +1288,29 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       logs de `seguridad-acceso`, primera petición real que recibió ese
       contenedor). Stack detenido y removido (`docker compose down`) al
       terminar, imagen de prueba borrada.
-      **Hallazgo real durante la verificación (no introducido por T-56, ver
-      T-58): `GET /eventos-auditoria` en el contenedor recién levantado
-      devolvió eventos de OTROS contextos** (`ORIGINAL_CUSTODIADO`,
-      `UNIDAD_RECIBIDA`, etc. de records-custodia/captura-ingesta/
-      normalizacion) — la tabla `eventos_auditoria` resultó estar
-      compartida por accidente entre TODOS los contextos que usan Postgres,
-      no aislada por contexto como exige spec-infra-servicios.md §2 ("cada
-      contexto mapea sus propios agregados a sus propias tablas"). Ver T-58.
+      **Hallazgo real durante la verificación, y SEXTO VETO real de Codex
+      sobre este mismo commit** (ver STATE.md): `GET /eventos-auditoria` en
+      el contenedor recién levantado devolvió eventos de OTROS contextos
+      (`ORIGINAL_CUSTODIADO`, `UNIDAD_RECIBIDA`, etc. de records-custodia/
+      captura-ingesta/normalizacion) — las cuatro tablas de
+      `contexts/indexacion-busqueda/persistencia.py` usaban nombres
+      genéricos (`entradas_de_indice`, `eventos_auditoria`...) que ya
+      existían en el mismo Postgres compartido, creadas por esos otros
+      contextos. Codex vetó: "Debe aislarse por esquema o nombres de tabla
+      por contexto, y demostrarse que el endpoint solo devuelve su propia
+      bitácora, antes de aprobarlo" — no bastaba con registrarlo como
+      tarea futura. Corregido en el mismo commit: las cuatro tablas de
+      indexacion-busqueda llevan ahora el prefijo único `ib_`
+      (`ib_entradas_de_indice`, `ib_indices_vectoriales`,
+      `ib_eventos_auditoria`, `ib_eventos_de_acceso`); nuevo test
+      `TestAislamientoDeTablasPorContexto` (guarda de regresión sobre
+      `__tablename__`); reverificado en vivo contra Docker — `\dt` mostró
+      las cuatro tablas `ib_*` junto a las originales sin tocarlas, y
+      `GET /eventos-auditoria` devolvió únicamente el evento propio recién
+      escrito, ninguno ajeno. T-58 queda acotada a los CUATRO contextos que
+      sí siguen colisionando ENTRE ELLOS (captura-ingesta/records-custodia/
+      normalizacion/extraccion) — indexacion-busqueda ya no participa de
+      esa colisión.
 - [ ] T-57 Colección Postman con el ciclo completo de Indexación y
       Búsqueda, mismo patrón que T-36/T-43/T-47/T-52 — flujo end-to-end
       real: custodiar y materializar un documento en records-custodia
@@ -1314,24 +1329,21 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       **Con esto se completan los nueve bounded contexts del alcance
       original del corte vertical.**
 - [ ] T-58 Aísla la tabla `eventos_auditoria` (y cualquier otra con nombre
-      genérico compartido) por contexto — hallazgo real verificado durante
-      T-56, no una hipótesis: `docker exec deploy-postgres-1 psql -U sgdea
-      -d sgdea -c "\d eventos_auditoria"` muestra UNA sola tabla física con
-      columnas de captura-ingesta/records-custodia (incluida
-      `es_correccion`, propia de records-custodia) y `GET /eventos-auditoria`
-      en indexacion-busqueda devolvió eventos de otros contextos
-      (`UNIDAD_RECIBIDA`, `ORIGINAL_CUSTODIADO`...). Contradice
-      spec-infra-servicios.md §2 ("cada contexto mapea sus propios
-      agregados a sus propias tablas") y mezcla la bitácora de auditoría
-      (P-08) de contextos que no deberían verse entre sí. Afecta a TODOS los
-      servicios con Postgres propio que usan ese nombre de tabla
-      (captura-ingesta, records-custodia, normalizacion, extraccion,
-      indexacion-busqueda) — no solo al más reciente. Alcance de la
-      corrección: cada contexto debe nombrar sus tablas con un prefijo o
-      usar un esquema Postgres propio (`CREATE SCHEMA` por contexto), de
-      forma que ningún nombre de tabla colisione entre servicios que
-      comparten el mismo `postgres:17` del compose; requiere tocar los seis
-      contextos con persistencia propia (Kotlin/JPA y Python/SQLAlchemy),
-      no solo uno — por eso es tarea aparte y no se corrigió dentro de T-56.
-      Sin umbral ni referencia normativa nueva que inventar: es una
-      corrección de infraestructura contra una decisión de spec ya escrita.
+      genérico compartido) ENTRE captura-ingesta, records-custodia,
+      normalizacion y extraccion — hallazgo real verificado durante T-56
+      (`docker exec deploy-postgres-1 psql -U sgdea -d sgdea -c "\d
+      eventos_auditoria"` mostró UNA sola tabla física con columnas de
+      captura-ingesta/records-custodia, incluida `es_correccion`, propia de
+      records-custodia). Contradice spec-infra-servicios.md §2 ("cada
+      contexto mapea sus propios agregados a sus propias tablas") y mezcla
+      la bitácora de auditoría (P-08) de contextos que no deberían verse
+      entre sí. `indexacion-busqueda` YA NO participa de esta colisión —
+      corregida dentro de T-56 (VETO real de Codex sobre ese commit, ver
+      STATE.md) con el prefijo único `ib_` en sus cuatro tablas; ese mismo
+      patrón (prefijo por contexto, o un esquema Postgres propio con
+      `CREATE SCHEMA`) es el que falta aplicar a los CUATRO contextos
+      restantes. Requiere tocar Kotlin/JPA (captura-ingesta,
+      records-custodia) y Python/SQLAlchemy (normalizacion, extraccion) —
+      por eso sigue siendo tarea aparte. Sin umbral ni referencia normativa
+      nueva que inventar: es una corrección de infraestructura contra una
+      decisión de spec ya escrita.

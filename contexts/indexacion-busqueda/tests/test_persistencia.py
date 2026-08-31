@@ -14,7 +14,16 @@ from dominio import (
     indexar,
     recibir_documento_materializado,
 )
-from persistencia import AlmacenDeEntradas, Base, IndiceLexicoAutoalojado, IndiceVectorialAutoalojado
+from persistencia import (
+    AlmacenDeEntradas,
+    Base,
+    EntradaDeIndiceEntity,
+    EventoAuditoriaEntity,
+    EventoDeAccesoEntity,
+    IndiceLexicoAutoalojado,
+    IndiceVectorialAutoalojado,
+    VectorDeEntradaEntity,
+)
 
 FECHA = datetime.fromisoformat("2026-08-30T00:00:00+00:00")
 
@@ -52,6 +61,25 @@ def sesion():
 @pytest.fixture()
 def almacen(sesion):
     return AlmacenDeEntradas(sesion)
+
+
+# SEXTO VETO real de Codex sobre el commit de T-56 (ver STATE.md):
+# `GET /eventos-auditoria` de indexacion-busqueda devolvía eventos de OTROS
+# bounded contexts (captura-ingesta/records-custodia/normalizacion), porque
+# las cuatro tablas de este módulo usaban nombres genéricos que YA existían
+# en el mismo Postgres compartido (`docker exec ... psql -c '\dt'` lo
+# demostró en vivo). Esta prueba es la guarda de regresión que Codex pidió
+# explícitamente ("demostrarse que el endpoint solo devuelve su propia
+# bitácora"): si alguien revierte el prefijo `ib_` de cualquiera de las
+# cuatro tablas, esto falla en rojo antes de llegar a un Postgres
+# compartido real. La demostración EN VIVO contra Docker (los otros ocho
+# servicios con sus propias tablas) queda documentada en STATE.md/TODO.md.
+class TestAislamientoDeTablasPorContexto:
+    def test_las_cuatro_tablas_de_este_contexto_tienen_prefijo_propio_unico(self):
+        assert EntradaDeIndiceEntity.__tablename__ == "ib_entradas_de_indice"
+        assert VectorDeEntradaEntity.__tablename__ == "ib_indices_vectoriales"
+        assert EventoAuditoriaEntity.__tablename__ == "ib_eventos_auditoria"
+        assert EventoDeAccesoEntity.__tablename__ == "ib_eventos_de_acceso"
 
 
 # P-08 (VETO real de Codex sobre 22b6b09/e356158, ver STATE.md): la entrada
