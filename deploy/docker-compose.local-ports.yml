@@ -39,3 +39,7 @@ services:
   enriquecimiento:
     ports:
       - "8088:8088"
+
+  indexacion-busqueda:
+    ports:
+      - "8089:8089"

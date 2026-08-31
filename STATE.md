@@ -2848,3 +2848,32 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   ningún servicio gestionado real desplegado en este proyecto todavía).
   Con esto, T-54/T-55 quedan cerradas sin VETO pendiente. Siguiente paso:
   T-56 (Dockerfile + wiring en docker-compose, con Postgres).
+
+- 2026-08-30 — T-56 completada: `contexts/indexacion-busqueda/Dockerfile`
+  (mismo patrón que extraccion, T-42) + wiring en
+  `docker-compose.{saas,onprem,local-ports}.yml` (Postgres propio, puerto
+  8089, `depends_on: [postgres, seguridad-acceso]`, `SEGURIDAD_ACCESO_BASE_URL`
+  cableada para `VerificadorDePermisosHttp`). A diferencia de T-42 (Docker
+  no disponible entonces), esta vez SÍ había Docker en el entorno: se
+  construyó la imagen, se levantaron los nueve contenedores
+  (`docker compose -f saas.yml -f local-ports.yml up -d --build`, todos
+  `Up`) y se ejercitó `POST /entradas` → `POST /entradas/{id}/indexacion` →
+  `POST /busquedas` contra el contenedor real — la búsqueda devolvió `[]`
+  porque `VerificadorDePermisosHttp` denegó de verdad al actor "ana"
+  (identidad no registrada en seguridad-acceso), confirmado en los logs del
+  contenedor de seguridad-acceso (primera petición real que recibió). Stack
+  detenido y removido al terminar.
+  **Hallazgo real, no introducido por este commit**: `GET /eventos-auditoria`
+  devolvió eventos de otros contextos (records-custodia/captura-ingesta/
+  normalizacion) — `eventos_auditoria` resultó ser UNA sola tabla física
+  compartida por accidente entre todos los contextos con Postgres propio
+  (confirmado con `psql \d eventos_auditoria`: tiene la columna
+  `es_correccion`, propia de records-custodia). Contradice
+  spec-infra-servicios.md §2 ("cada contexto mapea sus propios agregados a
+  sus propias tablas"). Registrado como T-58 (nueva, no se corrige aquí:
+  el alcance toca los seis contextos con persistencia propia, no solo
+  indexacion-busqueda). No bloquea T-56 ni T-57: los tests/Postman ya
+  filtran por `tipo`/actor propios del flujo, mismo patrón que
+  `test_api.py::TestBusqueda` de este mismo contexto.
+  Siguiente paso: T-57 (colección Postman E2E, cierra los nueve contextos
+  del corte vertical).

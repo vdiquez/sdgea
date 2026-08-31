@@ -1266,7 +1266,7 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       literal de RF-IB-009: hace la consulta HTTP real y DESPUÉS lee
       `GET /eventos-auditoria`, nunca inspecciona solo el valor devuelto) =
       46/46 en el módulo. `./test.sh` completo del repo en verde.
-- [ ] T-56 Dockerfile real de indexacion-busqueda + wiring en
+- [x] T-56 Dockerfile real de indexacion-busqueda + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que
       normalizacion/extraccion (T-35/T-42) — CON Postgres propio (a
       diferencia de clasificacion/enriquecimiento, T-46/T-51); verificar
@@ -1274,6 +1274,28 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       T-46: el stub "Hello from..." nunca se tocó); siguiente puerto
       disponible en `docker-compose.local-ports.yml`;
       `depends_on: [postgres, seguridad-acceso]`.
+      T-56 es infraestructura de empaquetado (como T-18/T-35/T-42), no un RF
+      con Dado/Cuando/Entonces propio — verificación real, no solo por
+      honestidad: a diferencia de T-42 (donde Docker no estaba disponible),
+      aquí SÍ había Docker en el entorno, así que se construyó la imagen
+      (`docker build`), se levantó el stack completo de nueve servicios
+      (`docker compose -f saas.yml -f local-ports.yml up -d --build`, los
+      nueve contenedores `Up`) y se ejercitó el flujo real por HTTP contra
+      el contenedor: `POST /entradas` → `POST /entradas/{id}/indexacion` →
+      `POST /busquedas` devolvió `[]` correctamente (RF-IB-008: el actor
+      "ana" no es una identidad real de seguridad-acceso, así que el
+      `VerificadorDePermisosHttp` la denegó de verdad — confirmado en los
+      logs de `seguridad-acceso`, primera petición real que recibió ese
+      contenedor). Stack detenido y removido (`docker compose down`) al
+      terminar, imagen de prueba borrada.
+      **Hallazgo real durante la verificación (no introducido por T-56, ver
+      T-58): `GET /eventos-auditoria` en el contenedor recién levantado
+      devolvió eventos de OTROS contextos** (`ORIGINAL_CUSTODIADO`,
+      `UNIDAD_RECIBIDA`, etc. de records-custodia/captura-ingesta/
+      normalizacion) — la tabla `eventos_auditoria` resultó estar
+      compartida por accidente entre TODOS los contextos que usan Postgres,
+      no aislada por contexto como exige spec-infra-servicios.md §2 ("cada
+      contexto mapea sus propios agregados a sus propias tablas"). Ver T-58.
 - [ ] T-57 Colección Postman con el ciclo completo de Indexación y
       Búsqueda, mismo patrón que T-36/T-43/T-47/T-52 — flujo end-to-end
       real: custodiar y materializar un documento en records-custodia
@@ -1291,3 +1313,25 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       fallos; actualizar `postman/README.md` con el conteo real.
       **Con esto se completan los nueve bounded contexts del alcance
       original del corte vertical.**
+- [ ] T-58 Aísla la tabla `eventos_auditoria` (y cualquier otra con nombre
+      genérico compartido) por contexto — hallazgo real verificado durante
+      T-56, no una hipótesis: `docker exec deploy-postgres-1 psql -U sgdea
+      -d sgdea -c "\d eventos_auditoria"` muestra UNA sola tabla física con
+      columnas de captura-ingesta/records-custodia (incluida
+      `es_correccion`, propia de records-custodia) y `GET /eventos-auditoria`
+      en indexacion-busqueda devolvió eventos de otros contextos
+      (`UNIDAD_RECIBIDA`, `ORIGINAL_CUSTODIADO`...). Contradice
+      spec-infra-servicios.md §2 ("cada contexto mapea sus propios
+      agregados a sus propias tablas") y mezcla la bitácora de auditoría
+      (P-08) de contextos que no deberían verse entre sí. Afecta a TODOS los
+      servicios con Postgres propio que usan ese nombre de tabla
+      (captura-ingesta, records-custodia, normalizacion, extraccion,
+      indexacion-busqueda) — no solo al más reciente. Alcance de la
+      corrección: cada contexto debe nombrar sus tablas con un prefijo o
+      usar un esquema Postgres propio (`CREATE SCHEMA` por contexto), de
+      forma que ningún nombre de tabla colisione entre servicios que
+      comparten el mismo `postgres:17` del compose; requiere tocar los seis
+      contextos con persistencia propia (Kotlin/JPA y Python/SQLAlchemy),
+      no solo uno — por eso es tarea aparte y no se corrigió dentro de T-56.
+      Sin umbral ni referencia normativa nueva que inventar: es una
+      corrección de infraestructura contra una decisión de spec ya escrita.

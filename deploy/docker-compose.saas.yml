@@ -11,12 +11,10 @@
 # enriquecimiento no tienen Postgres propio (T-30/T-46: orquestadores HTTP
 # sobre records-custodia [y seguridad-acceso en validacion-humana]; T-51:
 # mismo criterio — ninguno mantiene persistencia propia).
-# normalizacion, extraccion, clasificacion y enriquecimiento son contenedores
-# Python/FastAPI (build en dos etapas con `uv`, mismo patrón que los
-# Dockerfiles Kotlin pero con `uv sync --no-dev` en vez de `-x test`).
-#
-# TODO por contexto, cuando exista su Dockerfile:
-#   - contexts/indexacion-busqueda (Python/FastAPI)
+# normalizacion, extraccion, clasificacion, enriquecimiento e
+# indexacion-busqueda (T-56) son contenedores Python/FastAPI (build en dos
+# etapas con `uv`, mismo patrón que los Dockerfiles Kotlin pero con
+# `uv sync --no-dev` en vez de `-x test`).
 #
 # TODO — implementaciones SaaS (gestionadas) de las seis capacidades de P-03:
 #   almacenamiento de objetos, OCR, embeddings, inferencia LLM, índice vectorial,
@@ -171,6 +169,32 @@ services:
       SERVER_PORT: "8088"
     depends_on:
       - records-custodia
+
+  # T-54/T-55/T-56: quinto contenedor Python/FastAPI. Postgres propio (mismo
+  # criterio que normalizacion/extraccion: mantiene estado propio —
+  # entradas_de_indice, indices_vectoriales, eventos_auditoria,
+  # eventos_de_acceso). RF-IB-008/009: filtra resultados y registra acceso
+  # verificando autorización real contra seguridad-acceso, mismo patrón que
+  # extraccion. En este modo (SaaS) el compose sigue sin configurar
+  # INDICE_LEXICO_ENDPOINT_URL/INDICE_VECTORIAL_ENDPOINT_URL: no hay ningún
+  # servicio gestionado real desplegado todavía, así que las variantes
+  # AUTOALOJADAS (Postgres) siguen siendo las que se inyectan por defecto
+  # (api.py), igual en los tres modos de despliegue.
+  indexacion-busqueda:
+    build:
+      context: ..
+      dockerfile: contexts/indexacion-busqueda/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+      SERVER_PORT: "8089"
+      SEGURIDAD_ACCESO_BASE_URL: http://seguridad-acceso:8083
+    depends_on:
+      - postgres
+      - seguridad-acceso
 
 volumes:
   postgres-data:

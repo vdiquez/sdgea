@@ -15,9 +15,9 @@
 # `recibir_sugerencia_de_limites`/`recibir_sugerencia_ocr` — ambos son
 # FICTICIOS, T-33/T-40; clasificacion/enriquecimiento tampoco tienen ninguno
 # real detrás de `clasificar`/`agrupar`/`evaluar_texto`, T-44/T-49).
-#
-# TODO por contexto, cuando exista su Dockerfile: el restante de
-# docker-compose.saas.yml (indexacion-busqueda).
+# indexacion-busqueda (T-56) tampoco: `IndiceLexicoAutoalojado`/
+# `IndiceVectorialAutoalojado` son las variantes que se inyectan por
+# defecto (Postgres, sin salida de red) — coherente con P-10 en este modo.
 #
 # TODO — implementaciones self-hosted de las seis capacidades de P-03, cada una
 # como contenedor local (candidatas a evaluar, no decididas todavía):
@@ -161,6 +161,28 @@ services:
       SERVER_PORT: "8088"
     depends_on:
       - records-custodia
+
+  # T-54/T-55/T-56: quinto contenedor Python/FastAPI. Postgres propio (mismo
+  # criterio que normalizacion/extraccion). RF-IB-008/009: filtra
+  # resultados y registra acceso verificando autorización real contra
+  # seguridad-acceso. Sin salida de red — coherente con P-10 en modo
+  # appliance (las variantes AUTOALOJADAS son las que se inyectan por
+  # defecto, no las gestionadas).
+  indexacion-busqueda:
+    build:
+      context: ..
+      dockerfile: contexts/indexacion-busqueda/Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: sgdea
+      DB_USER: sgdea
+      DB_PASSWORD: sgdea
+      SERVER_PORT: "8089"
+      SEGURIDAD_ACCESO_BASE_URL: http://seguridad-acceso:8083
+    depends_on:
+      - postgres
+      - seguridad-acceso
 
 volumes:
   postgres-data:
