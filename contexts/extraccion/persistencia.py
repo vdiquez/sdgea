@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, create_engine, select
+from sqlalchemy import Column, DateTime, Float, Integer, MetaData, String, Table, Text, create_engine, inspect, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from dominio import (
@@ -81,6 +81,38 @@ class EventoAuditoriaEntity(Base):
     tipo: Mapped[str] = mapped_column(String, nullable=False)
     estado_anterior: Mapped[str | None] = mapped_column(String, nullable=True)
     estado_posterior: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+# VETO real de Codex sobre T-58 (ver STATE.md): renombrar `eventos_auditoria`
+# a `ex_eventos_auditoria` sin preservar la lectura del historial existente
+# viola P-08. Definida en su propio `MetaData` (no en `Base.metadata`) para
+# que `Base.metadata.create_all()` nunca la cree -- es de SOLO LECTURA, un
+# vestigio de la tabla compartida previa a T-58; `guardar_con_evento` nunca
+# escribe aquí.
+_metadata_heredada = MetaData()
+_tabla_eventos_heredada = Table(
+    "eventos_auditoria",
+    _metadata_heredada,
+    Column("id", Integer, primary_key=True),
+    Column("actor", String, nullable=False),
+    Column("fecha", DateTime(timezone=True), nullable=False),
+    Column("tipo", String, nullable=False),
+    Column("estado_anterior", String, nullable=True),
+    Column("estado_posterior", String, nullable=True),
+)
+
+# Tipos de evento EXCLUSIVOS de extraccion en la tabla heredada --
+# "VALIDACION_APLICADA" lo usa también normalizacion sobre la MISMA tabla
+# compartida, sin ninguna columna que identifique el contexto de origen, así
+# que no hay forma honesta de atribuir esas filas a un único contexto (quedan
+# fuera de la recuperación en ambos, ver STATE.md).
+_TIPOS_PROPIOS_EN_TABLA_HEREDADA = {
+    "TEXTO_EXTRAIDO_RECIBIDO",
+    "SOPORTE_DETERMINADO",
+    "EXTRACCION_DETERMINISTICA_APLICADA",
+    "SUGERENCIA_OCR_RECIBIDA",
+    "EXTRACCION_CONFIRMADA",
+}
 
 
 def _evento_a_fila(evento: EventoAuditoria) -> EventoAuditoriaEntity:
@@ -197,9 +229,31 @@ class AlmacenDeTextos:
         )
         return [_a_dominio(fila) for fila in filas]
 
+    # Combina la tabla nueva (ex_eventos_auditoria) con la tabla heredada
+    # compartida (VETO real de Codex sobre T-58, ver STATE.md): el rename no
+    # debía dejar inaccesible el historial previo. Solo recupera de la tabla
+    # heredada los tipos EXCLUSIVOS de extraccion (ver
+    # `_TIPOS_PROPIOS_EN_TABLA_HEREDADA` arriba). Ordenado por `fecha`, no por
+    # `id`: los dos orígenes tienen secuencias de autoincremento
+    # independientes.
     def eventos_de_auditoria(self) -> list[EventoAuditoria]:
-        filas = self._session.execute(select(EventoAuditoriaEntity).order_by(EventoAuditoriaEntity.id)).scalars().all()
-        return [_evento_a_dominio(fila) for fila in filas]
+        filas = self._session.execute(select(EventoAuditoriaEntity)).scalars().all()
+        eventos = [_evento_a_dominio(fila) for fila in filas]
+        if inspect(self._session.get_bind()).has_table(_tabla_eventos_heredada.name):
+            filas_heredadas = self._session.execute(
+                select(_tabla_eventos_heredada).where(_tabla_eventos_heredada.c.tipo.in_(_TIPOS_PROPIOS_EN_TABLA_HEREDADA))
+            ).all()
+            eventos += [
+                EventoAuditoria(
+                    actor=fila.actor,
+                    fecha=fila.fecha,
+                    tipo=fila.tipo,
+                    estado_anterior=fila.estado_anterior,
+                    estado_posterior=fila.estado_posterior,
+                )
+                for fila in filas_heredadas
+            ]
+        return sorted(eventos, key=lambda evento: evento.fecha)
 
 
 def crear_fabrica_de_sesiones(url: str | None = None) -> sessionmaker[Session]:

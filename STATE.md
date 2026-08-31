@@ -3012,3 +3012,73 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   143/143 aserciones, cero fallos -- confirma que el rename no rompió
   ningún flujo end-to-end existente.
   **Con T-58 cerrada, no queda ninguna tarea abierta en TODO.md.**
+
+- 2026-08-31 — SEGUNDO VETO real de Codex, esta vez sobre el propio commit
+  de T-58 (`ab7d770`) — el loop headless se detuvo ahí. Texto: "P-08 — el
+  renombrado de `eventos_auditoria` no migra ni mantiene accesible el
+  historial de auditoría ya existente." Argumento completo: `ddl-auto:
+  update`/`Base.metadata.create_all()` crean las tablas nuevas pero
+  conservan la vieja intacta; los endpoints pasan a consultar solo las
+  nuevas, así que los eventos históricos "siguen físicamente en la tabla
+  anterior" pero dejan de ser recuperables desde su contexto — viola P-08
+  (la bitácora debe seguir siendo recuperable). Codex explícitamente
+  aceptó DOS caminos de corrección: "una migración explícita... o una
+  transición de lectura compatible que los mantenga recuperables hasta
+  completar esa migración" — y exigió pruebas "contra una base preexistente
+  con eventos de los tres contextos".
+  Se descartó la migración (mover/copiar filas) porque, al diseñar el
+  filtro de atribución por `tipo`, apareció un hallazgo real: `normalizacion`
+  y `extraccion` usan literalmente el mismo `tipo="VALIDACION_APLICADA"`
+  sobre la tabla heredada compartida, que no tiene ninguna columna que
+  identifique el contexto de origen. Una migración que copiara esas filas a
+  UN SOLO contexto (o a los dos) fabricaría una atribución falsa -- más
+  deshonesto que el problema original. Se implementó la segunda vía
+  (lectura de compatibilidad, sin mutar nada):
+  - **records-custodia** (`persistencia/Entidades.kt`): nueva
+    `EventoAuditoriaLegacyEntity`, `@Entity` de SOLO LECTURA mapeada a
+    `eventos_auditoria` (la tabla vieja) con las mismas columnas que
+    `EventoAuditoriaEntity` tenía antes de T-58 (incluida `es_correccion`).
+    `AlmacenDeEventosJpa.todos()` (`persistencia/Almacenes.kt`) ahora
+    combina `rc_eventos_auditoria` con una consulta JPQL sobre la entidad
+    heredada filtrada por `TIPOS_PROPIOS_EN_TABLA_HEREDADA` (los 5 tipos
+    exclusivos de records-custodia), ordenado por `fecha` en vez de `id`
+    (dos secuencias de autoincremento independientes). Chequeo de
+    existencia vía `information_schema.tables` (portátil entre H2 y
+    Postgres) -- un primer intento con `DatabaseMetaData`/`Session.doWork`
+    falló en compilación por un error de inferencia de tipos con
+    anotaciones `checker-framework` inaccesibles en el classpath del JDBC
+    driver, corregido cambiando a SQL estándar.
+  - **normalizacion/extraccion** (`persistencia.py`): tabla heredada
+    definida en su PROPIO `MetaData()` (no en `Base.metadata`, para que
+    `create_all()` nunca la cree -- sigue siendo de solo lectura).
+    `eventos_de_auditoria()` combina la tabla nueva con una consulta Core
+    sobre la tabla heredada filtrada por los tipos exclusivos de cada
+    contexto (5 cada uno, excluyendo `VALIDACION_APLICADA` de ambos),
+    guardada tras `inspect(engine).has_table(...)` para no fallar en un
+    volumen nuevo que nunca tuvo la tabla vieja.
+  TDD exactamente como pidió Codex -- pruebas contra una base preexistente
+  con eventos de varios contextos, no solo del propio: `
+  AlmacenDeEventosLegacyTest` (records-custodia, `@SpringBootTest` +
+  `@Transactional`, siembra la tabla heredada vía `EntityManager.persist`
+  directo) y `TestLecturaCompatibleDeLaTablaHeredada` (normalizacion/
+  extraccion, siembra vía `Table.insert()` sobre SQLite) -- cada una con
+  una fila propia, una de OTRO contexto simulado, y una AMBIGUA
+  (`VALIDACION_APLICADA`), y comprueban que solo la propia se recupera,
+  más lo nuevo escrito después.
+  Verificado con Docker real, escenario más realista que un volumen
+  nuevo: volumen limpio (`down -v` + `up -d --build`), tabla heredada
+  `eventos_auditoria` sembrada manualmente vía `psql` con filas de
+  records-custodia, normalizacion Y extraccion (incluida una fila
+  `VALIDACION_APLICADA`) simulando datos reales pre-T-58 -- `GET
+  /eventos-auditoria` de cada uno de los tres contextos devolvió
+  exactamente su propio evento heredado, ninguno ajeno, ninguna fila
+  ambigua; un evento nuevo escrito después coexiste con el heredado,
+  ordenado por fecha. `./test.sh` completo del repo en verde (Gradle: las
+  14 suites de records-custodia, incluidas las dos nuevas; pytest:
+  eval-harness 4, normalizacion 43 [+2], extraccion 58 [+2], clasificacion
+  27, enriquecimiento 29, indexacion-busqueda 50). Colección Postman
+  completa (T-57) reverificada dos corridas seguidas sobre volumen limpio:
+  98/98 peticiones, 143/143 aserciones, sin fallos -- confirma que el
+  fallback de lectura no rompió ningún flujo end-to-end existente.
+  **Con esto, T-58 queda cerrada de verdad (sin VETO pendiente) y no queda
+  ninguna tarea abierta en TODO.md.**

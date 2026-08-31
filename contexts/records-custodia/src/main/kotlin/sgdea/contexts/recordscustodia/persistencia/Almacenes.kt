@@ -129,8 +129,18 @@ class AlmacenDeEventosJpa : AlmacenDeEventos {
         )
     }
 
-    override fun todos(): List<EventoAuditoria> =
-        entityManager.createQuery("select e from EventoAuditoriaEntity e order by e.id", EventoAuditoriaEntity::class.java)
+    // `todos()` combina la tabla nueva (rc_eventos_auditoria) con la tabla
+    // heredada compartida (VETO real de Codex sobre T-58, ver STATE.md): el
+    // rename de T-58 no debía dejar inaccesible el historial previo. Solo se
+    // recuperan de la tabla heredada los TIPOS exclusivos de records-custodia
+    // -- "VALIDACION_APLICADA" lo usan también normalizacion y extraccion
+    // sobre esa MISMA tabla compartida, sin ninguna columna que identifique
+    // el contexto de origen, así que no hay forma honesta de atribuir esas
+    // filas a un único contexto (quedan fuera de la recuperación en los tres,
+    // ver STATE.md). Ordenado por `fecha`, no por `id`: los dos orígenes
+    // tienen secuencias de autoincremento independientes.
+    override fun todos(): List<EventoAuditoria> {
+        val nuevos = entityManager.createQuery("select e from EventoAuditoriaEntity e", EventoAuditoriaEntity::class.java)
             .resultList
             .map {
                 EventoAuditoria(
@@ -142,6 +152,53 @@ class AlmacenDeEventosJpa : AlmacenDeEventos {
                     esCorreccion = it.esCorreccion,
                 )
             }
+        val heredados = if (existeTablaEventosHeredada()) {
+            entityManager.createQuery(
+                "select e from EventoAuditoriaLegacyEntity e where e.tipo in :tipos",
+                EventoAuditoriaLegacyEntity::class.java,
+            )
+                .setParameter("tipos", TIPOS_PROPIOS_EN_TABLA_HEREDADA)
+                .resultList
+                .map {
+                    EventoAuditoria(
+                        actor = it.actor,
+                        fecha = it.fecha,
+                        tipo = it.tipo,
+                        estadoAnterior = it.estadoAnterior,
+                        estadoPosterior = it.estadoPosterior,
+                        esCorreccion = it.esCorreccion,
+                    )
+                }
+        } else {
+            emptyList()
+        }
+        return (nuevos + heredados).sortedBy { it.fecha }
+    }
+
+    // `information_schema.tables` (estándar SQL, soportado por Postgres y
+    // H2) en vez de `DatabaseMetaData` cruda: en H2 (tests) la tabla heredada
+    // existe siempre porque `EventoAuditoriaLegacyEntity` es un `@Entity`
+    // real que `ddl-auto: create-drop` crea igual que cualquier otro -- este
+    // chequeo protege el camino de producción, donde un volumen de Postgres
+    // nunca antes usado no la tiene. `lower(table_name)`: H2 guarda los
+    // nombres sin comillas en mayúsculas por defecto, Postgres en
+    // minúsculas.
+    private fun existeTablaEventosHeredada(): Boolean {
+        val conteo = entityManager
+            .createNativeQuery("select count(*) from information_schema.tables where lower(table_name) = 'eventos_auditoria'")
+            .singleResult as Number
+        return conteo.toInt() > 0
+    }
+
+    companion object {
+        private val TIPOS_PROPIOS_EN_TABLA_HEREDADA = setOf(
+            "ORIGINAL_CUSTODIADO",
+            "DECISION_HUMANA_MATERIALIZADA",
+            "INTENTO_MODIFICACION_RECHAZADO",
+            "DISCREPANCIA_DE_INTEGRIDAD",
+            "SUGERENCIA_RECIBIDA",
+        )
+    }
 
     override fun en(indice: Int): EventoAuditoria = todos()[indice]
 }

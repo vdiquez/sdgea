@@ -119,6 +119,41 @@ class EventoAuditoriaEntity(
     var esCorreccion: Boolean = false,
 )
 
+// VETO real de Codex sobre T-58 (ver STATE.md): renombrar `eventos_auditoria`
+// a `rc_eventos_auditoria` sin preservar la lectura del historial ya
+// existente viola P-08 -- los eventos anteriores al rename seguían físicamente
+// en la tabla vieja, pero GET /eventos-auditoria dejaba de poder leerlos.
+// Esta entidad es de SOLO LECTURA sobre esa tabla heredada -- `anexar()`
+// nunca escribe aquí, solo `AlmacenDeEventosJpa.todos()` la consulta como
+// fallback. Mismas columnas que `EventoAuditoriaEntity` tenía antes del
+// rename (incluida `es_correccion`, que Hibernate ya le había agregado en
+// T-39 a la tabla compartida).
+@Entity
+@Table(name = "eventos_auditoria")
+class EventoAuditoriaLegacyEntity(
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long? = null,
+
+    @Column(nullable = false)
+    var actor: String = "",
+
+    @Column(nullable = false)
+    var fecha: Instant = Instant.EPOCH,
+
+    @Column(nullable = false)
+    var tipo: String = "",
+
+    @Column(name = "estado_anterior")
+    var estadoAnterior: String? = null,
+
+    @Column(name = "estado_posterior")
+    var estadoPosterior: String? = null,
+
+    @Column(name = "es_correccion", nullable = false, columnDefinition = "boolean not null default false")
+    var esCorreccion: Boolean = false,
+)
+
 // specs/spec-infra-servicios.md §4: "Sugerencia -> tabla sugerencias, con
 // documento_id como llave foránea". `evidencia` (List<String>) se serializa a
 // JSON en una columna de texto, misma decisión que `inventario` en

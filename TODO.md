@@ -1417,5 +1417,41 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       indexacion-busqueda 50).
       Sin umbral ni referencia normativa nueva inventada: es una corrección
       de infraestructura contra una decisión de spec ya escrita.
+      **SEGUNDO VETO real de Codex, sobre este mismo cambio**: "el renombrado
+      de `eventos_auditoria` no migra ni mantiene accesible el historial de
+      auditoría ya existente" — P-08 exige que la bitácora siga siendo
+      recuperable, y el rename por sí solo dejaba los eventos anteriores
+      físicamente en la tabla vieja pero invisibles para `GET
+      /eventos-auditoria`. Corregido SIN migrar datos (Codex ofreció esa vía
+      alternativa explícitamente: "una transición de lectura compatible que
+      los mantenga recuperables"): cada uno de los tres contextos ahora
+      combina su tabla nueva con una lectura de solo-consulta sobre la tabla
+      heredada `eventos_auditoria` (si existe), filtrada por los `tipo` de
+      evento EXCLUSIVOS de ese contexto. Hallazgo real detectado al
+      diseñar el filtro: `normalizacion` y `extraccion` usan literalmente el
+      mismo `tipo="VALIDACION_APLICADA"` sin ninguna columna de origen en la
+      tabla heredada — no hay forma honesta de atribuir esas filas a uno solo,
+      así que se excluyen explícitamente de la recuperación en ambos
+      contextos (documentado, no adivinado).
+      Nuevas pruebas contra una base preexistente con eventos de varios
+      contextos, exactamente lo que Codex pidió ("después de desplegar el
+      cambio, cada endpoint debe devolver sus propios eventos heredados y los
+      nuevos, sin mezcla"): `AlmacenDeEventosLegacyTest` (records-custodia,
+      Kotlin/H2) y `TestLecturaCompatibleDeLaTablaHeredada` (normalizacion/
+      extraccion, Python/SQLite) siembran la tabla heredada con una fila
+      propia, una ajena y una ambigua, y comprueban que solo la propia (más
+      lo nuevo) se recupera.
+      Verificado con Docker real sobre un volumen limpio con la tabla
+      heredada sembrada manualmente vía `psql` (simulando datos reales
+      pre-T-58, no solo el caso de un volumen nuevo): `GET
+      /eventos-auditoria` de records-custodia/normalizacion/extraccion
+      devolvió cada uno únicamente su propio evento heredado, ninguno ajeno,
+      ninguno ambiguo; un evento nuevo escrito después coexiste correctamente
+      con el heredado. `./test.sh` completo del repo en verde (Gradle
+      incluidas las 14 suites de records-custodia; pytest: eval-harness 4,
+      normalizacion 43 [+2], extraccion 58 [+2], clasificacion 27,
+      enriquecimiento 29, indexacion-busqueda 50). Colección Postman completa
+      reverificada dos corridas seguidas sobre volumen limpio: 98/98
+      peticiones, 143/143 aserciones, sin fallos.
       **Con T-58 cerrada, no queda ninguna tarea abierta en el backlog
       actual.**

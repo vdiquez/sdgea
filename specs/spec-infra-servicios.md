@@ -61,6 +61,23 @@ Postgres): `ib_` (indexacion-busqueda, T-56), `rc_` (records-custodia),
 exacto de cada tabla. `seguridad-acceso` (`eventos_seguridad`) y
 `captura-ingesta` (sin bitácora propia) nunca colisionaron.
 
+**Segundo VETO real de Codex, sobre la propia corrección anterior**: renombrar
+la tabla sin más dejaba inaccesible el historial ya escrito en la tabla
+compartida antes del rename — violación de P-08 (la bitácora debe seguir
+siendo recuperable). No hay migración de datos: `rc_eventos_auditoria`,
+`no_eventos_auditoria` y `ex_eventos_auditoria` reciben SOLO escrituras
+nuevas. En su lugar, `GET /eventos-auditoria` de cada uno de los tres
+contextos hace una lectura de compatibilidad de la tabla heredada
+`eventos_auditoria` (si existe) además de su tabla nueva, filtrada por los
+`tipo` de evento que ese contexto usa. Esa lectura es honesta solo con lo que
+puede saberse con certeza: `normalizacion` y `extraccion` comparten el mismo
+`tipo="VALIDACION_APLICADA"` sin ninguna columna que identifique el contexto
+de origen en la tabla heredada, así que esas filas no se le atribuyen a
+ninguno de los dos — quedan sin recuperar, documentado explícitamente en vez
+de adivinar (inventar una atribución sería peor que la pérdida de acceso que
+motivó el VETO). El resto de los `tipo` de cada contexto son exclusivos y se
+recuperan completos.
+
 ## 3. Contrato mínimo — `captura-ingesta`
 
 Traduce las funciones de
