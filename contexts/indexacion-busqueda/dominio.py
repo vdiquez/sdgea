@@ -212,8 +212,16 @@ def indexar(
 # eso está `indexar`). Cada campo es opcional: `None` significa "sin cambio",
 # mismo criterio que un PATCH parcial — el llamador declara solo lo que
 # cambió en el documento materializado subyacente.
+# `indice_lexico`/`indice_vectorial` (P-03, mismo criterio que `indexar()`
+# arriba): solo se invocan cuando el llamador SÍ declara un valor nuevo para
+# ese campo -- una actualización parcial que no toca el texto/embedding no
+# tiene nada nuevo que indexar. Sin esto, un embedding nuevo declarado aquí
+# quedaría solo en el valor devuelto, nunca en `indices_vectoriales`
+# (mismo defecto de raíz que el VETO real de Codex sobre 5a9f822).
 def actualizar_entrada(
     entrada: EntradaDeIndice,
+    indice_lexico: IndiceLexico,
+    indice_vectorial: IndiceVectorial,
     actor: str,
     fecha: datetime,
     texto_extraido: str | None = None,
@@ -229,6 +237,10 @@ def actualizar_entrada(
         embedding=embedding if embedding is not None else entrada.embedding,
         fecha_indexacion=fecha,
     )
+    if texto_extraido is not None:
+        indice_lexico.indexar(actualizada.id, texto_extraido)
+    if embedding is not None:
+        indice_vectorial.indexar(actualizada.id, embedding)
     evento = EventoAuditoria(
         actor=actor,
         fecha=fecha,

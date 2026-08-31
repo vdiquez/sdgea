@@ -194,9 +194,13 @@ class TestIndiceVectorialAutoalojado:
         almacen.guardar_con_evento(indexada, evento)
 
         assert indice_vectorial.obtener("entrada-1") == [0.5, 0.25, 0.1]
-        # AlmacenDeEntradas reconstruye el agregado completo leyendo la tabla
-        # del puerto -- no una columna propia (ver VETO real de Codex).
-        assert almacen.obtener("entrada-1").embedding == [0.5, 0.25, 0.1]
+        # QUINTO VETO real de Codex sobre 53ce657 (ver STATE.md):
+        # AlmacenDeEntradas ya NO lee `indices_vectoriales` -- eso acoplaba la
+        # orquestación a la variante AUTOALOJADA. `obtener()` siempre
+        # devuelve embedding=None; combinarlo con el puerto es
+        # responsabilidad exclusiva de api.py (`_con_embedding`), el único
+        # lugar que recibe ambos puertos sin conocer la variante activa.
+        assert almacen.obtener("entrada-1").embedding is None
 
     def test_obtener_devuelve_none_si_nunca_se_indexo(self, sesion):
         indice_vectorial = IndiceVectorialAutoalojado(sesion)

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime
 from typing import Generator
 
@@ -60,6 +61,19 @@ def _o_404(entrada: dominio.EntradaDeIndice | None, id: str) -> dominio.EntradaD
     if entrada is None:
         raise HTTPException(status_code=404, detail=f"No encontrado: {id}")
     return entrada
+
+
+# CUARTO VETO real de Codex (ver STATE.md): `AlmacenDeEntradas`/
+# `IndiceLexicoAutoalojado` ya no leen la tabla de `IndiceVectorial`
+# directamente (eso acoplaba la orquestación a la variante AUTOALOJADA) --
+# siempre devuelven `embedding=None`. Esta es la ÚNICA función que lo
+# completa, y lo hace a través del puerto ya inyectado (sea cual sea la
+# variante activa, gestionada o autoalojada) — la orquestación (api.py)
+# puede combinar dos puertos sin acoplarse a ninguno de los dos.
+def _con_embedding(entrada: dominio.EntradaDeIndice, indice_vectorial: dominio.IndiceVectorial) -> dominio.EntradaDeIndice:
+    if entrada.estado != dominio.EstadoEntradaDeIndice.INDEXADA:
+        return entrada
+    return replace(entrada, embedding=indice_vectorial.obtener(entrada.id))
 
 
 @app.exception_handler(dominio.ErrorDeDominio)
@@ -164,14 +178,25 @@ def indexar(
     return actualizada
 
 
-# RF-IB-004
+# RF-IB-004. `entrada` se enriquece con su embedding real ANTES de llamar al
+# dominio: si `request.embedding` viene vacío (actualización parcial),
+# `dominio.actualizar_entrada` preserva `entrada.embedding` tal cual —  sin
+# este paso, el embedding ya persistido se perdería en la respuesta (aunque
+# seguiría intacto en `indices_vectoriales`, ver VETO real de Codex sobre
+# 53ce657 en STATE.md).
 @app.post("/entradas/{id}/actualizacion")
 def actualizar_entrada(
-    id: str, request: ActualizacionRequest, almacen: AlmacenDeEntradas = Depends(obtener_almacen)
+    id: str,
+    request: ActualizacionRequest,
+    almacen: AlmacenDeEntradas = Depends(obtener_almacen),
+    indice_lexico: dominio.IndiceLexico = Depends(obtener_indice_lexico),
+    indice_vectorial: dominio.IndiceVectorial = Depends(obtener_indice_vectorial),
 ) -> dominio.EntradaDeIndice:
-    entrada = _o_404(almacen.obtener(id), id)
+    entrada = _con_embedding(_o_404(almacen.obtener(id), id), indice_vectorial)
     actualizada, evento = dominio.actualizar_entrada(
         entrada,
+        indice_lexico=indice_lexico,
+        indice_vectorial=indice_vectorial,
         actor=request.actor,
         fecha=request.fecha,
         texto_extraido=request.texto_extraido,
@@ -192,22 +217,26 @@ def buscar(
     request: BusquedaRequest,
     almacen: AlmacenDeEntradas = Depends(obtener_almacen),
     indice: dominio.IndiceLexico = Depends(obtener_indice_lexico),
+    indice_vectorial: dominio.IndiceVectorial = Depends(obtener_indice_vectorial),
     verificador: dominio.VerificadorDePermisos = Depends(obtener_verificador),
 ) -> list[dominio.EntradaDeIndice]:
     resultados, evento = dominio.buscar(
         indice=indice, termino=request.termino, filtros=request.filtros, verificador=verificador, actor=request.actor, fecha=request.fecha
     )
     almacen.guardar_evento_de_acceso(evento)
-    return resultados
+    return [_con_embedding(r, indice_vectorial) for r in resultados]
 
 
 @app.post("/recuperaciones")
 def recuperar_por_relevancia(
     request: RecuperacionRequest,
     almacen: AlmacenDeEntradas = Depends(obtener_almacen),
+    indice_vectorial: dominio.IndiceVectorial = Depends(obtener_indice_vectorial),
     verificador: dominio.VerificadorDePermisos = Depends(obtener_verificador),
 ) -> list[dominio.EntradaDeIndice]:
-    candidatos_ordenados = [_o_404(almacen.obtener(id), id) for id in request.entrada_ids_ordenados]
+    candidatos_ordenados = [
+        _con_embedding(_o_404(almacen.obtener(id), id), indice_vectorial) for id in request.entrada_ids_ordenados
+    ]
     resultados, evento = dominio.recuperar_por_relevancia(
         candidatos_ordenados=candidatos_ordenados, verificador=verificador, actor=request.actor, fecha=request.fecha
     )

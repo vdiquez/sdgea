@@ -173,30 +173,63 @@ class TestIndexacionVectorial:
 class TestActualizacionDelIndice:
     def test_dado_un_documento_ya_indexado_cuyo_estado_cambia_su_entrada_se_actualiza(self):
         indexada = _entrada_indexada(texto_extraido="texto original", metadatos={"serie": "100"})
+        indice_lexico = _IndiceLexicoFalso()
+        indice_vectorial = _IndiceVectorialFalso()
 
         actualizada, evento = actualizar_entrada(
-            indexada, actor="ana", fecha=FECHA, texto_extraido="texto rectificado", metadatos={"serie": "200"}
+            indexada,
+            indice_lexico=indice_lexico,
+            indice_vectorial=indice_vectorial,
+            actor="ana",
+            fecha=FECHA,
+            texto_extraido="texto rectificado",
+            metadatos={"serie": "200"},
+            embedding=[0.9, 0.8],
         )
 
         assert actualizada.texto_extraido == "texto rectificado"
         assert actualizada.metadatos == {"serie": "200"}
         assert actualizada.estado == EstadoEntradaDeIndice.INDEXADA
         assert evento.tipo == "ENTRADA_ACTUALIZADA"
+        # P-03 (VETO real de Codex sobre 53ce657, ver STATE.md): un embedding
+        # nuevo declarado en la actualización debe quedar de verdad persistido
+        # a través del puerto -- no solo reflejado en el valor devuelto.
+        assert indice_lexico.llamadas_indexar == [("entrada-1", "texto rectificado")]
+        assert indice_vectorial.llamadas_indexar == [("entrada-1", [0.9, 0.8])]
 
     def test_actualizar_una_entrada_pendiente_se_rechaza(self):
         documento = recibir_documento_materializado(documento_id="documento-1", texto_extraido="x", metadatos={})
         pendiente, _ = crear_entrada_pendiente("entrada-1", documento, actor="sistema", fecha=FECHA)
 
         with pytest.raises(ErrorDeDominio):
-            actualizar_entrada(pendiente, actor="ana", fecha=FECHA, texto_extraido="y")
+            actualizar_entrada(
+                pendiente,
+                indice_lexico=_IndiceLexicoFalso(),
+                indice_vectorial=_IndiceVectorialFalso(),
+                actor="ana",
+                fecha=FECHA,
+                texto_extraido="y",
+            )
 
     def test_campos_no_declarados_conservan_su_valor_anterior(self):
         indexada = _entrada_indexada(texto_extraido="texto original", metadatos={"serie": "100"})
+        indice_lexico = _IndiceLexicoFalso()
+        indice_vectorial = _IndiceVectorialFalso()
 
-        actualizada, _ = actualizar_entrada(indexada, actor="ana", fecha=FECHA, metadatos={"serie": "200"})
+        actualizada, _ = actualizar_entrada(
+            indexada,
+            indice_lexico=indice_lexico,
+            indice_vectorial=indice_vectorial,
+            actor="ana",
+            fecha=FECHA,
+            metadatos={"serie": "200"},
+        )
 
         assert actualizada.texto_extraido == "texto original"
         assert actualizada.metadatos == {"serie": "200"}
+        # Ningún campo indexable fue declarado -- ningún puerto debe invocarse.
+        assert indice_lexico.llamadas_indexar == []
+        assert indice_vectorial.llamadas_indexar == []
 
 
 # RF-IB-005 · Búsqueda léxica y por metadatos

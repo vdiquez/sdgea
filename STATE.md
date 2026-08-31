@@ -2773,3 +2773,68 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   consulta real, nunca solo el valor devuelto) = 46/46. `./test.sh`
   completo del repo en verde. T-54 y T-55 marcadas `- [x]` en TODO.md.
   Siguiente paso: T-56 (Dockerfile + wiring) es la próxima tarea abierta.
+
+- 2026-08-30 — CUARTO VETO real de Codex sobre el commit `5a9f822`:
+  `IndiceVectorialAutoalojado.indexar()` era literalmente `pass` — "fachada
+  vacía" — el embedding FICTICIO en realidad se persistía por otra vía
+  (directamente en la fila de `EntradaDeIndiceEntity` vía
+  `AlmacenDeEntradas.guardar_con_evento()`), no a través del puerto
+  `IndiceVectorial` que `dominio.indexar()` invoca. Corregido en el commit
+  `53ce657` (fix: corrige VETO real de Codex -- IndiceVectorialAutoalojado
+  era una fachada vacia): tabla dedicada `indices_vectoriales`
+  (`VectorDeEntradaEntity`), `.obtener()` añadido al `Protocol` y a las dos
+  variantes (autoalojada/gestionada), `.indexar()` ahora hace
+  `session.merge()` real (staged, sin commit propio — comparte la `Session`
+  con `AlmacenDeEntradas` para que la escritura sea atómica con
+  `guardar_con_evento`), columna `embedding` eliminada de
+  `EntradaDeIndiceEntity`.
+
+- 2026-08-30 — QUINTO VETO real de Codex, esta vez sobre el propio commit
+  `53ce657` — el loop headless se detuvo ahí. Texto del VETO: "P-03
+  incumplido: `AlmacenDeEntradas` lee directamente
+  `VectorDeEntradaEntity`/`indices_vectoriales`, el detalle de la variante
+  autoalojada, por lo que no es intercambiable con
+  `IndiceVectorialGestionado`." Hallazgo real: para completar el
+  `EntradaDeIndice` devuelto, `AlmacenDeEntradas.obtener()`/
+  `.todas_indexadas()` e `IndiceLexicoAutoalojado.buscar()` llamaban a un
+  helper de módulo `_embedding_de(session, entrada_id)` que consultaba
+  `VectorDeEntradaEntity` DIRECTAMENTE — esa tabla es un detalle de
+  `IndiceVectorialAutoalojado`; si se sustituyera por
+  `IndiceVectorialGestionado` en producción, estas lecturas seguirían
+  consultando la tabla local (vacía) en vez del puerto, perdiendo el
+  embedding en silencio. La orquestación conocía así la implementación
+  activa, justo lo que P-03 prohíbe. Corregido:
+  - `persistencia.py`: eliminado `_embedding_de()`; `_fila_a_entrada()` ya
+    no recibe parámetro `embedding` y siempre devuelve `None`;
+    `AlmacenDeEntradas.obtener()`/`.todas_indexadas()` e
+    `IndiceLexicoAutoalojado.buscar()` llaman a `_fila_a_entrada(fila)` sin
+    completar el embedding; `IndiceVectorialAutoalojado.obtener()` hace su
+    propia consulta directa (es dueño legítimo de esa tabla).
+  - `api.py`: nuevo helper `_con_embedding(entrada, indice_vectorial)` —
+    la ÚNICA función que combina los dos puertos, porque es la capa de
+    orquestación (recibe ambos vía `Depends`, sin conocer qué variante
+    concreta está activa). Aplicado en `POST /entradas/{id}/actualizacion`,
+    `POST /busquedas` y `POST /recuperaciones` (los tres puntos donde antes
+    se perdía el embedding en la respuesta HTTP tras el CUARTO VETO).
+  - `dominio.actualizar_entrada()`: hallazgo adicional detectado durante la
+    corrección, no señalado explícitamente por Codex — la función ya
+    aceptaba un `embedding` nuevo por parámetro pero nunca lo persistía a
+    través de ningún puerto, solo lo reflejaba en el valor devuelto (mismo
+    defecto de raíz que el CUARTO VETO, pero en la ruta de actualización en
+    vez de la de indexación inicial). Corregido añadiendo los parámetros
+    `indice_lexico`/`indice_vectorial`, invocados solo cuando el llamador
+    declara un valor nuevo para ese campo (mismo criterio que `indexar()`).
+  - `test_persistencia.py`: una aserción del test de T-55
+    (`test_indexar_y_obtener_persisten_y_recuperan_el_embedding_real`)
+    esperaba `almacen.obtener(...).embedding == [...]` — ese es
+    precisamente el acoplamiento que el QUINTO VETO señaló como incorrecto.
+    Corregida a `is None`, con el comentario explicando por qué.
+  `uv run --directory contexts/indexacion-busqueda pytest`: 49/49 (nuevas
+  aserciones de embedding en `test_dominio.py`/`test_api.py` que ejercitan
+  las llamadas reales a los puertos, no solo el valor de retorno).
+  `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL; pytest:
+  eval-harness 4, normalizacion 40, extraccion 55, clasificacion 27,
+  enriquecimiento 29, indexacion-busqueda 49).
+  Siguiente paso: T-56 (Dockerfile real de indexacion-busqueda + wiring en
+  docker-compose.{saas,onprem,local-ports}.yml, con Postgres) es la próxima
+  tarea abierta en TODO.md.

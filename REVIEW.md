@@ -1,50 +1,15 @@
-OK: T-55 corrige los dos motivos del VETO anterior; sin violaciones de P-01, P-03 ni P-08.
+VETO: P-03 incumplido: `AlmacenDeEntradas` lee directamente `VectorDeEntradaEntity`/`indices_vectoriales`, el detalle de la variante autoalojada, por lo que no es intercambiable con `IndiceVectorialGestionado`.
 
-# Revisión de `3793486bf8f5214f206eb20270d2c4bea0515190`
+Commit revisado: `53ce657bf62c34b87813882838ad6ca76b5cfb1e` — contexto `specs/005-indexacion-busqueda/spec.md` (RF-IB-003, RNF-IB-002; P-01/P-03/P-08).
 
-## Alcance y contexto
+Hallazgo bloqueante
 
-El commit modifica únicamente `TODO.md`: ajusta el diseño pendiente de T-55
-para el contexto [Indexación y Búsqueda](specs/005-indexacion-busqueda/spec.md).
-No incorpora código ni pruebas ejecutables, ni modifica archivos bajo `specs/`.
+- `persistencia.py` incorpora `_embedding_de(session, entrada_id)`, que consulta directamente `VectorDeEntradaEntity`, y `AlmacenDeEntradas.obtener()`/`todas_indexadas()` lo invocan. Esa tabla solo existe para `IndiceVectorialAutoalojado`; al sustituir el puerto por `IndiceVectorialGestionado`, el almacén continúa leyendo la tabla local en vez del puerto y pierde el embedding. La orquestación conoce por tanto la implementación activa, exactamente lo que P-03 prohíbe. Debe eliminarse ese acoplamiento: el consumidor debe depender de la interfaz `IndiceVectorial` (o el agregado de índice debe separar el dato externo sin que el almacén concrete la variante) y una prueba debe ejercitar ambas variantes bajo el mismo contrato.
 
-Por tanto, no aplica el control reforzado de referencias normativas y umbrales
-por ruta modificada. De todas formas, el diff no añade Acuerdos, Leyes,
-Decretos, ISO ni valores numéricos: RNF-IB-002, los cuatro componentes y el
-`[CLARIFICAR]` de motores/modelos ya existen en la spec. Postgres es parte del
-stack ya decidido en STATE.md; las URL de configuración no son una nueva
-referencia normativa ni un umbral.
+Verificaciones
 
-## Principios constitucionales
-
-- **P-01 — conforme.** T-55 mantiene embeddings, orden semántico, respuesta y
-  citas como valores ficticios ya entregados por el llamador. Sus adaptadores
-  gestionado/autoalojado no calculan nada probabilístico y fallan de forma
-  explícita si se invocan; no hay una ruta planificada que escriba el estado de
-  Records/Custodia sin una decisión humana.
-- **P-03 — conforme.** La tarea ahora ordena una interfaz y dos variantes de
-  despliegue reales e intercambiables para índice léxico, índice vectorial,
-  generador de embeddings y modelo de lenguaje: autoalojada sin salida de red
-  y gestionada mediante endpoint configurable. Además, Seguridad y Acceso se
-  consume mediante `VerificadorDePermisos`, no directamente desde el dominio.
-  El hecho de que el compose actual use por defecto la variante autoalojada no
-  elimina la segunda implementación ni contradice la paridad exigida.
-- **P-08 — conforme.** Cada ruta de consulta debe guardar su evento de acceso
-  en la bitácora append-only, de forma atómica y antes de responder. Se
-  distingue correctamente de `guardar_con_evento` para indexación/actualización
-  y se exige exponer ambos tipos mediante `GET /eventos-auditoria`.
-
-## Honestidad de pruebas
-
-No hay tests nuevos en este commit, por lo que no existe una prueba ejecutable
-que pueda estar amañada. La especificación de TDD corregida es honesta respecto
-a RF-IB-009: debe ejecutar la consulta HTTP real y luego consultar la bitácora;
-no permite satisfacer el criterio inspeccionando solo un evento devuelto ni una
-función auxiliar aislada. Al implementar T-55 habrá que comprobar que la prueba
-cubra las rutas efectivamente declaradas y que la persistencia sea transaccional.
-
-## Dictamen
-
-La modificación resuelve los dos hallazgos bloqueantes de `e356158`: ya no
-confunde dobles en memoria con variantes de despliegue y ya no confunde devolver
-un evento con emitirlo persistentemente. Sin VETO.
+- P-01: conforme en el cambio. No se incorpora componente probabilístico real; el adaptador vectorial únicamente almacena/recupera el embedding que recibe y no materializa decisiones de records.
+- P-08: conforme para la transición de indexación autoalojada. `IndiceVectorialAutoalojado.indexar()` deja su escritura en la misma `Session` que `guardar_con_evento()`, cuyo `commit` incluye entrada y evento; el rollback cubre ambos. El cambio no añade nuevas transiciones sin evento.
+- Tests: los dos tests nuevos son honestos respecto de la variante autoalojada: usan SQLAlchemy/SQLite real, persisten y leen el vector, y comprueban que el almacén lo reconstruye. No prueban el criterio de intercambiabilidad de P-03 ni pueden detectar el acoplamiento anterior; falta una prueba que cambie la implementación del puerto y verifique el mismo comportamiento sin acceso a la tabla local.
+- `specs/` no fue modificado en este commit; no aplica el chequeo adicional de referencias normativas ni umbrales.
+- Verificación ejecutada: `bash ./test.sh` llegó a los checks de scripts, pero no completó la suite por un fallo de entorno de Gradle al crear `C:\\.gradle\\wrapper\\...zip.lck` (no por un fallo de tests del cambio).

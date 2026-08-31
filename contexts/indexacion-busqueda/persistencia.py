@@ -103,18 +103,25 @@ def _entrada_a_fila(entrada: EntradaDeIndice) -> EntradaDeIndiceEntity:
     )
 
 
-# `embedding` ya no viene de esta fila (ver VectorDeEntradaEntity) -- lo
-# completa `AlmacenDeEntradas` con una consulta aparte a esa tabla, mismo
-# criterio de "el dueño del dato es el puerto P-03, no el agregado principal"
-# que motivó separar `indices_vectoriales`.
-def _fila_a_entrada(fila: EntradaDeIndiceEntity, embedding: list[float] | None = None) -> EntradaDeIndice:
+# `embedding` SIEMPRE None aquí -- CUARTO VETO real de Codex (ver STATE.md):
+# la primera corrección de este archivo tenía `AlmacenDeEntradas` e
+# `IndiceLexicoAutoalojado` leyendo `VectorDeEntradaEntity` directamente
+# (`_embedding_de`), acoplando la orquestación al detalle de la variante
+# AUTOALOJADA de `IndiceVectorial` -- si se sustituyera por
+# `IndiceVectorialGestionado`, este almacén seguiría leyendo la tabla local
+# (vacía) en vez del puerto, perdiendo el embedding en silencio. Ningún
+# adaptador de persistencia debe conocer la implementación activa de OTRO
+# puerto. Quien SÍ puede combinar los dos (porque recibe ambos puertos ya
+# inyectados, sea cual sea la variante activa) es la capa de orquestación
+# (api.py) -- ver `_con_embedding()` ahí.
+def _fila_a_entrada(fila: EntradaDeIndiceEntity) -> EntradaDeIndice:
     return EntradaDeIndice(
         id=fila.id,
         documento_id=fila.documento_id,
         estado=EstadoEntradaDeIndice(fila.estado),
         texto_extraido=fila.texto_extraido,
         metadatos=json.loads(fila.metadatos_json),
-        embedding=embedding,
+        embedding=None,
         fecha_indexacion=fila.fecha_indexacion,
     )
 
@@ -139,15 +146,6 @@ def _evento_acceso_a_fila(evento: EventoDeAcceso) -> EventoDeAccesoEntity:
     return EventoDeAccesoEntity(
         actor=evento.actor, fecha=evento.fecha, tipo=evento.tipo, documentos_accedidos_json=json.dumps(list(evento.documentos_accedidos))
     )
-
-
-# El embedding se lee desde `indices_vectoriales` (`IndiceVectorial` es su
-# único dueño, ver VETO real de Codex sobre 5a9f822 en STATE.md) -- función
-# de módulo porque tanto `AlmacenDeEntradas` como `IndiceLexicoAutoalojado`
-# necesitan completar el `EntradaDeIndice` que devuelven con su embedding.
-def _embedding_de(session: Session, entrada_id: str) -> list[float] | None:
-    fila = session.get(VectorDeEntradaEntity, entrada_id)
-    return json.loads(fila.embedding_json) if fila else None
 
 
 def _fila_a_evento_acceso(fila: EventoDeAccesoEntity) -> EventoDeAcceso:
@@ -178,7 +176,7 @@ class AlmacenDeEntradas:
 
     def obtener(self, id: str) -> EntradaDeIndice | None:
         fila = self._session.get(EntradaDeIndiceEntity, id)
-        return _fila_a_entrada(fila, _embedding_de(self._session, id)) if fila else None
+        return _fila_a_entrada(fila) if fila else None
 
     def todas_indexadas(self) -> list[EntradaDeIndice]:
         filas = (
@@ -188,7 +186,7 @@ class AlmacenDeEntradas:
             .scalars()
             .all()
         )
-        return [_fila_a_entrada(fila, _embedding_de(self._session, fila.id)) for fila in filas]
+        return [_fila_a_entrada(fila) for fila in filas]
 
     def eventos_de_auditoria(self) -> list[EventoAuditoria]:
         filas = self._session.execute(select(EventoAuditoriaEntity).order_by(EventoAuditoriaEntity.id)).scalars().all()
@@ -245,7 +243,7 @@ class IndiceLexicoAutoalojado(IndiceLexico):
             .scalars()
             .all()
         )
-        return [_fila_a_entrada(fila, _embedding_de(self._session, fila.id)) for fila in filas]
+        return [_fila_a_entrada(fila) for fila in filas]
 
 
 # P-03 (VETO real de Codex sobre 5a9f822, ver STATE.md): implementación
@@ -267,7 +265,8 @@ class IndiceVectorialAutoalojado(IndiceVectorial):
         self._session.merge(VectorDeEntradaEntity(entrada_id=entrada_id, embedding_json=json.dumps(embedding)))
 
     def obtener(self, entrada_id: str) -> list[float] | None:
-        return _embedding_de(self._session, entrada_id)
+        fila = self._session.get(VectorDeEntradaEntity, entrada_id)
+        return json.loads(fila.embedding_json) if fila else None
 
 
 def crear_fabrica_de_sesiones(url: str | None = None) -> sessionmaker[Session]:

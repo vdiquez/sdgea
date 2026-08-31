@@ -89,6 +89,24 @@ class TestActualizacion:
         assert response.status_code == 200
         assert response.json()["metadatos"] == {"serie": "200"}
 
+    # VETO real de Codex sobre 53ce657 (ver STATE.md): un embedding nuevo
+    # declarado en la actualización debe quedar realmente persistido en
+    # `indices_vectoriales`, no solo reflejado en la respuesta HTTP de este
+    # endpoint. Esta prueba lo comprueba con una petición POSTERIOR e
+    # independiente (una búsqueda), que reconstruye el agregado leyendo el
+    # puerto de nuevo -- no reutiliza el valor devuelto por la actualización.
+    def test_post_actualizacion_con_embedding_nuevo_lo_deja_persistido_de_verdad(self, client):
+        _crear_e_indexar(client, texto="el gato subió al tejado")
+
+        respuesta_actualizacion = client.post(
+            "/entradas/entrada-1/actualizacion", json={"embedding": [0.9, 0.8], "actor": "ana", "fecha": FECHA}
+        )
+        assert respuesta_actualizacion.json()["embedding"] == [0.9, 0.8]
+
+        respuesta_busqueda = client.post("/busquedas", json={"termino": "tejado", "actor": "ana", "fecha": FECHA})
+
+        assert [r["embedding"] for r in respuesta_busqueda.json()] == [[0.9, 0.8]]
+
 
 # RF-IB-005/008/009
 class TestBusqueda:
@@ -99,6 +117,10 @@ class TestBusqueda:
 
         assert response.status_code == 200
         assert [r["documento_id"] for r in response.json()] == ["documento-1"]
+        # P-03 (VETO real de Codex sobre 53ce657, ver STATE.md): el resultado
+        # debe traer su embedding real, recuperado a través del puerto -- no
+        # `None` (síntoma exacto del acoplamiento ya corregido).
+        assert response.json()[0]["embedding"] == [0.1, 0.2]
 
         eventos = client.get("/eventos-auditoria").json()
         accesos = [e for e in eventos["accesos"] if e["tipo"] == "BUSQUEDA_LEXICA"]
@@ -125,6 +147,7 @@ class TestRecuperacionPorRelevancia:
 
         assert response.status_code == 200
         assert [r["id"] for r in response.json()] == ["entrada-2", "entrada-1"]
+        assert [r["embedding"] for r in response.json()] == [[0.1, 0.2], [0.1, 0.2]]
 
 
 # RF-IB-007/010 (FICTICIO)
