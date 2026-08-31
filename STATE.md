@@ -3137,3 +3137,37 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   fallos.
   **Con esto, T-58 queda cerrada de verdad (sin VETO pendiente) y no queda
   ninguna tarea abierta en TODO.md.**
+
+- 2026-08-31 — Nueva iniciativa decidida por Victor: con el corte vertical
+  (F2) y el arnés/CI (F3) completos, el backend solo es demostrable vía
+  `curl`/Postman. Para el hilo comercial (F4 de
+  `plan-ejecucion-agentica.md` — conseguir socio de diseño) y para
+  adiestramiento funcional del equipo, se necesita una capa de UI de
+  demostración. Victor tomó cuatro decisiones explícitas (única vez que se
+  le pidió, vía preguntas de aclaración):
+  1. Stack: React + Vite (+ TypeScript, decisión técnica mía dentro de esa
+     elección, no requería su aprobación separada).
+  2. Alcance del primer demo: flujo completo de punta a punta, los nueve
+     contextos, misma narrativa que la colección Postman.
+  3. Los componentes FICTICIOS (clasificación, OCR, embeddings, ranking,
+     Q&A) se marcan visualmente como simulados, nunca como IA real — mismo
+     principio P-01 extendido a la capa visual.
+  4. Mismo régimen de disciplina que el backend: spec primero, TDD,
+     `HUMAN=1` solo para `.specify/memory/constitution.md`, Codex revisa
+     cada commit.
+  Creada `specs/008-ui-demo/spec.md` (nivel 1, RF-UI-001..012 con
+  Dado/Cuando/Entonces, ninguno redefine una regla de negocio — cada uno
+  referencia el RF backend que expone). Decisiones de arquitectura fijadas
+  en la spec, no inventadas sin base: proxy inverso curado (nuevo servicio
+  de infraestructura pura) para que el navegador nunca llame un puerto
+  interno directamente, coherente con `spec-infra-servicios.md` §10
+  (algunos servicios no deben exponerse fuera de la red interna); sin
+  mecanismo de sesión con token real porque Seguridad y Acceso no lo tiene
+  todavía (`POST /identidades/autenticacion` solo devuelve la `Identidad`)
+  — se reenvía el `identidadId` como `actor`, mismo patrón que ya usa
+  Postman; cuatro `[CLARIFICAR]` reales dejados abiertos en §8 (token de
+  sesión real, diseño visual/marca, dataset de ejemplo pre-cargado, modo
+  solo-lectura) — ninguno se resolvió inventando.
+  Siguiente paso: comitear la spec y pedir revisión de Codex antes de
+  sembrar TODO.md con las tareas de implementación (plan.md, scaffold,
+  RF-UI por RF-UI).
