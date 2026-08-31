@@ -2913,3 +2913,47 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   distintos, no solo uno.
   Siguiente paso: T-57 (colección Postman E2E, cierra los nueve contextos
   del corte vertical).
+
+- 2026-08-30 — T-57 completada: carpeta 10 (peticiones 82-97) en
+  `postman/SGDEA-coleccion.postman_collection.json`, siguiendo el flujo
+  del TODO: custodiar y materializar (RF-RC-004, records-custodia) →
+  recibir e indexar dos documentos (RF-IB-001/002/003) → rol+identidad en
+  seguridad-acceso (RF-IB-008/P-03) → buscar con actor autorizado y sin
+  autorizar (RF-IB-005/008) → recuperar por relevancia con orden invertido
+  ya calculado, preservado (RF-IB-006) → pregunta con cita permitida
+  (RF-IB-007) → pregunta sin evidencia (RF-IB-010) → pregunta con cita
+  real pero actor sin permiso -- la cita se filtra antes de decidir la
+  rama, cae a negativa apropiada (RF-IB-008 dentro de Q&A, invariante 3,
+  no pedido explícitamente por el TODO pero cubierto porque
+  `responder_qa()` lo exige) → `GET /eventos-auditoria` (P-08/RF-IB-009,
+  incluidos los accesos denegados con `documentos_accedidos` vacío).
+  **Primer fallo real que encontró esta carpeta**: el índice léxico vive
+  en el mismo Postgres persistente entre corridas de Newman -- sin un
+  token único por corrida embebido en el texto indexado y en el término de
+  búsqueda, la segunda corrida seguida encontraba las entradas de AMBAS
+  corridas (2 resultados donde se esperaba 1), mismo patrón que la huella
+  de contenido de Normalización en T-36. Corregido con
+  `{{documento_id_ib}}` embebido en ambos.
+  **Segundo hallazgo, sobre el volumen, no sobre la colección**: la
+  carpeta 2 publica el TRD v1 con versión FIJA (petición 08); el volumen
+  de Postgres de esta máquina ya tenía 14 versiones de TRD acumuladas de
+  sesiones anteriores, así que una reverificación completa desde la
+  carpeta 1 necesita partir de un volumen limpio (`docker compose ...
+  down -v`) -- no es nuevo (T-39 ya lo mencionó una vez), pero quedó
+  explícito como requisito en `postman/README.md` en vez de una nota
+  aislada.
+  Verificado con Docker real: nueve servicios (`docker compose -f
+  saas.yml -f local-ports.yml down -v && up -d --build`), dos corridas de
+  Newman seguidas sobre el mismo volumen sin bajarlo entre medias -- 98/98
+  peticiones, 143/143 aserciones, cero fallos en ambas corridas tras la
+  corrección. Stack detenido al terminar.
+  `postman/README.md` actualizado: párrafo de la carpeta 10, variables de
+  entorno nuevas, nota sobre el volumen de Postgres en "Levantar el
+  stack", entrada de reverificación en el historial de Newman.
+  **Con esto se completan los nueve bounded contexts del alcance original
+  del corte vertical** (captura-ingesta, records-custodia,
+  seguridad-acceso, validación-humana, normalización, extracción,
+  clasificación, enriquecimiento, indexación-búsqueda). Queda T-58
+  abierta (aislamiento de tablas ENTRE captura-ingesta/records-custodia/
+  normalizacion/extraccion, ver T-56) como la única tarea pendiente del
+  backlog actual.

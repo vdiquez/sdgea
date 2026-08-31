@@ -1,10 +1,11 @@
 # Colección Postman — corte vertical
 
-Cubre 50 de los 58 endpoints reales de `specs/spec-infra-servicios.md`
-(captura-ingesta + records-custodia + seguridad-acceso + validacion-humana +
-normalizacion + extraccion + clasificacion), en el orden en que se probaron
-manualmente con `curl` — los 8 que faltan ya tienen su propia cobertura fuera
-de esta colección: en validacion-humana, candidatas a aprobación masiva, aprobación
+Cubre la mayoría de los endpoints reales de `specs/spec-infra-servicios.md`
+(los nueve bounded contexts: captura-ingesta + records-custodia +
+seguridad-acceso + validacion-humana + normalizacion + extraccion +
+clasificacion + enriquecimiento + indexacion-busqueda), en el orden en que se
+probaron manualmente con `curl` — algunos endpoints ya tienen su propia
+cobertura fuera de esta colección: en validacion-humana, candidatas a aprobación masiva, aprobación
 en bloque y estado de la cola de clasificación (tests de Gradle, T-30); en
 records-custodia y normalizacion, `GET /sugerencias/pendientes` (T-28) y
 `GET /unidades/pendientes-de-limites` (T-39) — ambos se ejercitan
@@ -88,6 +89,47 @@ T-52** (`specs/004-enriquecimiento/spec.md` §8): la forma genérica de
 original" — Enriquecimiento la calcula y expone a nivel de dominio
 (RF-EN-003), pero se pierde al traducir a la forma saliente; no es
 consultable desde records-custodia, solo desde el propio Enriquecimiento.
+La carpeta 10 (T-57, peticiones 82-97) ejercita el ciclo completo de
+Indexación y Búsqueda — **noveno y último bounded context del corte
+vertical original**. A diferencia de las carpetas 8/9 (que solo custodian
+un documento porque no necesitan más), aquí el flujo también materializa
+una decisión humana real en records-custodia (RF-RC-004, reutilizando el
+TRD publicado en la petición 08), porque el TODO de T-57 lo exige
+explícitamente: custodiar y materializar → recibir dos documentos
+materializados e indexarlos (RF-IB-001/002/003, ambos con embedding
+FICTICIO real y persistido) → crear rol + identidad en Seguridad y Acceso
+con permiso `consultar`/`documento` (RF-IB-008/P-03, mismo patrón que la
+carpeta 7) → buscar por término y filtro con el actor autorizado, un
+resultado con su embedding recuperado a través del puerto (RF-IB-005,
+`_con_embedding`) → la MISMA búsqueda con un actor sin identidad
+registrada, lista vacía (RF-IB-008) → recuperar por relevancia con el
+orden ya calculado por el llamador, invertido respecto al orden de
+creación, y comprobar que se preserva exactamente (RF-IB-006, FICTICIO) →
+responder una pregunta con una cita permitida (RF-IB-007) → una pregunta
+sin ninguna evidencia declarada → negativa apropiada (RF-IB-010) → una
+pregunta con una cita real pero un actor sin permiso sobre ese documento →
+la cita se filtra ANTES de decidir la rama y también cae a negativa
+apropiada, nunca deja pasar una respuesta sustentada en evidencia no
+permitida (RF-IB-008 dentro de Q&A, invariante 3) →
+`GET /eventos-auditoria`, que expone dos bitácoras (transiciones y
+accesos) y confirma que el acceso denegado de la búsqueda/pregunta sin
+permiso queda igual de auditado, con `documentos_accedidos` vacío en vez
+de omitido (RF-IB-009 exacto). **Primer fallo real que encontró esta
+carpeta** (mismo patrón que la huella de contenido de Normalización en
+T-36): el texto buscado y el índice léxico persistente son compartidos por
+el mismo Postgres entre corridas — sin un token único por corrida
+(`{{documento_id_ib}}`) embebido en el texto y en el término de búsqueda,
+la segunda corrida seguida encontraba las entradas de AMBAS corridas en
+vez de solo la propia; corregido antes de dar T-57 por cerrada.
+
+**Nota sobre el volumen de Postgres**: a diferencia de las demás carpetas
+(cuyos identificadores llevan timestamp y toleran datos de corridas
+anteriores), la carpeta 2 publica el TRD v1 con una versión FIJA (petición
+08) y la carpeta 10 reutiliza esa misma versión — si el volumen de
+Postgres ya tiene un TRD v1 publicado por una sesión de verificación
+anterior, la petición 08 (que espera `201 Created`) falla con `409`. Por
+eso cada reverificación completa de esta colección parte de un volumen
+limpio: `docker compose ... down -v` antes de `up -d --build`.
 
 ## Levantar el stack (con puertos locales para Postman)
 
@@ -98,6 +140,18 @@ hace, T-30). Para probarlos desde Postman en tu máquina hay un overlay
 aparte, solo para desarrollo local:
 
 ```
+docker compose -f ../deploy/docker-compose.saas.yml -f ../deploy/docker-compose.local-ports.yml up -d --build
+```
+
+Para una reverificación COMPLETA de la colección (todas las carpetas, de
+punta a punta), primero baja el stack con `-v` para partir de un volumen
+de Postgres limpio — la carpeta 2 publica el TRD v1 con una versión fija
+(petición 08) y la carpeta 10 la reutiliza; un volumen con un TRD v1 ya
+publicado por una corrida anterior hace fallar la petición 08 con `409`
+en vez del `201` esperado:
+
+```
+docker compose -f ../deploy/docker-compose.saas.yml -f ../deploy/docker-compose.local-ports.yml down -v
 docker compose -f ../deploy/docker-compose.saas.yml -f ../deploy/docker-compose.local-ports.yml up -d --build
 ```
 
@@ -115,13 +169,20 @@ docker compose -f ../deploy/docker-compose.saas.yml -f ../deploy/docker-compose.
    (carpeta 6, T-39),
    `rol_ex`/`actor_ex`/`identidad_id_ex`/`lote_id_ex`/`texto_id_ex`/`texto_id_ex_2`/`texto_id_ex_3`
    (carpeta 7, T-43), `documento_id_cl`/`sugerencias_count_cl` (carpeta 8, T-47),
-   `documento_id_en`/`sugerencias_count_en` (carpeta 9, T-52)
+   `documento_id_en`/`sugerencias_count_en` (carpeta 9, T-52),
+   `documento_id_ib`/`documento_id_ib_2`/`rol_ib`/`actor_ib`/`identidad_id_ib`/
+   `entrada_id_ib`/`entrada_id_ib_2` (carpeta 10, T-57)
    — generadas con timestamp en la primera petición de cada flujo, así que correr la
    colección varias veces no colisiona. La huella de contenido de
    Normalización también necesita timestamp: sin él, la segunda corrida
    detecta un duplicado real contra la primera y falla la aserción de
    "entregada a Extracción" — fue el primer fallo real que encontró este
-   patrón, corregido en T-36.)
+   patrón, corregido en T-36. El texto/término de búsqueda de Indexación y
+   Búsqueda necesita el mismo tratamiento (ver nota sobre la carpeta 10
+   arriba) — segundo fallo real del mismo patrón, corregido en T-57. La
+   carpeta 10 además reutiliza el TRD v1 fijo publicado en la petición 08:
+   una reverificación completa necesita partir de un volumen de Postgres
+   limpio (`docker compose ... down -v`), no solo `up -d --build`.)
 
 ## Validar sin abrir Postman (Newman)
 
@@ -192,7 +253,21 @@ aserciones existentes en las peticiones 77/78, no agrega peticiones
 nuevas), dos corridas seguidas sin fallos, confirmando que la forma
 original de un valor propuesto sobrevive de punta a punta: Enriquecimiento
 → `POST /sugerencias` → records-custodia → `GET /documentos/{id}/
-sugerencias`.
+sugerencias`. Reverificado (2026-08-30, tras T-54..T-57/ciclo completo de
+Indexación y Búsqueda, con los nueve servicios corriendo a la vez —
+**noveno y último bounded context del corte vertical original**): 98/98
+peticiones, 143/143 aserciones — partiendo de un volumen de Postgres
+limpio (`docker compose ... down -v`, necesario porque la carpeta 10
+reutiliza el TRD v1 fijo de la petición 08, ver nota arriba), la primera
+corrida encontró un fallo real (dos entradas con el mismo texto
+compartiendo el mismo índice léxico entre corridas, ver nota sobre la
+carpeta 10 arriba), corregido con un token único por corrida embebido en
+el texto/término de búsqueda y confirmado con dos corridas seguidas
+limpias después — incluida la frontera de autorización en las tres rutas
+de consulta (búsqueda/recuperación/preguntas, RF-IB-008), el orden
+declarado por el llamador preservado en `POST /recuperaciones`
+(RF-IB-006), y que una cita real pero sin permiso nunca sustenta una
+respuesta (RF-IB-008 dentro de Q&A, invariante 3).
 
 ## Bajar el stack
 

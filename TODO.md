@@ -1311,7 +1311,7 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       sí siguen colisionando ENTRE ELLOS (captura-ingesta/records-custodia/
       normalizacion/extraccion) — indexacion-busqueda ya no participa de
       esa colisión.
-- [ ] T-57 Colección Postman con el ciclo completo de Indexación y
+- [x] T-57 Colección Postman con el ciclo completo de Indexación y
       Búsqueda, mismo patrón que T-36/T-43/T-47/T-52 — flujo end-to-end
       real: custodiar y materializar un documento en records-custodia
       (decisión humana real, RF-RC-004) → recibir su texto extraído
@@ -1326,6 +1326,41 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       Verificar con el stack Docker real de los nueve servicios (primera vez
       con `indexacion-busqueda`) y dos corridas de Newman seguidas sin
       fallos; actualizar `postman/README.md` con el conteo real.
+      Carpeta 10 (peticiones 82-97) construida siguiendo exactamente ese
+      flujo, con una identidad "sin permiso" implementada como un actor no
+      registrado en seguridad-acceso (mismo patrón que la petición 62,
+      T-43/RF-EX-011) en vez de una segunda identidad real con un rol
+      distinto -- ambos caminos demuestran RF-IB-008 igual de bien y este
+      es el ya aceptado por Codex en la carpeta 7. Además de las tres rutas
+      de consulta, se probó RF-IB-008 dentro de `POST /preguntas`: una cita
+      real pero sin permiso se filtra ANTES de decidir la rama, así que
+      `responder_qa()` cae a `NegativaApropiada` aunque el llamador
+      entregó una `respuesta`, nunca deja pasar una respuesta sustentada en
+      evidencia no permitida (invariante 3).
+      **Primer fallo real que encontró esta carpeta** (mismo patrón que la
+      huella de contenido de Normalización en T-36, ya documentado en
+      `postman/README.md`): el índice léxico es un Postgres persistente
+      compartido por todas las corridas de la colección, así que un texto
+      buscado sin un token único por corrida coincidía con las entradas de
+      corridas anteriores -- la segunda corrida seguida encontró 2
+      resultados donde se esperaba 1. Corregido embebiendo
+      `{{documento_id_ib}}` en el texto indexado y en el término de
+      búsqueda antes de dar la tarea por cerrada.
+      **Segundo hallazgo, sobre el volumen de Postgres, no sobre la
+      colección en sí**: la carpeta 2 publica el TRD v1 con una versión
+      FIJA (petición 08); en un volumen que ya tiene un TRD v1 publicado
+      por una sesión anterior (14 filas en `trd_versiones` al empezar esta
+      tarea), esa petición falla con `409` en vez del `201` esperado -- no
+      es un defecto de la colección, es que una reverificación completa
+      siempre necesitó partir de un volumen limpio (el propio historial de
+      `postman/README.md` ya lo documentaba una vez, T-39); ahora queda
+      explícito en el README como requisito, no una nota aislada.
+      Verificado con Docker real: `docker compose ... down -v` + `up -d
+      --build` (nueve servicios), dos corridas de Newman seguidas sobre el
+      mismo volumen sin bajarlo entre medias -- 98/98 peticiones, 143/143
+      aserciones, cero fallos en ambas corridas tras la corrección.
+      `postman/README.md` actualizado (carpeta 10, variables nuevas, nota
+      sobre el volumen de Postgres, historial de reverificación).
       **Con esto se completan los nueve bounded contexts del alcance
       original del corte vertical.**
 - [ ] T-58 Aísla la tabla `eventos_auditoria` (y cualquier otra con nombre

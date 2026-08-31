@@ -3613,6 +3613,790 @@
           ]
         }
       ]
+    },
+    {
+      "name": "10. Indexacion y Busqueda",
+      "item": [
+        {
+          "name": "82 [Setup] Custodiar documento en records-custodia (RF-RC-001)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos"
+              ]
+            },
+            "description": "T-57: ciclo completo de Indexacion y Busqueda (T-54..T-56), noveno y ultimo bounded context del corte vertical. A diferencia de las carpetas 8/9 (Clasificacion/Enriquecimiento, que solo custodian), aqui se completa tambien la materializacion (peticion 83, RF-RC-004) porque el TODO de T-57 la exige explicitamente como parte del flujo real.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{documento_id_ib}}\",\n  \"bytesBase64\": \"SG9sYSBTR0RFQQ==\",\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-30T16:00:00Z\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-30T16:00:00Z\",\n    \"loteOFlujoId\": \"lote-ib-postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"documento_id_ib\", \"doc-ib-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "83 [Setup] Materializar decision humana (RF-RC-004)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos/{{documento_id_ib}}/decisiones",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos",
+                "{{documento_id_ib}}",
+                "decisiones"
+              ]
+            },
+            "description": "Reutiliza el TRD publicado en la peticion 08 (trd_version) y la serie-1 -- mismo patron que la peticion 13. Unica operacion que puede cambiar la clasificacion del documento (P-01); decision manual, sin referenciar ninguna sugerencia.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-30T16:01:00Z\",\n  \"sugerenciasReferenciadas\": [],\n  \"clasificacionResultante\": {\n    \"documentoId\": \"{{documento_id_ib}}\",\n    \"trdVersion\": {{trd_version}},\n    \"serieId\": \"serie-1\",\n    \"subserieId\": null\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, clasificacion materializada\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().clasificacion.serieId).to.eql(\"serie-1\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "84 [Setup] Crear rol con permiso consultar/documento (RF-IB-008, P-03)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/roles",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "roles"
+              ]
+            },
+            "description": "VerificadorDePermisosHttp (integracion.py) envia accion=consultar, tipoRecurso=documento a POST /autorizacion sin nivelClasificacion -- seguridad-acceso lo asume PUBLICA por defecto (Dtos.kt), asi que nivelClasificacionMaximo=PUBLICA aqui basta para cubrir cualquier documento_id, mismo patron que la carpeta 7 (RF-EX-011).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"{{rol_ib}}\",\n  \"permisos\": [\n    { \"accion\": \"consultar\", \"tipoRecurso\": \"documento\", \"nivelClasificacionMaximo\": \"PUBLICA\" }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"rol_ib\", \"rol-ib-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "85 [Setup] Crear identidad con ese rol",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{seguridad_acceso_base_url}}/identidades",
+              "host": [
+                "{{seguridad_acceso_base_url}}"
+              ],
+              "path": [
+                "identidades"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{identidad_id_ib}}\",\n  \"actor\": \"{{actor_ib}}\",\n  \"credencial\": \"clave-ib-postman\",\n  \"roles\": [\"{{rol_ib}}\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"actor_ib\", \"actor-ib-postman-\" + Date.now());",
+                  "pm.environment.set(\"identidad_id_ib\", \"id-ib-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "86 Recibir documento materializado (RF-IB-001)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/entradas",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "entradas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{entrada_id_ib}}\",\n  \"documento_id\": \"{{documento_id_ib}}\",\n  \"texto_extraido\": \"acta de reunion del comite directivo sobre presupuesto-{{documento_id_ib}}\",\n  \"metadatos\": {\"serie\": \"serie-1\"},\n  \"actor\": \"sistema-indexacion\",\n  \"fecha\": \"2026-08-30T16:02:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"entrada_id_ib\", \"entrada-ib-postman-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created, PENDIENTE_DE_INDEXACION\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(pm.response.json().estado).to.eql(\"PENDIENTE_DE_INDEXACION\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "87 Indexar -- lexica y vectorial en una sola transicion (RF-IB-002/003)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/entradas/{{entrada_id_ib}}/indexacion",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "entradas",
+                "{{entrada_id_ib}}",
+                "indexacion"
+              ]
+            },
+            "description": "RF-IB-003: el embedding es FICTICIO, ya calculado por el llamador -- indexar() lo guarda de verdad detras de IndiceVectorial (VETO real de Codex sobre 5a9f822, ver STATE.md), recuperable via GET/busquedas gracias a _con_embedding (api.py).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto_extraido\": \"acta de reunion del comite directivo sobre presupuesto-{{documento_id_ib}}\",\n  \"metadatos\": {\"serie\": \"serie-1\"},\n  \"embedding\": [0.12, 0.34, 0.56],\n  \"actor\": \"sistema-indexacion\",\n  \"fecha\": \"2026-08-30T16:03:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, INDEXADA con embedding\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.estado).to.eql(\"INDEXADA\");",
+                  "  pm.expect(body.embedding).to.eql([0.12, 0.34, 0.56]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "88 [Setup] Custodiar un segundo documento en records-custodia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{records_custodia_base_url}}/documentos",
+              "host": [
+                "{{records_custodia_base_url}}"
+              ],
+              "path": [
+                "documentos"
+              ]
+            },
+            "description": "Segundo documento/entrada, solo para demostrar en la peticion 93 (RF-IB-006) que el orden declarado por el llamador se preserva -- no hace falta repetir la materializacion (RF-RC-004 ya quedo demostrada en la peticion 83).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{documento_id_ib_2}}\",\n  \"bytesBase64\": \"SG9sYSBTR0RFQQ==\",\n  \"actor\": \"victor\",\n  \"fecha\": \"2026-08-30T16:04:00Z\",\n  \"procedencia\": {\n    \"fuente\": \"escaner-postman\",\n    \"fecha\": \"2026-08-30T16:04:00Z\",\n    \"loteOFlujoId\": \"lote-ib-postman\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"documento_id_ib_2\", \"doc-ib-postman-2-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "89 Recibir el segundo documento materializado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/entradas",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "entradas"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{entrada_id_ib_2}}\",\n  \"documento_id\": \"{{documento_id_ib_2}}\",\n  \"texto_extraido\": \"circular informativa sobre horarios de atencion\",\n  \"metadatos\": {\"serie\": \"serie-1\"},\n  \"actor\": \"sistema-indexacion\",\n  \"fecha\": \"2026-08-30T16:05:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"entrada_id_ib_2\", \"entrada-ib-postman-2-\" + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201 Created\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "90 Indexar el segundo documento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/entradas/{{entrada_id_ib_2}}/indexacion",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "entradas",
+                "{{entrada_id_ib_2}}",
+                "indexacion"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto_extraido\": \"circular informativa sobre horarios de atencion\",\n  \"metadatos\": {\"serie\": \"serie-1\"},\n  \"embedding\": [0.78, 0.90],\n  \"actor\": \"sistema-indexacion\",\n  \"fecha\": \"2026-08-30T16:06:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, INDEXADA\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().estado).to.eql(\"INDEXADA\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "91 Buscar por termino y filtro, actor CON permiso (RF-IB-005/008)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/busquedas",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "busquedas"
+              ]
+            },
+            "description": "El termino incluye {{documento_id_ib}} para que sea unico por corrida -- sin eso, correr la coleccion dos veces seguidas deja DOS entradas con el mismo texto en el mismo indice lexico compartido, y esta busqueda encontraria ambas en vez de solo la de esta corrida (primer fallo real que encontro este patron, mismo criterio que la huella de contenido de Normalizacion en la peticion 20). Demuestra la busqueda lexica real (RF-IB-005) y el filtro de metadatos, y que el resultado trae su embedding recuperado a traves del puerto (_con_embedding, VETO real de Codex sobre 53ce657, ver STATE.md).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"termino\": \"presupuesto-{{documento_id_ib}}\",\n  \"filtros\": {\"serie\": \"serie-1\"},\n  \"actor\": \"{{identidad_id_ib}}\",\n  \"fecha\": \"2026-08-30T16:07:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, un resultado con su embedding real\", () => {",
+                  "  const resultados = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(resultados.length).to.eql(1);",
+                  "  pm.expect(resultados[0].documento_id).to.eql(pm.environment.get(\"documento_id_ib\"));",
+                  "  pm.expect(resultados[0].embedding).to.eql([0.12, 0.34, 0.56]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "92 Buscar el mismo termino con actor SIN permiso -> lista vacia (RF-IB-008)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/busquedas",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "busquedas"
+              ]
+            },
+            "description": "'actor-ib-no-autorizado-postman' no es un identidadId real de seguridad-acceso -- nunca tiene el permiso consultar/documento, mismo patron que la peticion 62 (RF-EX-011). El resultado debe quedar vacio, no un error: RF-IB-008 filtra, no rechaza la peticion completa.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"termino\": \"presupuesto-{{documento_id_ib}}\",\n  \"filtros\": {\"serie\": \"serie-1\"},\n  \"actor\": \"actor-ib-no-autorizado-postman\",\n  \"fecha\": \"2026-08-30T16:08:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, sin resultados (permiso denegado)\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.eql([]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "93 Recuperar por relevancia con orden ya calculado, invertido (RF-IB-006)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/recuperaciones",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "recuperaciones"
+              ]
+            },
+            "description": "RF-IB-006 es FICTICIO: el orden ya lo calculo el llamador (aqui, invertido respecto al orden de creacion) -- recuperar_por_relevancia() nunca reordena, solo filtra por permiso preservando el orden recibido.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entrada_ids_ordenados\": [\"{{entrada_id_ib_2}}\", \"{{entrada_id_ib}}\"],\n  \"actor\": \"{{identidad_id_ib}}\",\n  \"fecha\": \"2026-08-30T16:09:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, el orden declarado se preserva\", () => {",
+                  "  const resultados = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(resultados.map((r) => r.id)).to.eql([",
+                  "    pm.environment.get(\"entrada_id_ib_2\"),",
+                  "    pm.environment.get(\"entrada_id_ib\")",
+                  "  ]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "94 Responder pregunta con cita permitida (RF-IB-007)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/preguntas",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "preguntas"
+              ]
+            },
+            "description": "RF-IB-007: respuesta y cita YA CALCULADAS por el llamador (ModeloDeLenguaje, FICTICIO, nunca invocado) -- la cita debe ser verificable contra un fragmento real (RNF-IB-004), no solo un documento_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregunta\": \"¿Que dice el acta sobre el presupuesto?\",\n  \"respuesta\": \"El comite aprobo el presupuesto.\",\n  \"citas\": [\n    { \"documento_id\": \"{{documento_id_ib}}\", \"fragmento\": \"acta de reunion del comite directivo sobre presupuesto\" }\n  ],\n  \"modelo_id\": \"qa-ficticio-v1\",\n  \"actor\": \"{{identidad_id_ib}}\",\n  \"fecha\": \"2026-08-30T16:10:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, respuesta con la cita permitida\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.respuesta).to.eql(\"El comite aprobo el presupuesto.\");",
+                  "  pm.expect(body.citas.length).to.eql(1);",
+                  "  pm.expect(body.citas[0].documento_id).to.eql(pm.environment.get(\"documento_id_ib\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "95 Pregunta sin evidencia suficiente -> negativa apropiada (RF-IB-010)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/preguntas",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "preguntas"
+              ]
+            },
+            "description": "RF-IB-010: sin respuesta ni citas, con razon declarada -- responder_qa() debe bifurcar hacia NegativaApropiada, nunca alucinar una respuesta sin evidencia (invariante 3).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregunta\": \"¿Cual es la posicion sobre un tema no documentado?\",\n  \"modelo_id\": \"qa-ficticio-v1\",\n  \"actor\": \"{{identidad_id_ib}}\",\n  \"fecha\": \"2026-08-30T16:11:00Z\",\n  \"razon_negativa\": \"No hay evidencia suficiente en el acervo indexado.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, negativa apropiada\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.razon).to.eql(\"No hay evidencia suficiente en el acervo indexado.\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "96 Pregunta con cita pero actor SIN permiso -> negativa, cita filtrada (RF-IB-008 en preguntas)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/preguntas",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "preguntas"
+              ]
+            },
+            "description": "RF-IB-008 tambien aplica dentro de Q&A: aunque el llamador entrego una respuesta con una cita real, el actor no tiene permiso sobre ese documento -- la cita se filtra ANTES de decidir la rama, asi que responder_qa() nunca deja pasar una respuesta sustentada en evidencia no permitida (invariante 3), y cae a la razon_negativa de reserva.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pregunta\": \"¿Que dice el acta sobre el presupuesto?\",\n  \"respuesta\": \"El comite aprobo el presupuesto.\",\n  \"citas\": [\n    { \"documento_id\": \"{{documento_id_ib}}\", \"fragmento\": \"acta de reunion del comite directivo sobre presupuesto\" }\n  ],\n  \"modelo_id\": \"qa-ficticio-v1\",\n  \"actor\": \"actor-ib-no-autorizado-postman\",\n  \"fecha\": \"2026-08-30T16:12:00Z\",\n  \"razon_negativa\": \"Sin evidencia permitida para este actor.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, negativa apropiada -- la cita sin permiso nunca aparece\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(body.razon).to.eql(\"Sin evidencia permitida para este actor.\");",
+                  "  pm.expect(body.citas).to.be.undefined;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "97 Consultar bitacora de auditoria -- transiciones y accesos atribuibles (P-08/RF-IB-009)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{indexacion_busqueda_base_url}}/eventos-auditoria",
+              "host": [
+                "{{indexacion_busqueda_base_url}}"
+              ],
+              "path": [
+                "eventos-auditoria"
+              ]
+            },
+            "description": "Cierra el flujo: las transiciones (recepcion/indexacion) y los accesos (busquedas/recuperacion/preguntas) quedan en dos bitacoras append-only distintas (persistencia.py), y el acceso denegado de las peticiones 92/96 queda igual de auditado -- con documentos_accedidos vacio, reflejando fielmente que nada se mostro (RF-IB-009 exacto, no solo 'se intento')."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 OK, transiciones y accesos atribuibles\", () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.response.to.have.status(200);",
+                  "  const recepciones = body.transiciones.filter((e) => e.tipo === \"DOCUMENTO_MATERIALIZADO_RECIBIDO\");",
+                  "  const indexaciones = body.transiciones.filter((e) => e.tipo === \"ENTRADA_INDEXADA\");",
+                  "  pm.expect(recepciones.length).to.be.at.least(2);",
+                  "  pm.expect(indexaciones.length).to.be.at.least(2);",
+                  "  body.transiciones.forEach((e) => {",
+                  "    pm.expect(e.actor).to.be.a(\"string\").and.not.be.empty;",
+                  "    pm.expect(e.fecha).to.be.a(\"string\").and.not.be.empty;",
+                  "  });",
+                  "  const busquedaPermitida = body.accesos.find((e) => e.tipo === \"BUSQUEDA_LEXICA\" && e.actor === pm.environment.get(\"identidad_id_ib\"));",
+                  "  pm.expect(busquedaPermitida.documentos_accedidos).to.eql([pm.environment.get(\"documento_id_ib\")]);",
+                  "  const busquedaDenegada = body.accesos.find((e) => e.tipo === \"BUSQUEDA_LEXICA\" && e.actor === \"actor-ib-no-autorizado-postman\");",
+                  "  pm.expect(busquedaDenegada.documentos_accedidos).to.eql([]);",
+                  "  const recuperacion = body.accesos.find((e) => e.tipo === \"RECUPERACION_POR_RELEVANCIA\" && e.actor === pm.environment.get(\"identidad_id_ib\"));",
+                  "  pm.expect(recuperacion.documentos_accedidos.length).to.eql(2);",
+                  "  const preguntaDenegada = body.accesos.find((e) => e.tipo === \"PREGUNTA_RESPONDIDA\" && e.actor === \"actor-ib-no-autorizado-postman\");",
+                  "  pm.expect(preguntaDenegada.documentos_accedidos).to.eql([]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }
