@@ -207,18 +207,22 @@ integridad bajo demanda.
 
 **RF-UI-004 · Sugerencia de clasificación (FICTICIA)**
 Un operador ve una sugerencia de clasificación simulada, con su marca y su
-confianza — la decisión de materializarla es responsabilidad de RF-UI-005 (cola de
-Validación Humana), no de esta pantalla: evita que la UI llame directamente a
-Records/Custodia, contexto bloqueado por el prerrequisito de §1. Este RF NO está
-bloqueado: `POST /clasificaciones` es el propio contexto Clasificación, sin
-restricción de §10.
+confianza, y puede confirmar que cruzó la capa anticorrupción como `Sugerencia`
+real — frontera P-01 completa: FICTICIO → `Sugerencia` (RF-RC-003) → cola de
+Validación Humana (RF-UI-005) → decisión humana → materialización. La decisión de
+materializarla es responsabilidad de RF-UI-005, no de esta pantalla: evita que la
+UI llame directamente a Records/Custodia, contexto bloqueado por el prerrequisito
+de §1. Este RF NO está bloqueado: `POST /clasificaciones` es el propio contexto
+Clasificación, sin restricción de §10.
 - Dado un documento sin clasificación, Cuando se genera una sugerencia de
   clasificación, Entonces la UI la muestra con su marca de simulación y su
   confianza (RF-CL-001..003, marcada FICTICIA), devuelta directamente por
   `POST /clasificaciones` — sin consultar Records/Custodia.
-- Dada esa sugerencia, Cuando Clasificación la reenvía, Entonces queda disponible
-  para RF-UI-005 vía la cola de Validación Humana (RF-CL-004, RF-VH-001) — la
-  UI no la reenvía por su cuenta ni la materializa por sí sola.
+- Dada esa sugerencia, Cuando Clasificación la reenvía, Entonces cruza la capa
+  anticorrupción y queda almacenada como `Sugerencia` en Records/Custodia sin
+  alterar ningún estado documental (RF-RC-003), disponible para RF-UI-005 vía la
+  cola de Validación Humana (RF-CL-004, RF-VH-001) — la UI no la reenvía por su
+  cuenta ni la materializa por sí sola.
 
 **RF-UI-005 · Cola de validación humana y decisión individual**
 Un operador ve las colas de revisión por tipo, ordenadas por confianza, y decide
