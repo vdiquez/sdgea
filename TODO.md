@@ -1152,7 +1152,22 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       `./test.sh` completo del repo en verde (Gradle BUILD SUCCESSFUL; pytest:
       eval-harness 4, normalizacion 40, extraccion 55, clasificacion 27,
       enriquecimiento 29, indexacion-busqueda 23).
-- [ ] T-55 RF-IB-001..010 — Servicio HTTP (FastAPI) + persistencia
+      **TERCER VETO real de Codex sobre este mismo commit (`22b6b09`), ver
+      STATE.md — corregido junto con T-55 en un solo cambio siguiente
+      (Codex exigió explícitamente que ambas tareas cerraran juntas)**: (1)
+      P-03 — ningún puerto se ejercitaba de verdad (`documentos_permitidos`
+      llegaba como `set` ya resuelto, sin invocar ningún `Protocol`).
+      Corregido con el mismo patrón que `VerificadorDeAutorizacion` en
+      extracción/T-41b (ya validado por Codex sin VETO): `buscar`/
+      `recuperar_por_relevancia`/`responder_qa`/`indexar` ahora reciben el
+      puerto (`IndiceLexico`/`IndiceVectorial`/`VerificadorDePermisos`) y lo
+      invocan ellos mismos. (2) Bug real independiente: `EventoDeAcceso.
+      documentos_accedidos` era `list[str]` dentro de un dataclass
+      `frozen=True` — `frozen` impide reasignar el atributo pero NO impide
+      mutar la lista referenciada; corregido a `tuple[str, ...]`, genuinamente
+      inmutable. 23/23 tests siguen en verde tras ambas correcciones (+
+      aserciones nuevas que confirman las llamadas reales a los puertos).
+- [x] T-55 RF-IB-001..010 — Servicio HTTP (FastAPI) + persistencia
       (SQLAlchemy + Postgres) para Indexación y Búsqueda, mismo patrón que
       T-34/T-41 (Normalización/Extracción) — SÍ con Postgres propio, a
       diferencia de clasificación/enriquecimiento/validación-humana.
@@ -1223,6 +1238,34 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       `specs/spec-infra-servicios.md` §14 (nueva) con el contrato HTTP
       mínimo completo, incluidas las variables de entorno de las cuatro
       capacidades.
+      **Implementado junto con la corrección del tercer VETO de T-54**
+      (Codex exigió que ambas cerraran en el mismo cambio, ver arriba):
+      `persistencia.py` (`AlmacenDeEntradas.guardar_con_evento`/
+      `guardar_evento_de_acceso`, tablas `entradas_de_indice`/
+      `eventos_auditoria`/`eventos_de_acceso` — dos bitácoras separadas
+      porque `EventoAuditoria` y `EventoDeAcceso` tienen formas distintas;
+      `IndiceLexicoAutoalojado` hace una consulta SQL `ILIKE` real contra
+      Postgres, `IndiceVectorialAutoalojado` solo completa el seam porque el
+      embedding ya se persiste con la entrada); `integracion.py`
+      (`IndiceLexicoGestionado`/`IndiceVectorialGestionado`, clientes HTTP
+      genéricos contra una URL configurable; `GeneradorDeEmbeddings`/
+      `ModeloDeLenguaje` × 2 variantes, ambas lanzan
+      `ComponenteProbabilisticoNoImplementadoError` explícito si se
+      invocan; `VerificadorDePermisosHttp` contra `POST /autorizacion`);
+      `api.py` (7 endpoints: `POST /entradas`, `POST /entradas/{id}/
+      indexacion`, `POST /entradas/{id}/actualizacion`, `POST /busquedas`,
+      `POST /recuperaciones`, `POST /preguntas`, `GET /eventos-auditoria`);
+      `main.py` corregido (seguía siendo el stub "Hello from
+      indexacion-busqueda!", mismo hallazgo que T-46 documentó para
+      clasificacion). TDD: 23 tests de dominio (ya existían) + 9 de
+      integración (`httpx.MockTransport`, verifica cuerpo exacto, y los
+      cuatro adaptadores FICTICIOS fallan explícitamente) + 6 de
+      persistencia (atomicidad con violación `IntegrityError` real, no
+      simulada — mismo criterio que T-37/T-41 — más `IndiceLexicoAutoalojado`
+      contra SQLite real) + 8 de API (incluida la prueba de aceptación
+      literal de RF-IB-009: hace la consulta HTTP real y DESPUÉS lee
+      `GET /eventos-auditoria`, nunca inspecciona solo el valor devuelto) =
+      46/46 en el módulo. `./test.sh` completo del repo en verde.
 - [ ] T-56 Dockerfile real de indexacion-busqueda + wiring en
       `docker-compose.{saas,onprem,local-ports}.yml`, mismo patrón que
       normalizacion/extraccion (T-35/T-42) — CON Postgres propio (a

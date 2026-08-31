@@ -2726,3 +2726,50 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Indexación y Búsqueda, con las dos variantes de despliegue reales por cada
   uno de los cuatro puertos P-03, spec RNF-IB-002) es la próxima tarea
   abierta en TODO.md.
+
+- 2026-08-30 — TERCER VETO real de Codex, esta vez sobre la IMPLEMENTACIÓN
+  de T-54 (commit `22b6b09`), no solo el plan — el loop headless se detuvo
+  ahí. Dos hallazgos:
+  1. **P-03**: aunque `dominio.py` declaraba los cuatro puertos (ya
+     aceptado sin VETO en la revisión del plan), ninguna función los
+     invocaba de verdad — `documentos_permitidos` llegaba como `set` ya
+     resuelto. Codex: "Dejar las implementaciones para T-55 no satisface
+     una garantía constitucional del código que este commit presenta como
+     completado." Corregido con el mismo patrón que
+     `VerificadorDeAutorizacion` en extracción (T-41b, ya validado por
+     Codex): las funciones de consulta (`buscar`/`recuperar_por_relevancia`/
+     `responder_qa`) y `indexar` reciben el puerto como parámetro y lo
+     invocan ellas mismas — P-03 real, no solo declarado.
+  2. **Bug real independiente**: `EventoDeAcceso.documentos_accedidos` era
+     `list[str]` dentro de un `@dataclass(frozen=True)` — `frozen` impide
+     reasignar el atributo pero NO impide mutar la lista referenciada
+     (`evento.documentos_accedidos.append(...)` habría funcionado sin
+     error). Corregido a `tuple[str, ...]`.
+  Dado que Codex exigió explícitamente que las dos variantes de despliegue
+  por capacidad (P-03) y la persistencia append-only del evento de acceso
+  (P-08) existieran "en el mismo cambio que marque T-54 como hecho",
+  T-54 y T-55 se completaron juntas en esta sesión en vez de en dos
+  commits separados como estaba planeado:
+  - `persistencia.py`: `AlmacenDeEntradas` (`guardar_con_evento` atómico
+    para transiciones de `EntradaDeIndice`, mismo criterio T-37;
+    `guardar_evento_de_acceso` para consultas — bitácora separada porque
+    `EventoDeAcceso` tiene forma distinta de `EventoAuditoria`);
+    `IndiceLexicoAutoalojado` (consulta SQL `ILIKE` real contra Postgres —
+    primera vez que un adaptador Python de este proyecto ejecuta una
+    consulta de texto real, no solo CRUD por id); `IndiceVectorialAutoalojado`
+    (completa el seam; el embedding FICTICIO ya se persiste con la entrada).
+  - `integracion.py`: `IndiceLexicoGestionado`/`IndiceVectorialGestionado`
+    (clientes HTTP contra una URL configurable, sin nombrar producto);
+    `GeneradorDeEmbeddings`/`ModeloDeLenguaje` × 2 variantes cada uno,
+    todas lanzan `ComponenteProbabilisticoNoImplementadoError` si se
+    invocan (nunca deberían, por diseño); `VerificadorDePermisosHttp`
+    contra `POST /autorizacion` de seguridad-acceso, una llamada real por
+    documento candidato (el endpoint es por recurso, no una lista masiva).
+  - `api.py`: 7 endpoints; `main.py` corregido (seguía siendo el stub,
+    mismo hallazgo que T-46 documentó para clasificacion).
+  TDD: 23 tests de dominio (VETO corregido) + 9 de integración + 6 de
+  persistencia (atomicidad con `IntegrityError` real) + 8 de API
+  (RF-IB-009 verificado leyendo `GET /eventos-auditoria` DESPUÉS de la
+  consulta real, nunca solo el valor devuelto) = 46/46. `./test.sh`
+  completo del repo en verde. T-54 y T-55 marcadas `- [x]` en TODO.md.
+  Siguiente paso: T-56 (Dockerfile + wiring) es la próxima tarea abierta.

@@ -23,6 +23,44 @@ from dominio import (
 FECHA = datetime.fromisoformat("2026-08-30T00:00:00+00:00")
 
 
+# Dobles en memoria para los puertos P-03 declarados en dominio.py -- mismo
+# criterio que _VerificadorDeAutorizacionFalso en extraccion/T-41b: pruebas
+# de dominio contra un doble, la implementación real (Postgres/HTTP) la
+# prueba integracion.py/test_persistencia.py (T-55).
+class _IndiceLexicoFalso:
+    def __init__(self, entradas: list[EntradaDeIndice] | None = None):
+        self.entradas = list(entradas or [])
+        self.llamadas_indexar: list[tuple[str, str]] = []
+
+    def indexar(self, entrada_id: str, contenido: str) -> None:
+        self.llamadas_indexar.append((entrada_id, contenido))
+
+    def buscar(self, termino: str) -> list[EntradaDeIndice]:
+        return self.entradas
+
+
+class _IndiceVectorialFalso:
+    def __init__(self) -> None:
+        self.llamadas_indexar: list[tuple[str, list[float]]] = []
+
+    def indexar(self, entrada_id: str, embedding: list[float]) -> None:
+        self.llamadas_indexar.append((entrada_id, embedding))
+
+
+class _VerificadorDePermisosFalso:
+    def __init__(self, permitidos: set[str]):
+        self._permitidos = permitidos
+        self.llamadas: list[tuple[str, str]] = []
+
+    def tiene_permiso(self, actor: str, documento_id: str) -> bool:
+        self.llamadas.append((actor, documento_id))
+        return documento_id in self._permitidos
+
+
+def _permite(*documento_ids: str) -> _VerificadorDePermisosFalso:
+    return _VerificadorDePermisosFalso(set(documento_ids))
+
+
 def _entrada_indexada(
     entrada_id: str = "entrada-1",
     documento_id: str = "documento-1",
@@ -39,6 +77,8 @@ def _entrada_indexada(
         texto_extraido=documento.texto_extraido,
         metadatos=documento.metadatos,
         embedding=embedding or [0.1, 0.2],
+        indice_lexico=_IndiceLexicoFalso(),
+        indice_vectorial=_IndiceVectorialFalso(),
         actor="sistema",
         fecha=FECHA,
     )
@@ -58,11 +98,15 @@ class TestIndexacionDeDocumentosMaterializados:
         assert evento_recepcion.estado_anterior is None
         assert evento_recepcion.estado_posterior == "PENDIENTE_DE_INDEXACION"
 
+        indice_lexico = _IndiceLexicoFalso()
+        indice_vectorial = _IndiceVectorialFalso()
         indexada, evento_indexacion = indexar(
             pendiente,
             texto_extraido=documento.texto_extraido,
             metadatos=documento.metadatos,
             embedding=[0.1, 0.2],
+            indice_lexico=indice_lexico,
+            indice_vectorial=indice_vectorial,
             actor="sistema",
             fecha=FECHA,
         )
@@ -71,31 +115,43 @@ class TestIndexacionDeDocumentosMaterializados:
         assert indexada.documento_id == "documento-1"
         assert evento_indexacion.estado_anterior == "PENDIENTE_DE_INDEXACION"
         assert evento_indexacion.estado_posterior == "INDEXADA"
+        # P-03 (VETO real de Codex sobre 22b6b09, ver STATE.md): indexar()
+        # debe ejercer de verdad los dos puertos reales, no solo construir el
+        # valor de retorno.
+        assert indice_lexico.llamadas_indexar == [("entrada-1", "contenido del documento")]
+        assert indice_vectorial.llamadas_indexar == [("entrada-1", [0.1, 0.2])]
 
     def test_indexar_rechaza_una_entrada_que_no_esta_pendiente(self):
         indexada = _entrada_indexada()
 
         with pytest.raises(ErrorDeDominio):
-            indexar(indexada, texto_extraido="otro", metadatos={}, embedding=[0.0], actor="sistema", fecha=FECHA)
+            indexar(
+                indexada,
+                texto_extraido="otro",
+                metadatos={},
+                embedding=[0.0],
+                indice_lexico=_IndiceLexicoFalso(),
+                indice_vectorial=_IndiceVectorialFalso(),
+                actor="sistema",
+                fecha=FECHA,
+            )
 
 
 # RF-IB-002 · Indexación léxica
 class TestIndexacionLexica:
     def test_dado_un_documento_indexado_su_contenido_es_recuperable_por_palabra_clave(self):
         entrada = _entrada_indexada(texto_extraido="el gato subió al tejado")
+        indice = _IndiceLexicoFalso([entrada])
 
-        resultados, _ = buscar(
-            candidatos=[entrada], termino="tejado", filtros={}, documentos_permitidos={"documento-1"}, actor="ana", fecha=FECHA
-        )
+        resultados, _ = buscar(indice=indice, termino="tejado", filtros={}, verificador=_permite("documento-1"), actor="ana", fecha=FECHA)
 
         assert resultados == [entrada]
 
     def test_un_termino_que_no_aparece_no_devuelve_la_entrada(self):
         entrada = _entrada_indexada(texto_extraido="el gato subió al tejado")
+        indice = _IndiceLexicoFalso([entrada])
 
-        resultados, _ = buscar(
-            candidatos=[entrada], termino="perro", filtros={}, documentos_permitidos={"documento-1"}, actor="ana", fecha=FECHA
-        )
+        resultados, _ = buscar(indice=indice, termino="perro", filtros={}, verificador=_permite("documento-1"), actor="ana", fecha=FECHA)
 
         assert resultados == []
 
@@ -149,10 +205,10 @@ class TestBusquedaLexicaYPorMetadatos:
         )
 
         resultados, _ = buscar(
-            candidatos=[entrada_a, entrada_b],
+            indice=_IndiceLexicoFalso([entrada_a, entrada_b]),
             termino="resolución",
             filtros={"serie": "100"},
-            documentos_permitidos={"documento-a", "documento-b"},
+            verificador=_permite("documento-a", "documento-b"),
             actor="ana",
             fecha=FECHA,
         )
@@ -164,7 +220,12 @@ class TestBusquedaLexicaYPorMetadatos:
         pendiente, _ = crear_entrada_pendiente("entrada-1", documento, actor="sistema", fecha=FECHA)
 
         resultados, _ = buscar(
-            candidatos=[pendiente], termino="buscable", filtros={}, documentos_permitidos={"documento-1"}, actor="ana", fecha=FECHA
+            indice=_IndiceLexicoFalso([pendiente]),
+            termino="buscable",
+            filtros={},
+            verificador=_permite("documento-1"),
+            actor="ana",
+            fecha=FECHA,
         )
 
         assert resultados == []
@@ -178,7 +239,7 @@ class TestRecuperacionPorRelevanciaSemantica:
 
         resultados, _ = recuperar_por_relevancia(
             candidatos_ordenados=[mas_relevante, menos_relevante],
-            documentos_permitidos={"documento-1", "documento-2"},
+            verificador=_permite("documento-1", "documento-2"),
             actor="ana",
             fecha=FECHA,
         )
@@ -192,7 +253,7 @@ class TestRecuperacionPorRelevanciaSemantica:
 
         resultados, _ = recuperar_por_relevancia(
             candidatos_ordenados=[tercero, primero, segundo],
-            documentos_permitidos={"documento-1", "documento-2", "documento-3"},
+            verificador=_permite("documento-1", "documento-2", "documento-3"),
             actor="ana",
             fecha=FECHA,
         )
@@ -209,7 +270,7 @@ class TestRespuestaConversacionalConCitas:
             pregunta="¿dónde subió el gato?",
             respuesta="El gato subió al tejado.",
             citas=[cita],
-            documentos_permitidos={"documento-1"},
+            verificador=_permite("documento-1"),
             modelo_id="qa-ficticio-v1",
             actor="ana",
             fecha=FECHA,
@@ -227,7 +288,12 @@ class TestCeroExposicionSinPermiso:
         sin_permiso = _entrada_indexada(entrada_id="entrada-2", documento_id="documento-2", texto_extraido="acta de reunión")
 
         resultados, _ = buscar(
-            candidatos=[permitido, sin_permiso], termino="acta", filtros={}, documentos_permitidos={"documento-1"}, actor="ana", fecha=FECHA
+            indice=_IndiceLexicoFalso([permitido, sin_permiso]),
+            termino="acta",
+            filtros={},
+            verificador=_permite("documento-1"),
+            actor="ana",
+            fecha=FECHA,
         )
 
         assert resultados == [permitido]
@@ -238,7 +304,7 @@ class TestCeroExposicionSinPermiso:
         sin_permiso = _entrada_indexada(entrada_id="entrada-2", documento_id="documento-2")
 
         resultados, _ = recuperar_por_relevancia(
-            candidatos_ordenados=[sin_permiso, permitido], documentos_permitidos={"documento-1"}, actor="ana", fecha=FECHA
+            candidatos_ordenados=[sin_permiso, permitido], verificador=_permite("documento-1"), actor="ana", fecha=FECHA
         )
 
         assert resultados == [permitido]
@@ -250,7 +316,7 @@ class TestCeroExposicionSinPermiso:
             pregunta="¿qué dice el documento reservado?",
             respuesta="El documento dice X.",
             citas=[cita_sin_permiso],
-            documentos_permitidos={"documento-1"},
+            verificador=_permite("documento-1"),
             modelo_id="qa-ficticio-v1",
             actor="ana",
             fecha=FECHA,
@@ -266,22 +332,27 @@ class TestAuditoriaDeAccesoPorConsulta:
         entrada = _entrada_indexada(documento_id="documento-1", texto_extraido="contenido consultable")
 
         _, evento = buscar(
-            candidatos=[entrada], termino="consultable", filtros={}, documentos_permitidos={"documento-1"}, actor="ana", fecha=FECHA
+            indice=_IndiceLexicoFalso([entrada]),
+            termino="consultable",
+            filtros={},
+            verificador=_permite("documento-1"),
+            actor="ana",
+            fecha=FECHA,
         )
 
         assert isinstance(evento, EventoDeAcceso)
         assert evento.actor == "ana"
         assert evento.fecha == FECHA
-        assert evento.documentos_accedidos == ["documento-1"]
+        assert evento.documentos_accedidos == ("documento-1",)
 
     def test_recuperar_por_relevancia_devuelve_su_propio_evento_de_acceso(self):
         entrada = _entrada_indexada(documento_id="documento-1")
 
         _, evento = recuperar_por_relevancia(
-            candidatos_ordenados=[entrada], documentos_permitidos={"documento-1"}, actor="ana", fecha=FECHA
+            candidatos_ordenados=[entrada], verificador=_permite("documento-1"), actor="ana", fecha=FECHA
         )
 
-        assert evento.documentos_accedidos == ["documento-1"]
+        assert evento.documentos_accedidos == ("documento-1",)
 
     def test_responder_qa_devuelve_su_propio_evento_de_acceso_con_los_documentos_citados(self):
         cita = Cita(documento_id="documento-1", fragmento="fragmento citado")
@@ -290,23 +361,23 @@ class TestAuditoriaDeAccesoPorConsulta:
             pregunta="¿qué dice?",
             respuesta="Dice X.",
             citas=[cita],
-            documentos_permitidos={"documento-1"},
+            verificador=_permite("documento-1"),
             modelo_id="qa-ficticio-v1",
             actor="ana",
             fecha=FECHA,
         )
 
-        assert evento.documentos_accedidos == ["documento-1"]
+        assert evento.documentos_accedidos == ("documento-1",)
 
     def test_aplicar_permisos_y_construir_evento_es_la_unica_fuente_del_evento_en_las_tres_rutas(self):
         entrada = _entrada_indexada(documento_id="documento-1")
 
         permitidos, evento = aplicar_permisos_y_construir_evento(
-            [entrada], documentos_permitidos={"documento-1"}, actor="ana", fecha=FECHA, tipo="BUSQUEDA_LEXICA"
+            [entrada], verificador=_permite("documento-1"), actor="ana", fecha=FECHA, tipo="BUSQUEDA_LEXICA"
         )
 
         assert permitidos == [entrada]
-        assert evento == EventoDeAcceso(actor="ana", fecha=FECHA, tipo="BUSQUEDA_LEXICA", documentos_accedidos=["documento-1"])
+        assert evento == EventoDeAcceso(actor="ana", fecha=FECHA, tipo="BUSQUEDA_LEXICA", documentos_accedidos=("documento-1",))
 
 
 # RF-IB-010 · Negativa apropiada
@@ -316,7 +387,7 @@ class TestNegativaApropiada:
             pregunta="¿algo sin evidencia?",
             respuesta=None,
             citas=[],
-            documentos_permitidos=set(),
+            verificador=_permite(),
             modelo_id="qa-ficticio-v1",
             actor="ana",
             fecha=FECHA,
@@ -332,7 +403,7 @@ class TestNegativaApropiada:
                 pregunta="¿algo sin evidencia?",
                 respuesta=None,
                 citas=[],
-                documentos_permitidos=set(),
+                verificador=_permite(),
                 modelo_id="qa-ficticio-v1",
                 actor="ana",
                 fecha=FECHA,
@@ -350,7 +421,7 @@ class TestNegativaApropiada:
                 pregunta="¿qué dice el reservado?",
                 respuesta="Una respuesta inventada sobre el reservado.",
                 citas=[cita_sin_permiso],
-                documentos_permitidos={"documento-1"},
+                verificador=_permite("documento-1"),
                 modelo_id="qa-ficticio-v1",
                 actor="ana",
                 fecha=FECHA,

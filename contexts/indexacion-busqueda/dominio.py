@@ -43,7 +43,12 @@ class EventoDeAcceso:
     actor: str
     fecha: datetime
     tipo: str
-    documentos_accedidos: list[str]
+    # VETO real de Codex sobre T-54 (commit 22b6b09, ver STATE.md): `frozen=True`
+    # impide reasignar el atributo, pero NO impide mutar un `list` referenciado
+    # por él (`evento.documentos_accedidos.append(...)` habría funcionado sin
+    # error) -- un evento de auditoría que puede mutarse en silencio no es
+    # inmutable de verdad. `tuple` sí lo es.
+    documentos_accedidos: tuple[str, ...]
 
 
 # P-03 (corrige el VETO real de Codex sobre la siembra original de T-54,
@@ -64,7 +69,11 @@ class EventoDeAcceso:
 # sigue abierto en la spec §8).
 class IndiceLexico(Protocol):
     def indexar(self, entrada_id: str, contenido: str) -> None: ...
-    def buscar(self, termino: str) -> list[str]: ...
+    # Devuelve entradas completas (no solo ids): `buscar()` en este módulo
+    # necesita `estado`/`metadatos` para aplicar sus propios filtros, y pedir
+    # una segunda vuelta de consulta solo para "completar" cada id sería un
+    # segundo puerto de facto. Real (RF-IB-002/005) — nunca FICTICIO.
+    def buscar(self, termino: str) -> list["EntradaDeIndice"]: ...
 
 
 class IndiceVectorial(Protocol):
@@ -82,6 +91,21 @@ class GeneradorDeEmbeddings(Protocol):
 # respuesta y las citas YA CALCULADAS a `responder_qa()`.
 class ModeloDeLenguaje(Protocol):
     def responder(self, pregunta: str, contexto: list[str]) -> str: ...
+
+
+# P-03 (corrige el VETO real de Codex sobre la primera implementación de
+# T-54, commit 22b6b09, ver STATE.md): "documentos_permitidos" ya resuelto
+# como `set` no exigía que ninguna función de dominio invocara el puerto —
+# mismo defecto que Codex señaló ("ninguna ejercita esos puertos"). Corregido
+# con el mismo patrón que `VerificadorDeAutorizacion` en extracción
+# (T-41b, `confirmar_extraccion`, ya validado por Codex sin VETO): las
+# funciones de consulta reciben el puerto y lo invocan ellas mismas, por
+# candidato — P-03 real, no solo declarado. Seguridad y Acceso no expone un
+# endpoint de "lista de documentos permitidos" (specs/spec-infra-servicios.md
+# §5: `POST /autorizacion` es por recurso), así que "por candidato" es el
+# único contrato que existe, no una elección de conveniencia.
+class VerificadorDePermisos(Protocol):
+    def tiene_permiso(self, actor: str, documento_id: str) -> bool: ...
 
 
 # RF-IB-001/002/003/[CLARIFICAR] de correlación (spec §8): el llamador entrega
@@ -141,9 +165,19 @@ def crear_entrada_pendiente(
 # la spec no distingue dos pasos separados de indexación, ambas quedan
 # recuperables a la vez ("Cuando se indexa, Entonces su contenido es
 # recuperable..."). `embedding` es FICTICIO (RF-IB-003, ya calculado por el
-# llamador vía GeneradorDeEmbeddings — nunca invocado desde aquí).
+# llamador vía GeneradorDeEmbeddings — nunca invocado desde aquí), pero
+# GUARDARLO es una operación REAL sobre `IndiceVectorial` (P-03, corrige el
+# mismo VETO que `IndiceLexico` — indexar() ahora llama a los dos puertos de
+# verdad, no solo construye el valor de retorno).
 def indexar(
-    entrada: EntradaDeIndice, texto_extraido: str, metadatos: dict[str, str], embedding: list[float], actor: str, fecha: datetime
+    entrada: EntradaDeIndice,
+    texto_extraido: str,
+    metadatos: dict[str, str],
+    embedding: list[float],
+    indice_lexico: IndiceLexico,
+    indice_vectorial: IndiceVectorial,
+    actor: str,
+    fecha: datetime,
 ) -> tuple[EntradaDeIndice, EventoAuditoria]:
     if entrada.estado != EstadoEntradaDeIndice.PENDIENTE_DE_INDEXACION:
         raise ErrorDeDominio(f"La entrada de índice '{entrada.id}' no está pendiente de indexación.")
@@ -156,6 +190,8 @@ def indexar(
         embedding=embedding,
         fecha_indexacion=fecha,
     )
+    indice_lexico.indexar(actualizada.id, texto_extraido)
+    indice_vectorial.indexar(actualizada.id, embedding)
     evento = EventoAuditoria(
         actor=actor, fecha=fecha, tipo="ENTRADA_INDEXADA", estado_anterior=estado_anterior, estado_posterior=actualizada.estado.value
     )
@@ -197,11 +233,12 @@ def actualizar_entrada(
 # P-03/RF-IB-008 (structural, compartido por buscar/recuperar_por_relevancia/
 # responder_qa para que RNF-IB-003 -consistencia de permisos entre las tres
 # rutas- sea estructural y no una coincidencia de tres implementaciones
-# repetidas). `documentos_permitidos` llega YA RESUELTO desde la capa HTTP
-# (T-55, que consulta `POST /autorizacion` de seguridad-acceso una vez por
-# candidato — el dominio nunca llama a Seguridad y Acceso, spec §del TODO
-# punto 4). Nunca ordena ni reordena: preserva el orden de `candidatos` tal
-# como llega (relevante para RF-IB-006, que ya trae el ranking resuelto).
+# repetidas). `verificador` (corrige el VETO real de Codex sobre 22b6b09, ver
+# STATE.md: un `set` ya resuelto no ejercía el puerto) — se consulta AQUÍ,
+# una vez por candidato, mismo patrón que `VerificadorDeAutorizacion` en
+# extracción/T-41b. Nunca ordena ni reordena: preserva el orden de
+# `candidatos` tal como llega (relevante para RF-IB-006, que ya trae el
+# ranking resuelto).
 class _AccedeADocumento(Protocol):
     documento_id: str
 
@@ -210,11 +247,14 @@ _T = TypeVar("_T", bound=_AccedeADocumento)
 
 
 def aplicar_permisos_y_construir_evento(
-    candidatos: list[_T], documentos_permitidos: set[str], actor: str, fecha: datetime, tipo: str
+    candidatos: list[_T], verificador: VerificadorDePermisos, actor: str, fecha: datetime, tipo: str
 ) -> tuple[list[_T], EventoDeAcceso]:
-    permitidos = [candidato for candidato in candidatos if candidato.documento_id in documentos_permitidos]
+    permitidos = [candidato for candidato in candidatos if verificador.tiene_permiso(actor, candidato.documento_id)]
     evento = EventoDeAcceso(
-        actor=actor, fecha=fecha, tipo=tipo, documentos_accedidos=[candidato.documento_id for candidato in permitidos]
+        actor=actor,
+        fecha=fecha,
+        tipo=tipo,
+        documentos_accedidos=tuple(candidato.documento_id for candidato in permitidos),
     )
     return permitidos, evento
 
@@ -225,25 +265,25 @@ def _cumple_filtros(entrada: EntradaDeIndice, filtros: dict[str, str]) -> bool:
 
 # RF-IB-005: búsqueda léxica y por metadatos — REAL y determinística (spec
 # §1: "la construcción y el mantenimiento del índice en sí... es una
-# operación determinística"). La coincidencia de término es una contención de
-# subcadena sobre el texto ya indexado: no requiere ningún motor externo para
-# ser código real (el `[CLARIFICAR]` de motor concreto, spec §8, es sobre la
-# implementación de `IndiceLexico` a escala, no sobre si esta operación es
-# "real"). `candidatos` es la lista de entradas que T-55 ya obtuvo del índice
-# léxico (o el conjunto completo indexado, según la implementación del
-# puerto) — este módulo nunca llama `IndiceLexico` directamente.
+# operación determinística"). Corrige el VETO real de Codex sobre 22b6b09
+# (ver STATE.md): ahora llama a `indice.buscar(termino)` de verdad — el
+# puerto hace la búsqueda por término (real, Postgres en T-55), y este
+# módulo aplica encima el filtro de metadatos y el de permiso, que sí son
+# lógica de dominio pura. La recontención de subcadena que sigue abajo es
+# defensa en profundidad (no depende de que la implementación del puerto
+# filtre exactamente igual), no una segunda fuente de verdad.
 def buscar(
-    candidatos: list[EntradaDeIndice], termino: str, filtros: dict[str, str], documentos_permitidos: set[str], actor: str, fecha: datetime
+    indice: IndiceLexico, termino: str, filtros: dict[str, str], verificador: VerificadorDePermisos, actor: str, fecha: datetime
 ) -> tuple[list[EntradaDeIndice], EventoDeAcceso]:
     coincidencias = [
         entrada
-        for entrada in candidatos
+        for entrada in indice.buscar(termino)
         if entrada.estado == EstadoEntradaDeIndice.INDEXADA
         and entrada.texto_extraido is not None
         and termino.lower() in entrada.texto_extraido.lower()
         and _cumple_filtros(entrada, filtros)
     ]
-    return aplicar_permisos_y_construir_evento(coincidencias, documentos_permitidos, actor, fecha, tipo="BUSQUEDA_LEXICA")
+    return aplicar_permisos_y_construir_evento(coincidencias, verificador, actor, fecha, tipo="BUSQUEDA_LEXICA")
 
 
 # RF-IB-006: componente FICTICIO real — `candidatos_ordenados` llega YA
@@ -252,10 +292,10 @@ def buscar(
 # recibido (mismo criterio que `ordenar_por_confianza` en clasificacion, que
 # tampoco filtra por permiso — aquí es al revés, se filtra sin reordenar).
 def recuperar_por_relevancia(
-    candidatos_ordenados: list[EntradaDeIndice], documentos_permitidos: set[str], actor: str, fecha: datetime
+    candidatos_ordenados: list[EntradaDeIndice], verificador: VerificadorDePermisos, actor: str, fecha: datetime
 ) -> tuple[list[EntradaDeIndice], EventoDeAcceso]:
     return aplicar_permisos_y_construir_evento(
-        candidatos_ordenados, documentos_permitidos, actor, fecha, tipo="RECUPERACION_POR_RELEVANCIA"
+        candidatos_ordenados, verificador, actor, fecha, tipo="RECUPERACION_POR_RELEVANCIA"
     )
 
 
@@ -308,14 +348,14 @@ def responder_qa(
     pregunta: str,
     respuesta: str | None,
     citas: list[Cita],
-    documentos_permitidos: set[str],
+    verificador: VerificadorDePermisos,
     modelo_id: str,
     actor: str,
     fecha: datetime,
     razon_negativa: str | None = None,
 ) -> tuple[RespuestaQA | NegativaApropiada, EventoDeAcceso]:
     citas_permitidas, evento = aplicar_permisos_y_construir_evento(
-        citas, documentos_permitidos, actor, fecha, tipo="PREGUNTA_RESPONDIDA"
+        citas, verificador, actor, fecha, tipo="PREGUNTA_RESPONDIDA"
     )
     if respuesta is not None and citas_permitidas:
         return RespuestaQA(pregunta=pregunta, respuesta=respuesta, citas=citas_permitidas, modelo_id=modelo_id, fecha=fecha), evento
