@@ -63,13 +63,19 @@ class UnidadDocumentalEntity(Base):
 
 
 # P-08 (hallazgo V-01 de la revisión acumulada de Codex, ver REVIEW.md):
-# bitácora de solo anexado, mismo tratamiento que `eventos_auditoria` en
+# bitácora de solo anexado, mismo tratamiento que `rc_eventos_auditoria` en
 # records-custodia y `eventos_seguridad` en seguridad-acceso — se persiste
 # con `session.add` dentro de la MISMA transacción que la unidad (ver
 # `AlmacenDeUnidades.guardar_con_evento`), nunca con un commit propio, para no
 # recrear el riesgo de atomicidad que T-21/T-22 corrigieron en Kotlin.
+# Prefijo `no_` (VETO real de Codex sobre T-56, ver STATE.md/T-58): esta
+# tabla compartía el nombre genérico `eventos_auditoria` con records-custodia
+# y extraccion en el mismo Postgres (`docker-compose.saas.yml`) -- GET
+# /eventos-auditoria de cualquiera de los tres devolvía eventos de los
+# otros, contradice spec-infra-servicios.md §2. Mismo patrón que `ib_` en
+# indexacion-busqueda (T-56).
 class EventoAuditoriaEntity(Base):
-    __tablename__ = "eventos_auditoria"
+    __tablename__ = "no_eventos_auditoria"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     actor: Mapped[str] = mapped_column(String, nullable=False)

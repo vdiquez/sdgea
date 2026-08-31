@@ -191,7 +191,7 @@ class AlmacenDeSugerenciasJpa(
 }
 
 // T-19 (corrige VETO de Codex): `trd_versiones` recibe el mismo tratamiento
-// de solo-inserción que `originales_inmutables`/`eventos_auditoria` —
+// de solo-inserción que `originales_inmutables`/`rc_eventos_auditoria` —
 // `entityManager.persist` en vez de `JpaRepository.save`, para que un
 // `version` repetido falle también a nivel de acceso a datos y no solo
 // dependa del rechazo que ya hace `RegistroTrd.publicar` en el dominio.

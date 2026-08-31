@@ -75,12 +75,19 @@ class DocumentoEntity(
 )
 
 // specs/spec-infra-servicios.md §4: "EventoAuditoria (via BitacoraAuditoria)
-// -> tabla eventos_auditoria, de solo inserción". Mismo tratamiento que
+// -> tabla rc_eventos_auditoria, de solo inserción". Mismo tratamiento que
 // originales_inmutables: solo se escribe vía EntityManager.persist. El id
 // autoincremental fija el orden de anexado, que es lo que BitacoraAuditoria
 // necesita para `en(indice)`.
+// Prefijo `rc_` (VETO real de Codex sobre T-56, ver STATE.md): esta tabla
+// compartía nombre genérico con la de normalizacion y extraccion en el
+// mismo Postgres (`docker-compose.saas.yml`), así que GET /eventos-auditoria
+// de cualquiera de los tres devolvía eventos de los otros -- contradice
+// spec-infra-servicios.md §2 ("cada contexto mapea sus propios agregados a
+// sus propias tablas"). Mismo patrón de aislamiento que `ib_` en
+// indexacion-busqueda (T-56/T-58).
 @Entity
-@Table(name = "eventos_auditoria")
+@Table(name = "rc_eventos_auditoria")
 class EventoAuditoriaEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from dominio import EventoAuditoria, ProcedenciaHeredada, recibir_unidad
-from persistencia import AlmacenDeTextos, Base
+from persistencia import AlmacenDeTextos, Base, EventoAuditoriaEntity
 
 PROCEDENCIA = ProcedenciaHeredada(
     fuente="escaner-sala-3",
@@ -27,6 +27,18 @@ def almacen():
     Base.metadata.create_all(engine)
     sesion = sessionmaker(bind=engine)()
     return AlmacenDeTextos(sesion)
+
+
+# VETO real de Codex sobre T-56 (ver STATE.md/T-58): esta tabla compartía el
+# nombre genérico `eventos_auditoria` con records-custodia y normalizacion en
+# el mismo Postgres -- GET /eventos-auditoria de cualquiera de los tres
+# devolvía eventos de los otros. Guarda de regresión directa (mismo criterio
+# que TestAislamientoDeTablasPorContexto en indexacion-busqueda, T-56): si
+# alguien revierte el prefijo `ex_`, esto falla en rojo antes de llegar a un
+# Postgres compartido real.
+class TestAislamientoDeTablaPorContexto:
+    def test_la_tabla_de_eventos_tiene_prefijo_propio_unico(self):
+        assert EventoAuditoriaEntity.__tablename__ == "ex_eventos_auditoria"
 
 
 # P-08 (mismo criterio verificado en normalizacion/T-37 y en Kotlin por
@@ -56,7 +68,7 @@ class TestAtomicidadDeGuardarConEvento:
             actor="sistema-extraccion",
             fecha=PROCEDENCIA.fecha,
         )
-        # `actor=None` viola la restricción NOT NULL de `eventos_auditoria.actor`
+        # `actor=None` viola la restricción NOT NULL de `ex_eventos_auditoria.actor`
         # (una violación real de la base de datos, no un doble simulado) — el
         # rollback explícito de `guardar_con_evento` debe deshacer también el
         # `merge` del texto hecho en la misma transacción.

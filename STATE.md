@@ -2957,3 +2957,58 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   abierta (aislamiento de tablas ENTRE captura-ingesta/records-custodia/
   normalizacion/extraccion, ver T-56) como la única tarea pendiente del
   backlog actual.
+
+- 2026-08-31 — T-58 completada. **Corrección de alcance sobre su propia
+  redacción** (la del 2026-08-30, arriba): antes de tocar código se buscó
+  `@Table`/`@Entity` en todo `contexts/captura-ingesta/` y no apareció
+  ninguna tabla `eventos_auditoria` — ese contexto no persiste ningún
+  evento de auditoría propio (solo `lotes_ingesta`/`items_ingesta`), así
+  que nunca participó de la colisión. El alcance real eran TRES contextos
+  (records-custodia, normalizacion, extraccion), no cuatro.
+  Mismo patrón que T-56 (prefijo de tabla por contexto, no un esquema
+  Postgres propio -- más simple y no complica `sqlite:///:memory:` en los
+  tests Python):
+  - `contexts/records-custodia/.../persistencia/Entidades.kt`:
+    `@Table(name = "eventos_auditoria")` → `"rc_eventos_auditoria"` en
+    `EventoAuditoriaEntity`. Nuevo test `EntidadesTest.kt` (reflexión sobre
+    la anotación `@Table`) -- primera prueba de este archivo sin
+    `@SpringBootTest`, porque H2 en test no puede reproducir la colisión
+    real (cada módulo Kotlin corre contra su propia instancia
+    `jdbc:h2:mem:...` aislada); la única guarda posible en CI es sobre el
+    nombre de tabla en sí.
+  - `contexts/normalizacion/persistencia.py`: `__tablename__ =
+    "eventos_auditoria"` → `"no_eventos_auditoria"`. Nuevo test
+    `TestAislamientoDeTablaPorContexto` (mismo criterio que
+    `TestAislamientoDeTablasPorContexto` de indexacion-busqueda, T-56).
+  - `contexts/extraccion/persistencia.py`: ídem → `"ex_eventos_auditoria"`,
+    mismo test nuevo.
+  - `specs/spec-infra-servicios.md`: nota nueva en §2 documentando el
+    hallazgo (verificado en vivo, no solo inferido) y la convención de
+    prefijos (`ib_`/`rc_`/`no_`/`ex_`); §4 (`EventoAuditoria` → tabla
+    `rc_eventos_auditoria`), §5 (referencia cruzada actualizada), §7
+    (`no_eventos_auditoria`) y §11 (`ex_eventos_auditoria`, nombre que
+    antes no aparecía explícito en la spec) con el nombre correcto en cada
+    mapeo de persistencia. La nota histórica del bug de T-39 en §4 (que
+    cita literalmente el nombre de la tabla en el mensaje de error de
+    Postgres de esa fecha) se dejó intacta a propósito: es un registro de
+    lo que pasó entonces, no una referencia viva al estado actual.
+  `./test.sh` completo del repo en verde: Gradle (incluido `EntidadesTest`,
+  confirmado con `--rerun-tasks` porque la primera corrida lo marcó
+  `UP-TO-DATE` sin ejecutarlo de verdad); pytest eval-harness 4,
+  normalizacion 41 (+1), extraccion 56 (+1), clasificacion 27,
+  enriquecimiento 29, indexacion-busqueda 50.
+  Verificado con Docker real: `docker compose ... down -v` + `up -d
+  --build` (nueve servicios); `psql \dt` confirmó `rc_eventos_auditoria`,
+  `no_eventos_auditoria` y `ex_eventos_auditoria` como tablas nuevas y
+  separadas (las de Python se crean perezosamente en la primera petición,
+  no al arrancar el contenedor, a diferencia de Hibernate/`ddl-auto:
+  update`); se escribió un documento real en records-custodia y una unidad
+  real en normalizacion, y `GET /eventos-auditoria` de cada contexto
+  (records-custodia: 1 evento propio; normalizacion: 1 evento propio;
+  extraccion: 0, ninguno ajeno) confirmó CERO mezcla -- el hallazgo
+  original de T-56 queda cerrado con evidencia en vivo, no solo con el
+  cambio de nombre de tabla. Colección Postman completa (T-57) reverificada
+  sobre el mismo volumen limpio, dos corridas seguidas: 98/98 peticiones,
+  143/143 aserciones, cero fallos -- confirma que el rename no rompió
+  ningún flujo end-to-end existente.
+  **Con T-58 cerrada, no queda ninguna tarea abierta en TODO.md.**

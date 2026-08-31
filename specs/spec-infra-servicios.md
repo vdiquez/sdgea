@@ -44,6 +44,23 @@ cualquier otro código.
   necesita datos de otro contexto, los recibe por su contrato de entrada (ver
   spec de dominio correspondiente), igual que hoy.
 
+**Bug real encontrado y corregido en T-56/T-58 (VETO real de Codex, ver
+STATE.md)**: "sin esquema compartido" no bastaba por sí solo — varios
+contextos usaban el mismo nombre de tabla genérico (`eventos_auditoria`)
+sobre el mismo `postgres`/`DB_NAME=sgdea` de `docker-compose.saas.yml`, así
+que terminaban escribiendo literalmente en la MISMA tabla física sin
+saberlo: `GET /eventos-auditoria` de un contexto devolvía también los
+eventos de los otros. Verificado en vivo (`docker exec ... psql -c "\d
+eventos_auditoria"`), no solo inferido del código. Corregido dándole a la
+tabla de cada contexto un prefijo único derivado de su nombre — mismo
+tratamiento que si cada contexto tuviera su propio esquema de Postgres, sin
+la complejidad de `CREATE SCHEMA`/`search_path` (que además rompe
+`sqlite:///:memory:` en los tests Python, que no soporta esquemas
+Postgres): `ib_` (indexacion-busqueda, T-56), `rc_` (records-custodia),
+`no_` (normalizacion), `ex_` (extraccion) — ver §4/§7 abajo para el nombre
+exacto de cada tabla. `seguridad-acceso` (`eventos_seguridad`) y
+`captura-ingesta` (sin bitácora propia) nunca colisionaron.
+
 ## 3. Contrato mínimo — `captura-ingesta`
 
 Traduce las funciones de
@@ -126,8 +143,9 @@ Mapeo de persistencia (estructura, no DDL):
   código de dominio, que un `UPDATE` sobre esta tabla nunca ocurre.
 - `DocumentoDeArchivo` → tabla `documentos_archivo`, con `original_id` como
   llave foránea a `originales_inmutables`.
-- `EventoAuditoria` (vía `BitacoraAuditoria`) → tabla `eventos_auditoria`, de
-  solo inserción (RF-RC-005) — mismo tratamiento que `originales_inmutables`.
+- `EventoAuditoria` (vía `BitacoraAuditoria`) → tabla `rc_eventos_auditoria`
+  (prefijo `rc_`, ver §2 — T-56/T-58), de solo inserción (RF-RC-005) — mismo
+  tratamiento que `originales_inmutables`.
 - `Sugerencia` → tabla `sugerencias`, con `documento_id` como llave foránea.
   `forma_original` (T-53) es columna nullable — `ALTER TABLE ADD COLUMN`
   nullable sin `DEFAULT` es seguro sobre una tabla con filas existentes
@@ -190,7 +208,7 @@ Mapeo de persistencia (estructura, no DDL):
   (mismo tratamiento que `evidencia`/`series` en records-custodia).
 - `EventoSeguridad` (actor, fecha, tipo, recurso) → tabla `eventos_seguridad`,
   de solo inserción (RF-SA-005/RNF-SA-003) — mismo tratamiento que
-  `eventos_auditoria` en records-custodia: `EntityManager.persist`, nunca
+  `rc_eventos_auditoria` en records-custodia: `EntityManager.persist`, nunca
   `merge`/`update`.
 
 Fuera de alcance de esta spec: la integración real de `captura-ingesta` y
@@ -370,9 +388,10 @@ tupla `(UnidadDocumentalCandidata, EventoAuditoria)`, y
 `AlmacenDeUnidades.guardar_con_evento(unidad, evento)` persiste ambos en una
 única transacción SQLAlchemy (`merge` + `add` + `commit`, con
 `rollback()` explícito si falla el `commit`) sobre una nueva tabla
-`eventos_auditoria` (columnas: `actor`, `fecha`, `tipo`, `estado_anterior`,
-`estado_posterior`) — mismo criterio que `eventos_auditoria` en
-records-custodia y `eventos_seguridad` en seguridad-acceso. Verificado con un
+`no_eventos_auditoria` (prefijo `no_`, ver §2 — T-56/T-58; columnas: `actor`,
+`fecha`, `tipo`, `estado_anterior`, `estado_posterior`) — mismo criterio que
+`rc_eventos_auditoria` en records-custodia y `eventos_seguridad` en
+seguridad-acceso. Verificado con un
 test de atomicidad real (violación de restricción NOT NULL, no un doble
 simulado) que confirma que si el evento no se puede anexar, la unidad
 tampoco queda persistida (`tests/test_persistencia.py`).
@@ -501,8 +520,9 @@ manejador de `ErrorDeDominio` que el resto del módulo.
 Mapeo de persistencia (estructura, no DDL): `TextoExtraido` → tabla
 `textos_extraidos`, con procedencia y sugerencia de OCR aplanadas en columnas
 propias (mismo criterio que `UnidadDocumentalEntity` en normalizacion) y
-`evidencia` serializada a JSON en una columna de texto. Variables de entorno
-idénticas a los otros contextos: `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`.
+`evidencia` serializada a JSON en una columna de texto; `EventoAuditoria` →
+tabla `ex_eventos_auditoria` (prefijo `ex_`, ver §2 — T-56/T-58). Variables de
+entorno idénticas a los otros contextos: `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`.
 
 Autorización (corregido 2026-08-27, VETO real de Codex sobre commit `cf93d84`,
 ver `REVIEW.md`): a diferencia de `confirmar_limites` en Normalización y

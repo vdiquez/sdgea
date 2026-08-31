@@ -1307,10 +1307,11 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       `__tablename__`); reverificado en vivo contra Docker — `\dt` mostró
       las cuatro tablas `ib_*` junto a las originales sin tocarlas, y
       `GET /eventos-auditoria` devolvió únicamente el evento propio recién
-      escrito, ninguno ajeno. T-58 queda acotada a los CUATRO contextos que
-      sí siguen colisionando ENTRE ELLOS (captura-ingesta/records-custodia/
-      normalizacion/extraccion) — indexacion-busqueda ya no participa de
-      esa colisión.
+      escrito, ninguno ajeno. T-58 queda acotada a los contextos que sí
+      siguen colisionando ENTRE ELLOS (records-custodia/normalizacion/
+      extraccion — `captura-ingesta` no tiene tabla `eventos_auditoria`
+      propia, corrección de alcance hecha al implementar T-58) —
+      indexacion-busqueda ya no participa de esa colisión.
 - [x] T-57 Colección Postman con el ciclo completo de Indexación y
       Búsqueda, mismo patrón que T-36/T-43/T-47/T-52 — flujo end-to-end
       real: custodiar y materializar un documento en records-custodia
@@ -1363,22 +1364,58 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       sobre el volumen de Postgres, historial de reverificación).
       **Con esto se completan los nueve bounded contexts del alcance
       original del corte vertical.**
-- [ ] T-58 Aísla la tabla `eventos_auditoria` (y cualquier otra con nombre
-      genérico compartido) ENTRE captura-ingesta, records-custodia,
-      normalizacion y extraccion — hallazgo real verificado durante T-56
-      (`docker exec deploy-postgres-1 psql -U sgdea -d sgdea -c "\d
-      eventos_auditoria"` mostró UNA sola tabla física con columnas de
-      captura-ingesta/records-custodia, incluida `es_correccion`, propia de
-      records-custodia). Contradice spec-infra-servicios.md §2 ("cada
-      contexto mapea sus propios agregados a sus propias tablas") y mezcla
-      la bitácora de auditoría (P-08) de contextos que no deberían verse
-      entre sí. `indexacion-busqueda` YA NO participa de esta colisión —
-      corregida dentro de T-56 (VETO real de Codex sobre ese commit, ver
-      STATE.md) con el prefijo único `ib_` en sus cuatro tablas; ese mismo
-      patrón (prefijo por contexto, o un esquema Postgres propio con
-      `CREATE SCHEMA`) es el que falta aplicar a los CUATRO contextos
-      restantes. Requiere tocar Kotlin/JPA (captura-ingesta,
-      records-custodia) y Python/SQLAlchemy (normalizacion, extraccion) —
-      por eso sigue siendo tarea aparte. Sin umbral ni referencia normativa
-      nueva que inventar: es una corrección de infraestructura contra una
-      decisión de spec ya escrita.
+- [x] T-58 Aísla la tabla `eventos_auditoria` (y cualquier otra con nombre
+      genérico compartido) entre records-custodia, normalizacion y
+      extraccion — hallazgo real verificado durante T-56 (`docker exec
+      deploy-postgres-1 psql -U sgdea -d sgdea -c "\d eventos_auditoria"`
+      mostró UNA sola tabla física con columnas de records-custodia,
+      incluida `es_correccion`, propia de ese contexto). Contradice
+      spec-infra-servicios.md §2 ("cada contexto mapea sus propios
+      agregados a sus propias tablas") y mezclaba la bitácora de auditoría
+      (P-08) de contextos que no deberían verse entre sí.
+      **Corrección de alcance sobre la redacción original de esta tarea**:
+      al investigar antes de implementar, `captura-ingesta` resultó NO
+      tener ninguna tabla `eventos_auditoria` propia (`grep -rn "@Table"
+      contexts/captura-ingesta/...` solo muestra `lotes_ingesta`/
+      `items_ingesta`) — nunca participó de la colisión, así que el alcance
+      real era TRES contextos, no cuatro.
+      `indexacion-busqueda` ya no participaba (corregida dentro de T-56 con
+      el prefijo `ib_`); se aplicó el mismo patrón (prefijo por contexto)
+      a los tres restantes: `rc_eventos_auditoria` (records-custodia,
+      Kotlin/JPA, `@Table(name=...)`), `no_eventos_auditoria`
+      (normalizacion, Python/SQLAlchemy, `__tablename__`),
+      `ex_eventos_auditoria` (extraccion, ídem). Se prefirió el prefijo de
+      tabla sobre un esquema Postgres propio (`CREATE SCHEMA`) por el mismo
+      motivo que en T-56: más simple, y un esquema real complicaría
+      `sqlite:///:memory:` en los tests Python.
+      `specs/spec-infra-servicios.md` actualizada: nota nueva en §2
+      documentando el hallazgo y la convención de prefijos; §4/§5/§7/§11
+      con el nombre de tabla correcto en cada mapeo de persistencia (la
+      nota histórica del bug de T-39 en §4, que cita el nombre de entonces,
+      se dejó intacta como registro del incidente real, no una referencia
+      viva).
+      TDD: guarda de regresión sobre el nombre de tabla en los tres
+      contextos — `TestAislamientoDeTablaPorContexto` en
+      normalizacion/extraccion (mismo criterio que
+      `TestAislamientoDeTablasPorContexto` de indexacion-busqueda en T-56)
+      y `EntidadesTest` (reflexión sobre `@Table`) en records-custodia,
+      primera prueba unitaria de este archivo que no depende de Spring —
+      H2 en test no puede reproducir la colisión real porque cada módulo
+      Kotlin corre contra su propia instancia `jdbc:h2:mem:...` aislada, así
+      que la prueba de nombre de tabla es la única guarda posible en CI.
+      Verificado con Docker real: `docker compose ... down -v` + `up -d
+      --build` (nueve servicios), `\dt` confirmó las tres tablas nuevas
+      (`rc_/no_/ex_eventos_auditoria`) sin tocar las demás; se escribió un
+      evento real en records-custodia y otro en normalizacion y se confirmó
+      que `GET /eventos-auditoria` de cada contexto (incluida extraccion,
+      vacía) solo devuelve sus propios eventos — cero mezcla. Colección
+      Postman completa (T-57) reverificada dos corridas seguidas sobre el
+      mismo volumen limpio: 98/98 peticiones, 143/143 aserciones, sin
+      fallos. `./test.sh` completo del repo en verde (Gradle incluido el
+      nuevo `EntidadesTest`; pytest: eval-harness 4, normalizacion 41 [+1],
+      extraccion 56 [+1], clasificacion 27, enriquecimiento 29,
+      indexacion-busqueda 50).
+      Sin umbral ni referencia normativa nueva inventada: es una corrección
+      de infraestructura contra una decisión de spec ya escrita.
+      **Con T-58 cerrada, no queda ninguna tarea abierta en el backlog
+      actual.**

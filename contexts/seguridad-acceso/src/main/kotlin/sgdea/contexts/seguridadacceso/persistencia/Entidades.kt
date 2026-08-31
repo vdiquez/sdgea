@@ -49,7 +49,7 @@ class IdentidadEntity(
 )
 
 // specs/spec-infra-servicios.md §5: "EventoSeguridad -> tabla eventos_seguridad,
-// de solo inserción" — mismo tratamiento que eventos_auditoria en
+// de solo inserción" — mismo tratamiento que rc_eventos_auditoria en
 // records-custodia (RF-RC-005): solo se escribe vía EntityManager.persist en el
 // almacén (Almacenes.kt), nunca merge/update, para que un UPDATE sea físicamente
 // imposible desde este contexto (RF-SA-005/RNF-SA-003).

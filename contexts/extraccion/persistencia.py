@@ -60,14 +60,20 @@ class TextoExtraidoEntity(Base):
     sugerencia_ocr_fecha: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-# P-08: bitácora de solo anexado, mismo tratamiento que `eventos_auditoria` en
-# normalizacion (T-37) y records-custodia — se persiste con `session.add`
-# dentro de la MISMA transacción que el texto extraído (ver
-# `AlmacenDeTextos.guardar_con_evento`), nunca con un commit propio, para no
-# recrear el riesgo de atomicidad que T-21/T-22/T-37 corrigieron en los otros
-# contextos.
+# P-08: bitácora de solo anexado, mismo tratamiento que `no_eventos_auditoria`
+# en normalizacion (T-37) y `rc_eventos_auditoria` en records-custodia — se
+# persiste con `session.add` dentro de la MISMA transacción que el texto
+# extraído (ver `AlmacenDeTextos.guardar_con_evento`), nunca con un commit
+# propio, para no recrear el riesgo de atomicidad que T-21/T-22/T-37
+# corrigieron en los otros contextos.
+# Prefijo `ex_` (VETO real de Codex sobre T-56, ver STATE.md/T-58): esta
+# tabla compartía el nombre genérico `eventos_auditoria` con records-custodia
+# y normalizacion en el mismo Postgres -- GET /eventos-auditoria de
+# cualquiera de los tres devolvía eventos de los otros, contradice
+# spec-infra-servicios.md §2. Mismo patrón que `ib_` en indexacion-busqueda
+# (T-56).
 class EventoAuditoriaEntity(Base):
-    __tablename__ = "eventos_auditoria"
+    __tablename__ = "ex_eventos_auditoria"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     actor: Mapped[str] = mapped_column(String, nullable=False)
