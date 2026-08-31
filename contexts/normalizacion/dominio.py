@@ -88,6 +88,16 @@ class EventoAuditoria:
     tipo: str
     estado_anterior: str | None
     estado_posterior: str | None
+    # `True` para todo evento que este módulo emite de verdad (el valor por
+    # defecto, así que ninguna construcción existente necesitó cambiar).
+    # `False` solo lo pone `persistencia.py` al recuperar una fila de la
+    # tabla heredada compartida (T-58, ver STATE.md) cuyo `tipo` también usa
+    # otro contexto ("VALIDACION_APLICADA" en extraccion) sin ninguna columna
+    # que identifique el origen -- SEGUNDO VETO real de Codex sobre T-58:
+    # excluir esas filas era tan deshonesto como atribuírselas a un solo
+    # contexto sin certeza. Se muestran en AMBOS, marcadas como tales, nunca
+    # como un evento propio confirmado.
+    origen_verificado: bool = True
 
 
 # RF-NO-001/003: recibir un ítem validado desde Captura/Ingesta genera una

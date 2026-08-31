@@ -40,17 +40,20 @@ class TestAislamientoDeTablaPorContexto:
         assert EventoAuditoriaEntity.__tablename__ == "no_eventos_auditoria"
 
 
-# VETO real de Codex sobre T-58 (ver STATE.md): renombrar `eventos_auditoria`
-# a `no_eventos_auditoria` sin preservar la lectura del historial existente
-# viola P-08. Esta prueba siembra la tabla HEREDADA directamente -- como si
-# viniera de antes de T-58, con una fila propia de normalizacion, una fila de
-# OTRO contexto simulado y una fila con un tipo AMBIGUO
+# SEGUNDO VETO real de Codex sobre T-58 (ver STATE.md): la primera versión de
+# esta prueba (y del código) EXCLUÍA "VALIDACION_APLICADA" de la
+# recuperación -- Codex vetó también eso: "documentar la omisión tampoco la
+# corrige", P-08 exige que toda transición histórica siga siendo recuperable.
+# Esta prueba siembra la tabla HEREDADA directamente -- como si viniera de
+# antes de T-58, con una fila propia de normalizacion, una fila de OTRO
+# contexto simulado (nunca debe aparecer) y una fila AMBIGUA
 # ("VALIDACION_APLICADA", que extraccion también usa sobre la misma tabla
 # compartida, sin ninguna columna de origen) -- y comprueba que
-# `eventos_de_auditoria()` recupera solo lo propio inequívoco, nunca lo ajeno
-# ni lo ambiguo, además de lo nuevo escrito después del rename.
+# `eventos_de_auditoria()` recupera lo propio inequívoco (marcado
+# `origen_verificado=True`) Y lo ambiguo (marcado `origen_verificado=False`,
+# nunca omitido ni atribuido en falso), nunca lo ajeno, además de lo nuevo.
 class TestLecturaCompatibleDeLaTablaHeredada:
-    def test_recupera_el_historial_propio_ignora_el_ajeno_y_el_ambiguo(self):
+    def test_recupera_el_historial_propio_y_el_ambiguo_marcado_ignora_el_ajeno(self):
         engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         Base.metadata.create_all(engine)
         _tabla_eventos_heredada.create(engine)
@@ -74,8 +77,8 @@ class TestLecturaCompatibleDeLaTablaHeredada:
                     "estado_posterior": "CUSTODIADO",
                 },
                 {
-                    # Ambigua -- sin forma honesta de atribuirla, tampoco debe
-                    # recuperarse.
+                    # Ambigua -- sin forma honesta de atribuirla a UN solo
+                    # contexto, pero debe seguir siendo recuperable (P-08).
                     "actor": "sistema-extraccion",
                     "fecha": datetime.fromisoformat("2026-08-20T00:10:00+00:00"),
                     "tipo": "VALIDACION_APLICADA",
@@ -97,11 +100,15 @@ class TestLecturaCompatibleDeLaTablaHeredada:
         )
         almacen.guardar_con_evento(unidad, evento)
 
-        tipos = [e.tipo for e in almacen.eventos_de_auditoria()]
+        eventos = almacen.eventos_de_auditoria()
+        tipos = [e.tipo for e in eventos]
 
-        assert tipos == ["UNIDAD_RECIBIDA", "UNIDAD_RECIBIDA"]
+        assert tipos == ["UNIDAD_RECIBIDA", "VALIDACION_APLICADA", "UNIDAD_RECIBIDA"]
         assert "ORIGINAL_CUSTODIADO" not in tipos
-        assert "VALIDACION_APLICADA" not in tipos
+        propios = [e for e in eventos if e.tipo == "UNIDAD_RECIBIDA"]
+        assert all(e.origen_verificado for e in propios)
+        ambiguo = next(e for e in eventos if e.tipo == "VALIDACION_APLICADA")
+        assert ambiguo.origen_verificado is False
 
     def test_si_la_tabla_heredada_no_existe_no_falla(self, almacen):
         # Volumen nuevo, nunca usado antes de T-58 -- has_table() devuelve

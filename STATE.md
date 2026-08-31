@@ -3080,5 +3080,60 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   completa (T-57) reverificada dos corridas seguidas sobre volumen limpio:
   98/98 peticiones, 143/143 aserciones, sin fallos -- confirma que el
   fallback de lectura no rompió ningún flujo end-to-end existente.
+  Codex mantuvo el VETO sobre esta corrección (ver entrada siguiente) —
+  T-58 seguía sin cerrar.
+
+- 2026-08-31 — TERCER VETO real de Codex, sobre la corrección anterior
+  (commit `452a448`) — el loop headless se detuvo ahí de nuevo. Texto: "P-08
+  — el commit deja sin recuperar eventos históricos `VALIDACION_APLICADA` de
+  la bitácora heredada." Argumento: "P-08 exige auditoría total, inmutable y
+  recuperable: toda transición debe conservar un evento atribuible.
+  Mantener esas filas físicamente en una tabla sin exponerlas no satisface
+  la recuperabilidad; documentar la omisión tampoco la corrige." Codex
+  señaló además que la propia adición a la spec ("quedan sin recuperar")
+  contradecía la constitución en el mismo párrafo que invocaba P-08. Ofreció
+  la vía de corrección explícitamente: "preservar el acceso a TODAS las
+  filas heredadas sin inventar su atribución... una consulta/bitácora
+  histórica explícita que exponga las filas de origen indeterminado COMO
+  TALES, sin asignarlas falsamente a un contexto."
+  Corregido siguiendo esa indicación al pie de la letra: en vez de excluir
+  `VALIDACION_APLICADA` del filtro de recuperación, se incluye en AMBOS
+  contextos (`normalizacion` y `extraccion`) que podrían haberla escrito,
+  pero marcada como de origen no verificado:
+  - `EventoAuditoria` (dominio.py de ambos contextos) gana un campo
+    `origen_verificado: bool = True` -- `True` por defecto para todo evento
+    que el propio módulo emite de verdad, así que ninguna construcción
+    existente necesitó cambiar (compatible hacia atrás). Solo
+    `persistencia.py` construye una instancia con `origen_verificado=False`,
+    y solo para las filas heredadas de tipo ambiguo.
+  - `_TIPOS_PROPIOS_EN_TABLA_HEREDADA` (sin cambios) más una nueva
+    `_TIPOS_AMBIGUOS_EN_TABLA_HEREDADA = {"VALIDACION_APLICADA"}`;
+    `eventos_de_auditoria()` consulta la unión de ambos conjuntos contra la
+    tabla heredada y decide `origen_verificado` por membresía en el
+    conjunto ambiguo.
+  - `api.py` de ambos contextos no necesitó cambios: `GET
+    /eventos-auditoria` ya devuelve `list[dominio.EventoAuditoria]`
+    directamente (FastAPI serializa el dataclass completo), así que el
+    campo nuevo aparece solo con el rename de persistencia.py/dominio.py.
+  - `records-custodia` no necesitó ningún cambio: sus cinco tipos son todos
+    exclusivos, nunca tuvo un caso ambiguo.
+  Tests actualizados en vez de reescritos desde cero: la misma siembra de
+  tabla heredada (fila propia + fila ajena + fila ambigua) que ya existía,
+  con la aserción sobre `VALIDACION_APLICADA` invertida -- antes exigía su
+  ausencia, ahora exige su presencia con `origen_verificado=False`, y que
+  las filas propias tengan `origen_verificado=True`.
+  `specs/spec-infra-servicios.md` §2 corregida: ya no dice "quedan sin
+  recuperar" (la frase que Codex señaló como contradictoria) -- ahora
+  describe el mecanismo real de exposición marcada.
+  Verificado con Docker real, mismo escenario que la corrida anterior
+  (volumen limpio + `eventos_auditoria` sembrada manualmente con filas de
+  los tres contextos, incluida `VALIDACION_APLICADA`): `GET
+  /eventos-auditoria` de normalizacion Y de extraccion devolvieron la fila
+  ambigua, cada uno con `origen_verificado: false`, además de su propio
+  evento (`origen_verificado: true`); records-custodia sin cambios de
+  comportamiento. `./test.sh` completo del repo en verde (mismos conteos que
+  la entrada anterior). Colección Postman completa reverificada dos corridas
+  seguidas sobre volumen limpio: 98/98 peticiones, 143/143 aserciones, sin
+  fallos.
   **Con esto, T-58 queda cerrada de verdad (sin VETO pendiente) y no queda
   ninguna tarea abierta en TODO.md.**

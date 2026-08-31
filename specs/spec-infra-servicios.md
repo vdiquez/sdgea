@@ -69,14 +69,18 @@ siendo recuperable). No hay migración de datos: `rc_eventos_auditoria`,
 nuevas. En su lugar, `GET /eventos-auditoria` de cada uno de los tres
 contextos hace una lectura de compatibilidad de la tabla heredada
 `eventos_auditoria` (si existe) además de su tabla nueva, filtrada por los
-`tipo` de evento que ese contexto usa. Esa lectura es honesta solo con lo que
-puede saberse con certeza: `normalizacion` y `extraccion` comparten el mismo
-`tipo="VALIDACION_APLICADA"` sin ninguna columna que identifique el contexto
-de origen en la tabla heredada, así que esas filas no se le atribuyen a
-ninguno de los dos — quedan sin recuperar, documentado explícitamente en vez
-de adivinar (inventar una atribución sería peor que la pérdida de acceso que
-motivó el VETO). El resto de los `tipo` de cada contexto son exclusivos y se
-recuperan completos.
+`tipo` de evento que ese contexto usa. Un primer intento excluyó de la
+recuperación los `tipo` que dos contextos comparten en la tabla heredada sin
+ninguna columna que identifique el origen (`VALIDACION_APLICADA`, usado tanto
+por `normalizacion` como por `extraccion`) — Codex vetó también eso: omitir
+una transición histórica sigue siendo una pérdida de recuperabilidad, aunque
+esté documentada. Corregido exponiendo esas filas AMBIGUAS en los DOS
+contextos que podrían haberlas escrito, cada una marcada
+`origen_verificado: false` en `EventoAuditoria` (campo nuevo, `true` por
+defecto para todo evento que el contexto emite de verdad) — nunca omitidas,
+nunca atribuidas en falso a uno solo. El resto de los `tipo` de cada contexto
+son exclusivos, se recuperan completos y siempre con `origen_verificado:
+true`.
 
 ## 3. Contrato mínimo — `captura-ingesta`
 
