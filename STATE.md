@@ -3168,6 +3168,55 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Postman; cuatro `[CLARIFICAR]` reales dejados abiertos en §8 (token de
   sesión real, diseño visual/marca, dataset de ejemplo pre-cargado, modo
   solo-lectura) — ninguno se resolvió inventando.
-  Siguiente paso: comitear la spec y pedir revisión de Codex antes de
-  sembrar TODO.md con las tareas de implementación (plan.md, scaffold,
-  RF-UI por RF-UI).
+
+- 2026-08-31 — VETO real de Codex sobre el commit `b2a6367` (primer borrador
+  de `specs/008-ui-demo/spec.md`) — el loop headless se detuvo ahí. Cuatro
+  hallazgos reales:
+  1. **P-03/§10**: la spec proponía exponer Captura/Ingesta y
+     Records/Custodia a través del proxy curado presentándolo como
+     coherente con `spec-infra-servicios.md` §10 — no lo es, §10 exige que
+     esos dos contextos implementen autorización real antes de exponerse,
+     y un proxy no sustituye esa verificación.
+  2. **Endpoint inventado**: la spec citaba
+     `POST /documentos/{id}/verificacion`; el contrato real es
+     `POST /documentos/{id}/verificacion-integridad`.
+  3. **RF-UI-011 no verificable**: prometía consolidar "todos los
+     contextos que participaron", pero Captura/Ingesta, Clasificación,
+     Validación Humana y Enriquecimiento no exponen `GET
+     /eventos-auditoria` (confirmado con `grep` sobre los controladores
+     Kotlin/Python de los nueve contextos — solo records-custodia,
+     normalizacion, extraccion e indexacion-busqueda lo tienen; seguridad-
+     acceso expone `GET /eventos-seguridad`, forma distinta).
+  4. **RF-UI-004/008 no referenciaban la cadena RF completa**: omitían
+     RF-CL-004/RF-RC-003 y RF-EN-001/009/010/RF-RC-003, el tramo de la
+     capa anticorrupción que hace verificable P-01 de punta a punta.
+  Corregido:
+  - Nueva sección "Prerrequisito de arquitectura" en §1: la UI no expone
+    Captura/Ingesta ni Records/Custodia vía el proxy hasta implementar un
+    puerto `VerificadorDeAutorizacion` real en ambos (mismo patrón que
+    Extracción/T-41b y Validación Humana/T-30) — eso es tarea de esos dos
+    contextos backend, no de esta spec.
+  - **Hallazgo propio, no señalado por Codex**: al re-diseñar RF-UI-004
+    (sugerencia de clasificación) noté que la decisión de materializarla
+    no necesita que el navegador llame a Records/Custodia directamente —
+    Validación Humana (RF-UI-005) ya orquesta esa materialización
+    servidor-a-servidor, patrón ya construido y aprobado (T-30). Moví la
+    acción de decidir de RF-UI-004 a RF-UI-005; RF-UI-004 pasó de
+    bloqueado a NO bloqueado (solo muestra la sugerencia que devuelve
+    Clasificación directamente). Esto reduce el prerrequisito real a
+    RF-UI-002/003 (ingesta y vista del original custodiado) más algunos
+    sub-criterios de verificación en RF-UI-005/008/011 — la mayoría de la
+    narrativa de demo (clasificación, cola, aprobación masiva,
+    normalización/extracción, enriquecimiento, búsqueda, Q&A) puede
+    implementarse sin esperar el trabajo de autorización backend.
+  - `POST /documentos/{id}/verificacion-integridad` corregido en §4/RF-UI-003.
+  - RF-UI-011 reescrita: consolida solo Records/Custodia, Normalización,
+    Extracción e Indexación y Búsqueda (los que sí exponen
+    `GET /eventos-auditoria`), más Seguridad y Acceso en su propia
+    sección — nunca promete lo que el backend no expone.
+  - RF-UI-004/008 ahora citan la cadena RF completa (FICTICIO → capa
+    anticorrupción como `Sugerencia`, RF-CL-004/RF-EN-010 + RF-RC-003 →
+    decisión humana → materialización, P-08 consultable).
+  `./test.sh` completo del repo en verde (sin cambios de código, solo
+  spec). Siguiente paso: comitear la corrección y pedir revisión de Codex
+  antes de sembrar TODO.md con las tareas de implementación.

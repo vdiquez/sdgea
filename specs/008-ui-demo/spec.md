@@ -42,6 +42,35 @@ prospectos sin supervisión (ver §8); cobertura de los endpoints administrativo
 depuración que la colección Postman ya prueba pero que no aportan a la narrativa de
 venta (p. ej. reintentar una autenticación fallida a propósito).
 
+### Prerrequisito de arquitectura (VETO real de Codex sobre el primer borrador de esta spec, ver STATE.md)
+
+`spec-infra-servicios.md` §10 es explícito: Captura/Ingesta y Records/Custodia "siguen
+sin deber exponerse fuera de una red de confianza (docker-compose interno)" mientras
+no llamen ellos mismos a `POST /autorizacion` — exactamente lo que ya hicieron
+Validación Humana (T-30) y Extracción, solo para RF-EX-011 (T-41b). El primer borrador
+de esta spec proponía exponer esos dos contextos a través del proxy curado
+presentándolo como coherente con §10; no lo es — un proxy no sustituye la
+autorización que el propio servicio nunca verifica, y `spec-infra-servicios.md` §10
+sigue vigente sin excepción para esta capa.
+
+Por tanto: **la UI no expone, vía el proxy curado, ningún endpoint de Captura/Ingesta
+ni de Records/Custodia hasta que ese prerrequisito se cierre** — implementar en
+ambos un puerto `VerificadorDeAutorizacion` real que consulte `POST /autorizacion`
+antes de responder, mismo patrón ya aceptado por Codex en Extracción/T-41b y
+Validación Humana/T-30 (Kotlin: `VerificadorDeAutorizacionHttp` o equivalente,
+consultado en cada endpoint que esta capa necesite exponer). Esa es tarea de
+`spec-infra-servicios.md` (corrección de §10, cuando se cierre) y de los contextos
+Captura/Ingesta y Records/Custodia respectivamente, NO de esta spec — pero es una
+dependencia dura para RF-UI-002/003 (ver §5), que quedan `Borrador · bloqueado`
+hasta entonces (más algunos sub-criterios de verificación de RF-UI-005/008/011 que
+también leen Records/Custodia, marcados individualmente). El resto de los RF-UI
+(Clasificación, Validación Humana, Normalización, Extracción — lectura,
+Enriquecimiento, Indexación y Búsqueda, Seguridad y Acceso) no dependen de este
+prerrequisito: ninguno de esos contextos está listado en §10 como restringido, y
+RF-UI-005 demuestra que la decisión humana que materializa en Records/Custodia no
+necesita que el navegador lo llame directamente — Validación Humana ya lo orquesta
+servidor-a-servidor.
+
 ---
 
 ## 2. Lenguaje ubicuo
@@ -80,18 +109,21 @@ ya persisten los contextos backend). Su único estado propio es de sesión de cl
 
 - **Sesión** — identidad autenticada (id, actor, roles) conservada en el cliente.
 - **Panel de un documento** — vista compuesta que combina, para un `documento_id`,
-  el original custodiado (Records/Custodia), su clasificación materializada o
-  pendiente, sus sugerencias (Records/Custodia vía `GET
-  /documentos/{id}/sugerencias`), y el estado de su unidad documental en
-  Normalización/Extracción si existe.
+  el original custodiado (Records/Custodia — bloqueado hasta cerrar el prerrequisito
+  de §1), su clasificación materializada o pendiente, sus sugerencias
+  (Records/Custodia vía `GET /documentos/{id}/sugerencias` — mismo bloqueo), y el
+  estado de su unidad documental en Normalización/Extracción si existe (sin bloqueo,
+  ninguno de los dos está restringido por §10).
 - **Cola de revisión** — la lista ordenada por confianza que expone Validación
   Humana (`GET /colas/...`), presentada por tipo.
 - **Resultado de búsqueda** — la lista de entradas que devuelve Indexación y
   Búsqueda (`POST /busquedas`), cada una con su marca de simulación donde
   corresponda (embedding) y sin ella donde no (coincidencia léxica).
 - **Bitácora consolidada** — la unión, por documento o por sesión de demo, de los
-  eventos de auditoría que exponen los `GET /eventos-auditoria` de cada contexto
-  que participó en el flujo mostrado.
+  eventos de auditoría que exponen `GET /eventos-auditoria` en Records/Custodia,
+  Normalización, Extracción e Indexación y Búsqueda, más `GET /eventos-seguridad`
+  de Seguridad y Acceso en su propia sección — nunca "todo lo que tocó el
+  documento": ver RF-UI-011 sobre los contextos que no exponen bitácora propia.
 
 ### Invariantes (no negociables)
 
@@ -121,9 +153,9 @@ contrato a los endpoints ya documentados en `spec-infra-servicios.md` (§3 a §1
 
 | Contexto | Endpoints que la UI consume (subconjunto) |
 |---|---|
-| Seguridad y Acceso | `POST /identidades/autenticacion`, `POST /autorizacion` (indirecto, vía los demás servicios) |
-| Captura/Ingesta | `POST /lotes`, `GET /lotes/{id}/conteo`, `GET /lotes/{id}/conciliacion`, `POST /lotes/{id}/items/{id}/validacion` |
-| Records/Custodia | `POST /documentos`, `GET /documentos/{id}`, `GET /documentos/{id}/original`, `POST /documentos/{id}/decisiones`, `GET /documentos/{id}/sugerencias`, `GET /eventos-auditoria`, `POST /documentos/{id}/verificacion` |
+| Seguridad y Acceso | `POST /identidades/autenticacion`, `POST /autorizacion` (indirecto, vía los demás servicios), `GET /eventos-seguridad` |
+| Captura/Ingesta | **Bloqueado hasta cerrar el prerrequisito de §1** — `POST /lotes`, `GET /lotes/{id}/conteo`, `GET /lotes/{id}/conciliacion`, `POST /lotes/{id}/items/{id}/validacion` |
+| Records/Custodia | **Bloqueado hasta cerrar el prerrequisito de §1** — `POST /documentos`, `GET /documentos/{id}`, `GET /documentos/{id}/original`, `POST /documentos/{id}/decisiones`, `GET /documentos/{id}/sugerencias`, `GET /eventos-auditoria`, `POST /documentos/{id}/verificacion-integridad` |
 | Normalización | `GET /unidades/{id}`, `GET /eventos-auditoria` |
 | Extracción | `GET /textos/{id}`, `GET /eventos-auditoria` |
 | Clasificación | `POST /clasificaciones`, `POST /agrupamientos`, `POST /no-clasificables` |
@@ -153,7 +185,9 @@ UI conserva la identidad para el resto de la sesión.
 - Dadas credenciales inválidas, Cuando el operador intenta iniciar sesión, Entonces
   la UI muestra el rechazo sin conservar ninguna identidad.
 
-**RF-UI-002 · Ingesta de un lote de documentos**
+**RF-UI-002 · Ingesta de un lote de documentos** — `Borrador · bloqueado` (ver §1,
+prerrequisito de arquitectura: Captura/Ingesta no debe exponerse hasta implementar
+autorización real)
 Un operador registra un lote y ve su conteo por estado.
 - Dado un lote nuevo con al menos un ítem, Cuando el operador lo registra, Entonces
   la UI muestra el lote con sus ítems en estado `Recibido` (RF-CI-001).
@@ -161,31 +195,47 @@ Un operador registra un lote y ve su conteo por estado.
   consulta el conteo, Entonces la UI muestra el desglose y si hay pérdida silenciosa
   (RF-CI-008).
 
-**RF-UI-003 · Custodia y verificación de integridad del original**
+**RF-UI-003 · Custodia y verificación de integridad del original** — `Borrador ·
+bloqueado` (ver §1, mismo prerrequisito, para Records/Custodia)
 Un operador ve el original custodiado de un documento y puede verificar su
 integridad bajo demanda.
 - Dado un documento custodiado, Cuando el operador lo abre, Entonces la UI muestra
   su huella, algoritmo y procedencia (RF-RC-001/002).
 - Dado un documento custodiado, Cuando el operador pide verificar su integridad,
-  Entonces la UI muestra si la huella coincide (RF-RC-009).
+  Entonces la UI muestra si la huella coincide (RF-RC-009, endpoint
+  `POST /documentos/{id}/verificacion-integridad`).
 
-**RF-UI-004 · Sugerencia de clasificación (FICTICIA) y decisión humana**
-Un operador ve una sugerencia de clasificación simulada y decide materializarla o
-no.
+**RF-UI-004 · Sugerencia de clasificación (FICTICIA)**
+Un operador ve una sugerencia de clasificación simulada, con su marca y su
+confianza — la decisión de materializarla es responsabilidad de RF-UI-005 (cola de
+Validación Humana), no de esta pantalla: evita que la UI llame directamente a
+Records/Custodia, contexto bloqueado por el prerrequisito de §1. Este RF NO está
+bloqueado: `POST /clasificaciones` es el propio contexto Clasificación, sin
+restricción de §10.
 - Dado un documento sin clasificación, Cuando se genera una sugerencia de
   clasificación, Entonces la UI la muestra con su marca de simulación y su
-  confianza (RF-CL-001..003, marcada FICTICIA).
-- Dada una sugerencia visible, Cuando el operador decide materializarla, Entonces la
-  UI la envía como decisión humana explícita y refleja la clasificación resultante
-  (RF-RC-004).
+  confianza (RF-CL-001..003, marcada FICTICIA), devuelta directamente por
+  `POST /clasificaciones` — sin consultar Records/Custodia.
+- Dada esa sugerencia, Cuando Clasificación la reenvía, Entonces queda disponible
+  para RF-UI-005 vía la cola de Validación Humana (RF-CL-004, RF-VH-001) — la
+  UI no la reenvía por su cuenta ni la materializa por sí sola.
 
 **RF-UI-005 · Cola de validación humana y decisión individual**
 Un operador ve las colas de revisión por tipo, ordenadas por confianza, y decide
-sobre una sugerencia puntual.
+sobre una sugerencia puntual — incluida la sugerencia de clasificación de
+RF-UI-004. La UI llama solo a Validación Humana (sin bloqueo, no restringido por
+§10); es Validación Humana quien internamente materializa en Records/Custodia
+(RF-RC-004) o confirma en Normalización (RF-NO-004) — la misma orquestación
+servidor-a-servidor que ya existe hoy, no una exposición nueva del navegador hacia
+esos dos contextos.
 - Dada una cola con sugerencias pendientes, Cuando el operador la abre, Entonces la
   UI las muestra ordenadas de menor a mayor confianza (RF-VH-001/002).
 - Dada una sugerencia de la cola, Cuando el operador la acepta o la corrige,
-  Entonces la UI produce la decisión humana y la retira de la cola (RF-VH-003).
+  Entonces la UI produce la decisión humana vía Validación Humana y la retira de
+  la cola (RF-VH-003), y la transición resultante queda consultable en
+  `GET /eventos-auditoria` de Records/Custodia o Normalización según corresponda
+  (P-08) — verificación aplazada hasta cerrar el prerrequisito de §1, ya que esa
+  lectura sí requiere exponer Records/Custodia.
 
 **RF-UI-006 · Aprobación masiva de candidatos de alta confianza**
 Un operador aprueba en bloque los candidatos que superan el umbral de la curva
@@ -204,10 +254,18 @@ Normalización.
 
 **RF-UI-008 · Sugerencia de enriquecimiento de metadatos (FICTICIA)**
 Un operador ve valores de metadatos propuestos y campos no encontrados,
-distinguibles entre sí.
+distinguibles entre sí, y puede confirmar que llegaron a Records/Custodia como
+`Sugerencia` real — misma frontera P-01 completa que RF-UI-004.
 - Dado un texto extraído, Cuando se genera una sugerencia de enriquecimiento,
   Entonces la UI muestra cada valor propuesto con su marca de simulación y cada
   campo no encontrado, distinguibles (RF-EN-002..006/008, marcada FICTICIA).
+- Dado un texto sin ningún campo reconocible, Cuando Enriquecimiento lo marca no
+  enriquecible con una razón, Entonces la UI muestra la razón y no reenvía ninguna
+  sugerencia nueva (RF-EN-009).
+- Dada una sugerencia de enriquecimiento generada, Cuando Enriquecimiento la
+  reenvía, Entonces la UI puede confirmar (`GET /documentos/{id}/sugerencias` en
+  Records/Custodia — bloqueado hasta cerrar el prerrequisito de §1) que llegó como
+  `Sugerencia` real a través de la capa anticorrupción (RF-EN-010, RF-RC-003).
 
 **RF-UI-009 · Búsqueda léxica y filtrada**
 Un operador busca por palabra clave y filtro de metadatos sobre el índice ya
@@ -227,10 +285,23 @@ respuesta con sus citas, o una negativa apropiada si no hay evidencia suficiente
 
 **RF-UI-011 · Bitácora de auditoría consolidada**
 Un operador ve, para un documento o para la sesión de demo, los eventos de
-auditoría de todos los contextos que participaron, con actor y fecha.
-- Dado un documento que pasó por varios contextos, Cuando el operador consulta su
-  bitácora, Entonces la UI muestra los eventos de cada contexto que lo tocó, cada
-  uno con actor y fecha no vacíos (P-08).
+auditoría de los contextos que exponen una bitácora propia — no de "todos los
+contextos que participaron": Captura/Ingesta, Clasificación, Enriquecimiento y
+Validación Humana no persisten su propia bitácora (sus transiciones relevantes que
+sí generan estado quedan capturadas indirectamente en Records/Custodia o
+Normalización cuando corresponde, p. ej. `SUGERENCIA_RECIBIDA` en Records/Custodia
+para lo que reenvía Clasificación/Enriquecimiento, T-48/observación T-52) — esta
+spec no promete consolidar lo que el backend no expone, ni inventa un endpoint
+nuevo para lograrlo.
+- Dado un documento que pasó por Records/Custodia, Normalización, Extracción y/o
+  Indexación y Búsqueda, Cuando el operador consulta su bitácora, Entonces la UI
+  muestra los eventos de cada uno de esos contextos que sí expone
+  `GET /eventos-auditoria` (Records/Custodia bloqueado hasta cerrar el prerrequisito
+  de §1; Normalización, Extracción e Indexación y Búsqueda sin bloqueo), cada uno
+  con actor y fecha no vacíos (P-08).
+- Dado un evento de Seguridad y Acceso (`GET /eventos-seguridad`, forma distinta a
+  `EventoAuditoria`), Cuando el operador lo consulta, Entonces la UI lo muestra en
+  su propia sección, sin fusionarlo con la forma de los demás.
 
 **RF-UI-012 · Distinción visual universal de componentes FICTICIOS**
 Requisito transversal, no ligado a una sola pantalla: la marca de simulación es un
@@ -298,7 +369,7 @@ probabilístico.
   de ventas — decisión de negocio/guion comercial, no técnica.
 - **[CLARIFICAR]** Si se necesita un modo de solo-lectura para que un prospecto
   explore sin supervisión de un humano del equipo, o si la demo siempre la conduce
-  alguien del equipo — afecta si RF-UI-004/006 (decisiones) deben poder
+  alguien del equipo — afecta si RF-UI-005/006 (decisiones) deben poder
   deshabilitarse.
 
 ---
