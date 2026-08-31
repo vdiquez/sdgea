@@ -3220,3 +3220,19 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   `./test.sh` completo del repo en verde (sin cambios de código, solo
   spec). Siguiente paso: comitear la corrección y pedir revisión de Codex
   antes de sembrar TODO.md con las tareas de implementación.
+
+- 2026-08-31 — SEGUNDO VETO real de Codex sobre `specs/008-ui-demo/spec.md`
+  (commit `ffda4a7`): RF-UI-004 trazaba la sugerencia hasta la cola de
+  Validación Humana (RF-CL-004, RF-VH-001) pero omitía RF-RC-003, el tramo
+  de la capa anticorrupción — la cadena P-01 completa no quedaba
+  verificable dentro del propio RF. Corregido (commit `6dcad2b`): el
+  segundo criterio y el párrafo introductorio de RF-UI-004 citan ahora
+  RF-RC-003 explícitamente, mismo patrón ya aceptado en RF-UI-008. Codex
+  confirmó "OK: sin VETO" (ver REVIEW.md).
+  **Con esto, `specs/008-ui-demo/spec.md` (nivel 1) queda cerrada sin VETO
+  pendiente**, tras dos rondas de corrección real. Siguiente paso:
+  sembrar TODO.md con las tareas de implementación — primero las que NO
+  dependen del prerrequisito de autorización (RF-UI-001/004/005/006/007/
+  008/009/010/011/012, la mayor parte de la narrativa de demo), después
+  el prerrequisito backend (VerificadorDeAutorizacion real en
+  Captura/Ingesta y Records/Custodia) que desbloquea RF-UI-002/003.
