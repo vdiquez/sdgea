@@ -30,6 +30,15 @@ test.describe("RF-UI-001 · Autenticación de la sesión de demo", () => {
 
     await expect(page).toHaveURL("/");
     await expect(page.getByText(`Sesión activa: ${actor}`)).toBeVisible();
+
+    // Observación de Codex sobre T-60 (ver REVIEW.md/STATE.md): el e2e
+    // inferia la sesión solo desde la vista de inicio -- esto inspecciona
+    // localStorage directamente y confirma que credencialHash (que sí viene
+    // en la respuesta real de Identidad) nunca se persiste.
+    const sesionGuardada = await page.evaluate(() => localStorage.getItem("sgdea-ui-demo:sesion"));
+    const sesion = JSON.parse(sesionGuardada ?? "{}");
+    expect(sesion).toMatchObject({ id: identidadId, actor });
+    expect(sesion).not.toHaveProperty("credencialHash");
   });
 
   test("credenciales inválidas muestran el rechazo y no guardan ninguna sesión", async ({ page }) => {
