@@ -16,5 +16,10 @@ spring:
       # §4 deja el DDL exacto como decisión de implementación; no hay
       # herramienta de migración decidida (Flyway/Liquibase) en ninguna spec.
       ddl-auto: update
+# T-63: primera dependencia saliente real de records-custodia -- mismo
+# criterio de variable de entorno que records-custodia.base-url en
+# validacion-humana (T-30).
+seguridad-acceso:
+  base-url: ${SEGURIDAD_ACCESO_BASE_URL:http://localhost:8083}
 server:
   port: ${SERVER_PORT:8082}

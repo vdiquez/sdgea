@@ -19,3 +19,9 @@ spring:
     hibernate:
       ddl-auto: create-drop
     database-platform: org.hibernate.dialect.H2Dialect
+# T-63: este application.yml de test REEMPLAZA por completo al de main (no lo
+# extiende) -- sin este valor, VerificadorDeAutorizacionHttp no podía
+# construirse y CUALQUIER test de este módulo que arranca el contexto Spring
+# completo fallaba, incluidos los que nunca llaman a un endpoint protegido.
+seguridad-acceso:
+  base-url: http://localhost:8083

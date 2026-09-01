@@ -122,19 +122,32 @@ tablas, sin cambiar el contrato de los métodos.
 | Método y ruta | Dominio que invoca | RF |
 |---|---|---|
 | `POST /documentos` | `custodiar(id, bytes, actor, fecha, procedencia)` | RF-RC-001, RF-RC-002 |
-| `GET /documentos/{id}/original` | `consultar(id)` | RF-RC-001 |
-| `GET /documentos/{id}` | `consultarDocumento(id)` | RF-RC-001 |
+| `GET /documentos/{id}/original?identidadId=` | `consultar(id)` | RF-RC-001, RF-RC-010 (T-63) |
+| `GET /documentos/{id}?identidadId=` | `consultarDocumento(id)` | RF-RC-001 (T-63) |
 | `GET /documentos/{id}/procedencia` | `consultarProcedencia(id)` | RF-RC-002 |
 | `POST /documentos/{id}/decisiones` | `materializar(decision)` | RF-RC-004, RF-VH-009 (T-39) |
 | `GET /documentos/correcciones` | `correccionesPendientesDeRerevision()` | RF-VH-009 (T-39) |
-| `POST /documentos/{id}/verificacion-integridad` | `verificarIntegridad(id, actor, fecha)` | RF-RC-009 |
+| `POST /documentos/{id}/verificacion-integridad` | `verificarIntegridad(id, actor, fecha)` | RF-RC-009 (T-63: cuerpo gana `identidadId`, distinto de `actor`, solo para autorizar) |
 | `POST /verificacion-integridad` | `verificarTodos(actor, fecha)` | RF-RC-009 |
 | `POST /sugerencias` | `CapaAnticorrupcionSugerencias.recibir(entrada, fecha)` | RF-RC-003 |
-| `GET /documentos/{id}/sugerencias` | `sugerenciasDe(documentoId)` | RF-RC-003 |
+| `GET /documentos/{id}/sugerencias?identidadId=` | `sugerenciasDe(documentoId)` | RF-RC-003 (T-63) |
 | `GET /sugerencias/pendientes` | `CapaAnticorrupcionSugerencias.sugerenciasPendientes()` | RF-VH-001 (T-28) |
 | `POST /trd` | `RegistroTrd.publicar(trd)` | RF-RC-006 |
 | `GET /trd/{version}` | `RegistroTrd.version(numero)` | RF-RC-006 |
-| `GET /eventos-auditoria` | `CustodiaOriginales.eventosDeAuditoria` | P-08 (T-48) |
+| `GET /eventos-auditoria?identidadId=` | `CustodiaOriginales.eventosDeAuditoria` | P-08 (T-48), T-63 |
+
+**T-63 (2026-09-01)**: los cinco endpoints marcados arriba exigen ahora un
+`identidadId` con permiso `leer`/`documento` (`verificar`/`documento`
+para `verificacion-integridad`), verificado contra `POST /autorizacion` de
+Seguridad y Acceso — mismo patrón que `extraccion` (T-41b) y
+`validacion-humana` (T-30), primer consumidor real de ese endpoint en este
+contexto. Son exactamente los cinco endpoints que
+`specs/008-ui-demo/spec.md` §1 necesita exponer vía el proxy curado de la UI
+de demo; un permiso denegado responde `403` con el formato de error
+unificado. Los demás endpoints de esta tabla (`custodiar`, `procedencia`,
+`decisiones`, `correcciones`, `sugerencias` entrante, `pendientes`, `trd`)
+no están en ese alcance —el navegador nunca los llama— y siguen sin
+verificación.
 
 Intentar modificar un original (`intentarModificar`) y las operaciones de
 escritura de la bitácora de solo-anexado (`BitacoraAuditoria.anexar` /
@@ -176,8 +189,11 @@ Mapeo de persistencia (estructura, no DDL):
 
 Fuera de alcance de esta spec: RF-RC-007 (cálculo de retención — no
 implementado en el dominio todavía), RF-RC-008 (expediente electrónico — no
-implementado), RF-RC-010 (recuperación con evento de acceso — `consultar`
-existe pero sin el evento de auditoría de acceso que pide el RF).
+implementado). RF-RC-010 queda parcial: T-63 (2026-09-01) cierra la mitad
+"consumidor autorizado" (`GET /documentos/{id}/original` ahora exige
+`identidadId` con permiso `leer`/`documento`), pero `consultar` sigue sin el
+evento de auditoría de acceso que la segunda mitad del RF exige en cada
+recuperación — eso sigue sin implementar.
 
 **RF-VH-009 (T-39)**: `DecisionHumana`/`EventoAuditoria` ganan un campo
 `esCorreccion: Boolean` (default `false`, así que ningún otro sitio que
@@ -461,15 +477,28 @@ necesite exponer un valor derivado lo arma explícito en la capa HTTP
   (§8) — decisión técnica, no bloqueante.
 - **[CLARIFICAR]** Integración real de autenticación/autorización: el
   contexto Seguridad y Acceso ya existe como servicio (T-23, 2026-08-25,
-  §5), pero `captura-ingesta` y `records-custodia` todavía no lo llaman —
-  sus endpoints siguen sin exigir una decisión de `POST /autorizacion` antes
-  de responder. `validacion-humana` (T-30) sí lo llama de verdad, siendo el
-  primer consumidor real de `/autorizacion`; `extraccion` (2026-08-27, VETO
-  de Codex sobre commit `cf93d84`, ver §11) es el segundo, pero solo para
+  §5), pero `captura-ingesta` todavía no lo llama — sus endpoints siguen sin
+  exigir una decisión de `POST /autorizacion` antes de responder.
+  `validacion-humana` (T-30) sí lo llama de verdad, siendo el primer
+  consumidor real de `/autorizacion`; `extraccion` (2026-08-27, VETO de
+  Codex sobre commit `cf93d84`, ver §11) es el segundo, pero solo para
   `POST /textos/{id}/confirmacion` — el único endpoint cuyo RF (RF-EX-011)
-  exige literalmente un "actor autorizado". Hasta que captura-ingesta y
-  records-custodia hagan lo mismo, ambos siguen sin deber exponerse fuera de
-  una red de confianza (docker-compose interno).
+  exige literalmente un "actor autorizado". `records-custodia` (T-63,
+  2026-09-01, prerrequisito de arquitectura de `specs/008-ui-demo/spec.md`
+  §1) es el tercero: a diferencia de extraccion, aquí ningún RF-RC-00X
+  literal exige "autorizado" salvo RF-RC-010 (recuperación del original) —
+  la verificación se extiende igual a `GET /documentos/{id}`,
+  `GET /documentos/{id}/original`, `GET /documentos/{id}/sugerencias`,
+  `POST /documentos/{id}/verificacion-integridad` y
+  `GET /eventos-auditoria` porque son, textualmente, los cinco endpoints que
+  `specs/008-ui-demo/spec.md` §1 necesita exponer vía el proxy curado — no
+  una interpretación extendida de un RF de negocio, sino la propia decisión
+  de arquitectura ya aprobada en esa spec. `POST /documentos` (custodiar),
+  `GET /documentos/{id}/procedencia` y `GET /documentos/correcciones` quedan
+  fuera de ese alcance (el navegador nunca los llama) y siguen sin
+  verificación. Hasta que captura-ingesta haga lo mismo, sigue sin deber
+  exponerse fuera de una red de confianza (docker-compose interno);
+  records-custodia ya cerró esa restricción para sí misma.
 - ~~RF-VH-005 (confirmación/corrección de límites de documento)~~ — **cerrado
   en T-38**: `GestionDeLimites` + `ConfirmadorDeLimitesHttp` en Validación
   Humana ya llaman a `POST /unidades/{id}/confirmacion-limites` en

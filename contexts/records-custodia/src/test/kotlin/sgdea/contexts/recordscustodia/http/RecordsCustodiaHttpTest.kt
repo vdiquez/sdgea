@@ -4,27 +4,51 @@ import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
 import org.springframework.boot.test.web.server.LocalServerPort
+import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.test.web.client.MockRestServiceServer
+import org.springframework.test.web.client.match.MockRestRequestMatchers.method
+import org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo
+import org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess
+import org.springframework.web.client.RestTemplate
 
 // specs/spec-infra-servicios.md §4 · Contrato mínimo — records-custodia.
 // Cada endpoint traduce un método de dominio ya probado por TDD
 // (T-03/T-08/T-09/T-11); estas pruebas verifican la traducción HTTP y la
 // persistencia entre peticiones separadas (lo nuevo de T-17), no reglas de
 // negocio nuevas.
+//
+// T-63 (specs/008-ui-demo/spec.md §1): `original`, `documento`, `sugerencias`,
+// `verificarIntegridad` y `eventos-auditoria` ahora exigen un actor autorizado
+// -- estas pruebas interceptan la llamada saliente real a
+// `POST /autorizacion` con `MockRestServiceServer`, mismo patrón que
+// ValidacionHumanaHttpTest (T-30), en vez de levantar seguridad-acceso real
+// (eso lo cubre Postman/Newman contra Docker).
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class RecordsCustodiaHttpTest {
 
     @LocalServerPort
     private var port: Int = 0
 
+    @Autowired
+    private lateinit var restTemplateAguasAbajo: RestTemplate
+
     private val restTemplate = TestRestTemplate()
 
     private fun url(path: String) = "http://localhost:$port$path"
 
     private val fecha = "2026-08-21T10:00:00Z"
+
+    private fun mockearAutorizacion(resultado: String, servidor: MockRestServiceServer) {
+        servidor.expect(requestTo("http://localhost:8083/autorizacion"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess("""{"resultado":"$resultado"}""", MediaType.APPLICATION_JSON))
+    }
 
     private fun custodiarDocumento(id: String, contenido: String = "contenido de $id"): Map<*, *> {
         val request = mapOf(
@@ -48,14 +72,29 @@ class RecordsCustodiaHttpTest {
     }
 
     @Test
-    fun `GET documentos original refleja el original persistido en una peticion POST anterior - RF-RC-001`() {
+    fun `GET documentos original refleja el original persistido en una peticion POST anterior - RF-RC-001, T-63`() {
         custodiarDocumento("doc-http-002", "contenido persistido")
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("PERMITIDO", servidor)
 
-        val response = restTemplate.getForEntity(url("/documentos/doc-http-002/original"), Map::class.java)
+        val response = restTemplate.getForEntity(url("/documentos/doc-http-002/original?identidadId=id-1"), Map::class.java)
 
         assertEquals(HttpStatus.OK, response.statusCode)
         val bytes = Base64.getDecoder().decode(response.body!!["bytes"] as String)
         assertEquals("contenido persistido", String(bytes))
+        servidor.verify()
+    }
+
+    @Test
+    fun `GET documentos original deniega cuando seguridad-acceso responde DENEGADO - T-63`() {
+        custodiarDocumento("doc-http-002b", "contenido persistido")
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("DENEGADO", servidor)
+
+        val response = restTemplate.getForEntity(url("/documentos/doc-http-002b/original?identidadId=id-1"), Map::class.java)
+
+        assertEquals(HttpStatus.FORBIDDEN, response.statusCode)
+        servidor.verify()
     }
 
     @Test
@@ -71,10 +110,14 @@ class RecordsCustodiaHttpTest {
 
     @Test
     fun `GET documentos de un id inexistente responde 404 con el formato de error unificado - specs-infra-servicios §5`() {
-        val response = restTemplate.getForEntity(url("/documentos/no-existe"), Map::class.java)
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("PERMITIDO", servidor)
+
+        val response = restTemplate.getForEntity(url("/documentos/no-existe?identidadId=id-1"), Map::class.java)
 
         assertEquals(HttpStatus.NOT_FOUND, response.statusCode)
         assertTrue((response.body!!["error"] as String).contains("no-existe"))
+        servidor.verify()
     }
 
     @Test
@@ -95,9 +138,12 @@ class RecordsCustodiaHttpTest {
         val postResponse = restTemplate.postForEntity(url("/documentos/doc-http-004/decisiones"), decision, Map::class.java)
         assertEquals(HttpStatus.OK, postResponse.statusCode)
 
-        val getResponse = restTemplate.getForEntity(url("/documentos/doc-http-004"), Map::class.java)
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("PERMITIDO", servidor)
+        val getResponse = restTemplate.getForEntity(url("/documentos/doc-http-004?identidadId=id-1"), Map::class.java)
         val clasificacion = getResponse.body!!["clasificacion"] as Map<*, *>
         assertEquals("serie-1", clasificacion["serieId"])
+        servidor.verify()
     }
 
     @Test
@@ -116,13 +162,16 @@ class RecordsCustodiaHttpTest {
         val postResponse = restTemplate.postForEntity(url("/sugerencias"), entrada, Map::class.java)
         assertEquals(HttpStatus.CREATED, postResponse.statusCode)
 
-        val getResponse = restTemplate.getForEntity(url("/documentos/doc-http-005/sugerencias"), List::class.java)
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("PERMITIDO", servidor)
+        val getResponse = restTemplate.getForEntity(url("/documentos/doc-http-005/sugerencias?identidadId=id-1"), List::class.java)
         val sugerencias = getResponse.body as List<*>
         assertEquals(1, sugerencias.size)
         assertEquals("emisor-ficticio-v0", (sugerencias[0] as Map<*, *>)["modeloId"])
         // T-53: formaOriginal es opcional -- una sugerencia sin ese campo (como esta,
         // estilo Clasificacion) queda null en vez de fallar o inventar un valor.
         assertEquals(null, (sugerencias[0] as Map<*, *>)["formaOriginal"])
+        servidor.verify()
     }
 
     @Test
@@ -148,10 +197,13 @@ class RecordsCustodiaHttpTest {
         assertEquals(HttpStatus.CREATED, postResponse.statusCode)
         assertEquals("12 de enero de 2026", postResponse.body!!["formaOriginal"])
 
-        val getResponse = restTemplate.getForEntity(url("/documentos/doc-http-013/sugerencias"), List::class.java)
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("PERMITIDO", servidor)
+        val getResponse = restTemplate.getForEntity(url("/documentos/doc-http-013/sugerencias?identidadId=id-1"), List::class.java)
         val sugerencias = getResponse.body as List<*>
         assertEquals(1, sugerencias.size)
         assertEquals("12 de enero de 2026", (sugerencias[0] as Map<*, *>)["formaOriginal"])
+        servidor.verify()
     }
 
     @Test
@@ -217,14 +269,30 @@ class RecordsCustodiaHttpTest {
     }
 
     @Test
-    fun `POST verificacion-integridad de un documento intacto no reporta discrepancia - RF-RC-009`() {
+    fun `POST verificacion-integridad de un documento intacto no reporta discrepancia - RF-RC-009, T-63`() {
         custodiarDocumento("doc-http-006")
-        val request = mapOf("actor" to "auditor-1", "fecha" to "2026-08-21T13:00:00Z")
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("PERMITIDO", servidor)
+        val request = mapOf("identidadId" to "id-1", "actor" to "auditor-1", "fecha" to "2026-08-21T13:00:00Z")
 
         val response = restTemplate.postForEntity(url("/documentos/doc-http-006/verificacion-integridad"), request, Map::class.java)
 
         assertEquals(HttpStatus.OK, response.statusCode)
         assertEquals(true, response.body!!["coincide"])
+        servidor.verify()
+    }
+
+    @Test
+    fun `POST documentos verificacion-integridad deniega cuando seguridad-acceso responde DENEGADO - T-63`() {
+        custodiarDocumento("doc-http-006b")
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("DENEGADO", servidor)
+        val request = mapOf("identidadId" to "id-1", "actor" to "auditor-1", "fecha" to "2026-08-21T13:00:00Z")
+
+        val response = restTemplate.postForEntity(url("/documentos/doc-http-006b/verificacion-integridad"), request, Map::class.java)
+
+        assertEquals(HttpStatus.FORBIDDEN, response.statusCode)
+        servidor.verify()
     }
 
     @Test
@@ -295,7 +363,7 @@ class RecordsCustodiaHttpTest {
     }
 
     @Test
-    fun `GET eventos-auditoria expone los eventos de custodia y de recepcion de sugerencias - P-08, T-48`() {
+    fun `GET eventos-auditoria expone los eventos de custodia y de recepcion de sugerencias - P-08, T-48, T-63`() {
         custodiarDocumento("doc-http-009")
         val entrada = mapOf(
             "documentoId" to "doc-http-009",
@@ -308,11 +376,25 @@ class RecordsCustodiaHttpTest {
         )
         restTemplate.postForEntity(url("/sugerencias"), entrada, Map::class.java)
 
-        val response = restTemplate.getForEntity(url("/eventos-auditoria"), List::class.java)
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("PERMITIDO", servidor)
+        val response = restTemplate.getForEntity(url("/eventos-auditoria?identidadId=id-1"), List::class.java)
 
         assertEquals(HttpStatus.OK, response.statusCode)
         val eventos = (response.body as List<*>).map { it as Map<*, *> }
         assertTrue(eventos.any { it["tipo"] == "ORIGINAL_CUSTODIADO" && it["actor"] == "sistema-ingesta" })
         assertTrue(eventos.any { it["tipo"] == "SUGERENCIA_RECIBIDA" && it["actor"] == "emisor-ficticio-clasificacion-v0" })
+        servidor.verify()
+    }
+
+    @Test
+    fun `GET eventos-auditoria deniega cuando seguridad-acceso responde DENEGADO - T-63`() {
+        val servidor = MockRestServiceServer.createServer(restTemplateAguasAbajo)
+        mockearAutorizacion("DENEGADO", servidor)
+
+        val response = restTemplate.getForEntity(url("/eventos-auditoria?identidadId=id-1"), Map::class.java)
+
+        assertEquals(HttpStatus.FORBIDDEN, response.statusCode)
+        servidor.verify()
     }
 }

@@ -8,9 +8,10 @@
 #
 # Uso: docker compose -f deploy/docker-compose.saas.yml -f deploy/docker-compose.demo.yml up -d --build
 #
-# Captura/Ingesta y Records/Custodia deliberadamente no aparecen en
-# `depends_on`: nginx.conf no tiene ninguna ruta hacia ellos todavía
-# (prerrequisito de arquitectura de la spec §1, ver TODO.md T-63).
+# Captura/Ingesta deliberadamente no aparece en `depends_on`: nginx.conf no
+# tiene ninguna ruta hacia ella todavía (prerrequisito de arquitectura de la
+# spec §1, ver TODO.md T-63). Records/Custodia sí aparece desde T-63: ya
+# cerró ese mismo prerrequisito (VerificadorDeAutorizacion real).
 services:
   ui-demo:
     build:
@@ -26,3 +27,4 @@ services:
       - clasificacion
       - enriquecimiento
       - indexacion-busqueda
+      - records-custodia

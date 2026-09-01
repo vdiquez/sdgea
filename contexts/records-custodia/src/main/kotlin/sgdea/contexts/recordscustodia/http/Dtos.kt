@@ -41,7 +41,26 @@ data class CorreccionPendienteDeRerevisionResponse(
     val estadoDeRevision: String = "PENDIENTE_DE_REREVISION",
 )
 
+// Sin cambios (T-63): sigue sirviendo también a
+// VerificacionIntegridadController (`POST /verificacion-integridad`,
+// agregado), que queda fuera del alcance del prerrequisito de arquitectura
+// -- el navegador nunca lo llama. Añadirle `identidadId` habría forzado ese
+// endpoint, no protegido, a exigir un campo que ignora; el endpoint
+// protegido usa `VerificacionDeDocumentoRequest` en su lugar.
 data class VerificacionRequest(
+    val actor: String,
+    val fecha: Instant,
+)
+
+// `identidadId` (T-63): distinto de `actor` a propósito -- mismo criterio que
+// `DecisionRequest` en validacion-humana/http/Dtos.kt (`identidadId`
+// autoriza, `actor` atribuye el evento de auditoría). Reutilizar `actor`
+// como identidad a autorizar habría sido incorrecto: seguridad-acceso
+// resuelve permisos por `identidadId` (el id real de la Identidad), no por
+// el nombre libre que se guarda como atribución del evento -- ambos pueden
+// ser el mismo texto pero no lo son necesariamente.
+data class VerificacionDeDocumentoRequest(
+    val identidadId: String,
     val actor: String,
     val fecha: Instant,
 )

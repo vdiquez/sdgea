@@ -7,8 +7,10 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import sgdea.contexts.recordscustodia.AccesoDenegadoException
 import sgdea.contexts.recordscustodia.CapaAnticorrupcionSugerencias
 import sgdea.contexts.recordscustodia.CustodiaOriginales
 import sgdea.contexts.recordscustodia.DecisionHumana
@@ -17,6 +19,7 @@ import sgdea.contexts.recordscustodia.OriginalInmutable
 import sgdea.contexts.recordscustodia.Procedencia
 import sgdea.contexts.recordscustodia.ResultadoVerificacionIntegridad
 import sgdea.contexts.recordscustodia.Sugerencia
+import sgdea.contexts.recordscustodia.VerificadorDeAutorizacion
 import sgdea.contexts.recordscustodia.configuracion.CustodiaTransaccional
 
 // specs/spec-infra-servicios.md §4 · Contrato mínimo — records-custodia.
@@ -26,12 +29,20 @@ import sgdea.contexts.recordscustodia.configuracion.CustodiaTransaccional
 // por `CustodiaTransaccional` (no por `custodia` directo) porque cada uno hace
 // más de una escritura a través de almacenes JPA independientes — ver
 // CustodiaTransaccional para el riesgo de atomicidad que evita.
+//
+// T-63 (specs/008-ui-demo/spec.md §1, prerrequisito de arquitectura): `original`,
+// `documento`, `sugerencias` y `verificarIntegridad` exigen ahora un actor
+// autorizado -- son exactamente los cuatro endpoints que la UI de demo necesita
+// exponer vía el proxy curado (RF-UI-003/005/008). `custodiar`, `procedencia` y
+// `correcciones` NO están en ese alcance (nunca los llama el navegador, según la
+// propia spec) y siguen sin verificación, igual que antes.
 @RestController
 @RequestMapping("/documentos")
 class DocumentosController(
     private val custodia: CustodiaOriginales,
     private val custodiaTransaccional: CustodiaTransaccional,
     private val capa: CapaAnticorrupcionSugerencias,
+    private val permisos: VerificadorDeAutorizacion,
 ) {
 
     @PostMapping
@@ -46,10 +57,16 @@ class DocumentosController(
         )
 
     @GetMapping("/{id}/original")
-    fun original(@PathVariable id: String): OriginalInmutable = custodia.consultar(id)
+    fun original(@PathVariable id: String, @RequestParam identidadId: String): OriginalInmutable {
+        exigirPermiso(identidadId, "leer")
+        return custodia.consultar(id)
+    }
 
     @GetMapping("/{id}")
-    fun documento(@PathVariable id: String): DocumentoDeArchivo = custodia.consultarDocumento(id)
+    fun documento(@PathVariable id: String, @RequestParam identidadId: String): DocumentoDeArchivo {
+        exigirPermiso(identidadId, "leer")
+        return custodia.consultarDocumento(id)
+    }
 
     @GetMapping("/{id}/procedencia")
     fun procedencia(@PathVariable id: String): Procedencia = custodia.consultarProcedencia(id)
@@ -84,9 +101,23 @@ class DocumentosController(
         }
 
     @PostMapping("/{id}/verificacion-integridad")
-    fun verificarIntegridad(@PathVariable id: String, @RequestBody request: VerificacionRequest): ResultadoVerificacionIntegridad =
-        custodia.verificarIntegridad(id, request.actor, request.fecha)
+    fun verificarIntegridad(@PathVariable id: String, @RequestBody request: VerificacionDeDocumentoRequest): ResultadoVerificacionIntegridad {
+        // `identidadId` autoriza, `actor` atribuye el evento -- ver el
+        // comentario de VerificacionDeDocumentoRequest en Dtos.kt sobre por
+        // qué no son el mismo campo.
+        exigirPermiso(request.identidadId, "verificar")
+        return custodia.verificarIntegridad(id, request.actor, request.fecha)
+    }
 
     @GetMapping("/{id}/sugerencias")
-    fun sugerencias(@PathVariable id: String): List<Sugerencia> = capa.sugerenciasDe(id)
+    fun sugerencias(@PathVariable id: String, @RequestParam identidadId: String): List<Sugerencia> {
+        exigirPermiso(identidadId, "leer")
+        return capa.sugerenciasDe(id)
+    }
+
+    private fun exigirPermiso(identidadId: String, accion: String) {
+        if (!permisos.tienePermiso(identidadId, accion, "documento")) {
+            throw AccesoDenegadoException("La identidad '$identidadId' no tiene permiso para '$accion' sobre este recurso.")
+        }
+    }
 }

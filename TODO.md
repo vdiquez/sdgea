@@ -1622,7 +1622,7 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       Verificado con Docker real: cinco pruebas e2e, dos corridas seguidas
       sin fallos contra `http://localhost:8090` (saas.yml + demo.yml +
       local-ports.yml). `./test.sh` completo del repo en verde.
-- [ ] T-63 Autorización real en Records/Custodia — cierra, PARA
+- [x] T-63 Autorización real en Records/Custodia — cierra, PARA
       RECORDS/CUSTODIA únicamente (Captura/Ingesta queda fuera de alcance
       de esta tarea, ver T-64+), el prerrequisito de arquitectura de §1 de
       `specs/008-ui-demo/spec.md`: nuevo puerto `VerificadorDeAutorizacion`
@@ -1643,6 +1643,59 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       bloqueada; RF-UI-002 sigue bloqueada, depende de Captura/Ingesta).
       Añadir la ruta de Records/Custodia al proxy curado (T-59) una vez
       cerrado.
+      Hecho: `VerificadorDeAutorizacion`/`AccesoDenegadoException` en
+      `CustodiaOriginales.kt`; `VerificadorDeAutorizacionHttp` real en
+      `integracion/IntegracionHttp.kt` (primera integración saliente de
+      records-custodia, mismo contrato `POST /autorizacion` que
+      validacion-humana/T-30). Corrección de alcance real frente al texto
+      original de esta tarea: `POST /documentos/{id}/decisiones` NO se
+      protegió — RF-UI-005 (ya aprobada por Codex) demuestra que el
+      navegador nunca llama ese endpoint directamente, Validación Humana ya
+      lo orquesta servidor-a-servidor; protegerlo habría sido inventar un
+      requisito que ninguna spec pide. El alcance real quedó en cinco
+      endpoints (`GET /documentos/{id}`, `GET /documentos/{id}/original`,
+      `GET /documentos/{id}/sugerencias`, `GET /eventos-auditoria`,
+      `POST /documentos/{id}/verificacion-integridad`) — exactamente los
+      que `specs/008-ui-demo/spec.md` §1 (ya aprobada) dice que la UI
+      necesita exponer. La verificación vive en la capa HTTP
+      (`DocumentosController`/`EventosAuditoriaController`), no en el
+      dominio — mismo criterio que RF-VH-007 en
+      validacion-humana/http/ColasController.kt: es una comprobación de
+      quién puede leer/actuar a través del proxy curado, no un invariante
+      del agregado; los llamadores internos entre contextos (p. ej.
+      `CapaAnticorrupcionSugerencias.recibir`) siguen llamando los métodos
+      de dominio directamente, sin `identidadId`.
+      **Hallazgo real durante la verificación contra Docker real** (no en
+      los tests de Gradle, que mockean `/autorizacion` con
+      `MockRestServiceServer`): el primer intento de `POST
+      /documentos/{id}/verificacion-integridad` reutilizaba `request.actor`
+      (el nombre libre que atribuye el evento de auditoría) como la
+      identidad a autorizar — devolvía 403 incluso con un rol correcto,
+      porque seguridad-acceso resuelve permisos por `identidadId` (el id
+      real de la Identidad), no por ese nombre libre; ambos pueden
+      coincidir por casualidad pero no son el mismo campo (mismo criterio
+      que `DecisionRequest` en validacion-humana, que ya los mantiene
+      separados). Corregido separando el DTO: `VerificacionRequest`
+      (`actor`, `fecha`) sigue sirviendo al endpoint agregado no protegido
+      `POST /verificacion-integridad`; el endpoint por documento usa el
+      nuevo `VerificacionDeDocumentoRequest` (`identidadId`, `actor`,
+      `fecha`). Verificado de nuevo contra Docker real: `GET
+      /documentos/{id}` sin `identidadId` → 400; con `identidadId` sin rol
+      → 403; `POST .../verificacion-integridad` con `identidadId`
+      correcto y rol `verificar`/`documento` → 200; proxy
+      `/api/records-custodia/...` de ui-demo (puerto 8090) reenvía y
+      aplica la misma verificación. `./gradlew :contexts:records-custodia:test`
+      46/46 verdes (11 nuevas: cinco pares 200/403 más la denegación de
+      `/original`). Suite e2e de ui-demo (5 pruebas) sin regresión, dos
+      corridas seguidas. `./test.sh` completo del repo en verde.
+      `spec-infra-servicios.md` §4/§10 y `specs/008-ui-demo/spec.md`
+      §1/§4/§5 actualizados: RF-UI-003 desbloqueada; RF-UI-002 (Captura/
+      Ingesta) sigue bloqueada. `nginx.conf`/`vite.config.ts`/
+      `docker-compose.demo.yml` ganan la ruta de records-custodia.
+      `docker-compose.saas.yml`/`onprem.yml`: records-custodia gana
+      `SEGURIDAD_ACCESO_BASE_URL` y `depends_on: seguridad-acceso`, sigue
+      sin `ports:` (el prerrequisito habilita el proxy de ui-demo, no un
+      puerto directo al host).
 - [ ] T-64 RF-UI-011 · Bitácora de auditoría consolidada, alcance inicial:
       panel de decisión de T-62 — tras decidir sobre la sugerencia de
       clasificación, la UI consulta `GET /eventos-auditoria` de

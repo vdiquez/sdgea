@@ -33,6 +33,29 @@ class ModificacionDeOriginalRechazadaException(mensaje: String) : RuntimeExcepti
 
 class ModificacionDeEventoAuditoriaRechazadaException(mensaje: String) : RuntimeException(mensaje)
 
+// T-63: cierra, PARA RECORDS/CUSTODIA únicamente, el prerrequisito de
+// arquitectura de specs/008-ui-demo/spec.md §1 -- spec-infra-servicios.md §10
+// exige que este contexto no se exponga fuera de una red de confianza hasta
+// que él mismo consulte `POST /autorizacion` antes de responder. Mismo
+// puerto mínimo que `VerificadorDeAutorizacion` en extraccion (T-41b, Python)
+// y `VerificadorDePermisos` en validacion-humana (T-30, Kotlin): el dominio
+// desconoce cuál implementación está detrás (P-03); en producción la
+// implementa un cliente HTTP real contra seguridad-acceso
+// (integracion/IntegracionHttp.kt), en los tests un doble simple en memoria.
+// La verificación vive en la capa HTTP (http/DocumentosController.kt,
+// http/EventosAuditoriaController.kt), no aquí en el dominio -- mismo
+// criterio que RF-VH-007 en validacion-humana/http/ColasController.kt: es
+// una comprobación de QUIÉN puede leer/actuar a través del proxy curado, no
+// un invariante de negocio del agregado. Los llamadores internos entre
+// contextos (p. ej. CapaAnticorrupcionSugerencias.recibir ->
+// consultarDocumento) siguen llamando los métodos de dominio directamente,
+// sin pasar por este puerto.
+interface VerificadorDeAutorizacion {
+    fun tienePermiso(actor: String, accion: String, tipoRecurso: String): Boolean
+}
+
+class AccesoDenegadoException(mensaje: String) : RuntimeException(mensaje)
+
 // specs/spec-infra-servicios.md §4: puertos de almacenamiento (P-03) que
 // reemplazan los mapas/listas en memoria de este contexto por una
 // implementación intercambiable. El valor por defecto de cada puerto es la

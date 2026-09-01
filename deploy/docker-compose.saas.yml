@@ -62,12 +62,18 @@ services:
       DB_NAME: sgdea
       DB_USER: sgdea
       DB_PASSWORD: sgdea
+      # T-63 (specs/008-ui-demo/spec.md §1, prerrequisito de arquitectura):
+      # primer consumidor real de POST /autorizacion en records-custodia —
+      # cierra, PARA ESTE CONTEXTO, el "sin deber exponerse fuera de una red
+      # de confianza" de spec-infra-servicios.md §10. Sigue sin `ports:`: el
+      # prerrequisito habilita el proxy curado de ui-demo (docker-compose.
+      # demo.yml), no un puerto directo al host — captura-ingesta sigue sin
+      # esta llamada, así que su propio "sin ports:" sigue vigente sin
+      # cambios.
+      SEGURIDAD_ACCESO_BASE_URL: http://seguridad-acceso:8083
     depends_on:
       - postgres
-    # Mismo tratamiento que captura-ingesta: sin `ports:` hasta que
-    # captura-ingesta/records-custodia llamen de verdad a seguridad-acceso
-    # (specs/spec-infra-servicios.md §8 — el contexto ya existe, T-23/T-25,
-    # pero esa integración todavía no).
+      - seguridad-acceso
 
   # T-23/T-25: primer contexto Kotlin/Spring además de los dos originales.
   # Sin `ports:` a propósito, mismo criterio que los otros dos — expone

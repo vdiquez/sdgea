@@ -5,8 +5,9 @@ import { defineConfig } from "vite";
 // que nginx sirve en producción/demo (Dockerfile + docker-compose.demo.yml)
 // -- mismos prefijos `/api/<contexto>`, apuntando aquí a los puertos locales
 // que expone docker-compose.local-ports.yml en vez de los nombres de
-// servicio internos de docker-compose. Captura/Ingesta y Records/Custodia
-// deliberadamente sin entrada (ver prerrequisito de arquitectura, §1).
+// servicio internos de docker-compose. Captura/Ingesta deliberadamente sin
+// entrada (sigue bloqueada, ver prerrequisito de arquitectura, §1);
+// Records/Custodia ya cerró ese prerrequisito (T-63).
 const PUERTOS_LOCALES: Record<string, number> = {
   "seguridad-acceso": 8083,
   "validacion-humana": 8084,
@@ -15,6 +16,7 @@ const PUERTOS_LOCALES: Record<string, number> = {
   clasificacion: 8087,
   enriquecimiento: 8088,
   "indexacion-busqueda": 8089,
+  "records-custodia": 8082,
 };
 
 export default defineConfig({

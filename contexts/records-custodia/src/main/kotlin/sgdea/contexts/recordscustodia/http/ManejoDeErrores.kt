@@ -4,6 +4,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import sgdea.contexts.recordscustodia.AccesoDenegadoException
 import sgdea.contexts.recordscustodia.PublicacionDeTrdRechazadaException
 
 // specs/spec-infra-servicios.md §5: formato de error queda [CLARIFICAR]
@@ -27,4 +28,10 @@ class ManejoDeErrores {
     @ExceptionHandler(PublicacionDeTrdRechazadaException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
     fun publicacionRechazada(ex: PublicacionDeTrdRechazadaException): Map<String, String?> = mapOf("error" to ex.message)
+
+    // T-63 / specs/008-ui-demo/spec.md §1: mismo tratamiento canónico que
+    // AccesoDenegadoException en validacion-humana (T-30, http/ManejoDeErrores.kt).
+    @ExceptionHandler(AccesoDenegadoException::class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    fun accesoDenegado(ex: AccesoDenegadoException): Map<String, String?> = mapOf("error" to ex.message)
 }

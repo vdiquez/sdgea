@@ -44,32 +44,40 @@ venta (p. ej. reintentar una autenticación fallida a propósito).
 
 ### Prerrequisito de arquitectura (VETO real de Codex sobre el primer borrador de esta spec, ver STATE.md)
 
-`spec-infra-servicios.md` §10 es explícito: Captura/Ingesta y Records/Custodia "siguen
+`spec-infra-servicios.md` §10 era explícito: Captura/Ingesta y Records/Custodia "siguen
 sin deber exponerse fuera de una red de confianza (docker-compose interno)" mientras
 no llamen ellos mismos a `POST /autorizacion` — exactamente lo que ya hicieron
 Validación Humana (T-30) y Extracción, solo para RF-EX-011 (T-41b). El primer borrador
 de esta spec proponía exponer esos dos contextos a través del proxy curado
-presentándolo como coherente con §10; no lo es — un proxy no sustituye la
-autorización que el propio servicio nunca verifica, y `spec-infra-servicios.md` §10
-sigue vigente sin excepción para esta capa.
+presentándolo como coherente con §10; no lo era — un proxy no sustituye la
+autorización que el propio servicio nunca verifica.
 
-Por tanto: **la UI no expone, vía el proxy curado, ningún endpoint de Captura/Ingesta
-ni de Records/Custodia hasta que ese prerrequisito se cierre** — implementar en
-ambos un puerto `VerificadorDeAutorizacion` real que consulte `POST /autorizacion`
-antes de responder, mismo patrón ya aceptado por Codex en Extracción/T-41b y
-Validación Humana/T-30 (Kotlin: `VerificadorDeAutorizacionHttp` o equivalente,
-consultado en cada endpoint que esta capa necesite exponer). Esa es tarea de
-`spec-infra-servicios.md` (corrección de §10, cuando se cierre) y de los contextos
-Captura/Ingesta y Records/Custodia respectivamente, NO de esta spec — pero es una
-dependencia dura para RF-UI-002/003 (ver §5), que quedan `Borrador · bloqueado`
-hasta entonces (más algunos sub-criterios de verificación de RF-UI-005/008/011 que
-también leen Records/Custodia, marcados individualmente). El resto de los RF-UI
+**Actualización (T-63, 2026-09-01): el prerrequisito ya se cerró para
+Records/Custodia**, no para Captura/Ingesta. Records/Custodia implementó un
+puerto `VerificadorDeAutorizacion` real (`VerificadorDeAutorizacionHttp`,
+mismo patrón que Extracción/T-41b y Validación Humana/T-30) consultado en
+`GET /documentos/{id}`, `GET /documentos/{id}/original`,
+`GET /documentos/{id}/sugerencias`, `POST /documentos/{id}/verificacion-integridad`
+y `GET /eventos-auditoria` — exactamente los cinco endpoints que esta capa
+necesita exponer (ver §4/§5). `spec-infra-servicios.md` §10 ya refleja este
+cierre parcial. `custodiar`, `procedencia`, `decisiones` y `correcciones` no
+entran en ese alcance porque el navegador nunca los llama directamente (RF-UI-005
+sigue demostrando que la decisión humana que materializa en Records/Custodia se
+orquesta servidor-a-servidor desde Validación Humana, no desde el navegador).
+
+Por tanto: **la UI no expone, vía el proxy curado, ningún endpoint de
+Captura/Ingesta hasta que ese contexto cierre el mismo prerrequisito** —
+implementar en él un puerto `VerificadorDeAutorizacion` real que consulte
+`POST /autorizacion` antes de responder, mismo patrón ya aplicado en
+Records/Custodia (T-63). Esa es tarea de `spec-infra-servicios.md`
+(corrección de §10, cuando se cierre) y de Captura/Ingesta, NO de esta spec
+— pero sigue siendo una dependencia dura para RF-UI-002 (ver §5), que queda
+`Borrador · bloqueado` hasta entonces. RF-UI-003 ya no está bloqueada: su
+dependencia era exclusivamente Records/Custodia. El resto de los RF-UI
 (Clasificación, Validación Humana, Normalización, Extracción — lectura,
-Enriquecimiento, Indexación y Búsqueda, Seguridad y Acceso) no dependen de este
-prerrequisito: ninguno de esos contextos está listado en §10 como restringido, y
-RF-UI-005 demuestra que la decisión humana que materializa en Records/Custodia no
-necesita que el navegador lo llame directamente — Validación Humana ya lo orquesta
-servidor-a-servidor.
+Enriquecimiento, Indexación y Búsqueda, Seguridad y Acceso) nunca dependió de
+este prerrequisito: ninguno de esos contextos está listado en §10 como
+restringido.
 
 ---
 
@@ -109,11 +117,11 @@ ya persisten los contextos backend). Su único estado propio es de sesión de cl
 
 - **Sesión** — identidad autenticada (id, actor, roles) conservada en el cliente.
 - **Panel de un documento** — vista compuesta que combina, para un `documento_id`,
-  el original custodiado (Records/Custodia — bloqueado hasta cerrar el prerrequisito
-  de §1), su clasificación materializada o pendiente, sus sugerencias
-  (Records/Custodia vía `GET /documentos/{id}/sugerencias` — mismo bloqueo), y el
-  estado de su unidad documental en Normalización/Extracción si existe (sin bloqueo,
-  ninguno de los dos está restringido por §10).
+  el original custodiado (Records/Custodia — desbloqueado desde T-63), su
+  clasificación materializada o pendiente, sus sugerencias (Records/Custodia vía
+  `GET /documentos/{id}/sugerencias` — también desbloqueado), y el estado de su
+  unidad documental en Normalización/Extracción si existe (sin bloqueo, ninguno de
+  los dos estuvo nunca restringido por §10).
 - **Cola de revisión** — la lista ordenada por confianza que expone Validación
   Humana (`GET /colas/...`), presentada por tipo.
 - **Resultado de búsqueda** — la lista de entradas que devuelve Indexación y
@@ -155,7 +163,7 @@ contrato a los endpoints ya documentados en `spec-infra-servicios.md` (§3 a §1
 |---|---|
 | Seguridad y Acceso | `POST /identidades/autenticacion`, `POST /autorizacion` (indirecto, vía los demás servicios), `GET /eventos-seguridad` |
 | Captura/Ingesta | **Bloqueado hasta cerrar el prerrequisito de §1** — `POST /lotes`, `GET /lotes/{id}/conteo`, `GET /lotes/{id}/conciliacion`, `POST /lotes/{id}/items/{id}/validacion` |
-| Records/Custodia | **Bloqueado hasta cerrar el prerrequisito de §1** — `POST /documentos`, `GET /documentos/{id}`, `GET /documentos/{id}/original`, `POST /documentos/{id}/decisiones`, `GET /documentos/{id}/sugerencias`, `GET /eventos-auditoria`, `POST /documentos/{id}/verificacion-integridad` |
+| Records/Custodia | **Desbloqueado desde T-63** — `GET /documentos/{id}?identidadId=`, `GET /documentos/{id}/original?identidadId=`, `GET /documentos/{id}/sugerencias?identidadId=`, `GET /eventos-auditoria?identidadId=`, `POST /documentos/{id}/verificacion-integridad`. `POST /documentos` y `POST /documentos/{id}/decisiones` **no** están en este subconjunto — RF-UI-005 ya demuestra que la materialización se orquesta servidor-a-servidor desde Validación Humana, nunca desde el navegador. |
 | Normalización | `GET /unidades/{id}`, `GET /eventos-auditoria` |
 | Extracción | `GET /textos/{id}`, `GET /eventos-auditoria` |
 | Clasificación | `POST /clasificaciones`, `POST /agrupamientos`, `POST /no-clasificables` |
@@ -195,8 +203,9 @@ Un operador registra un lote y ve su conteo por estado.
   consulta el conteo, Entonces la UI muestra el desglose y si hay pérdida silenciosa
   (RF-CI-008).
 
-**RF-UI-003 · Custodia y verificación de integridad del original** — `Borrador ·
-bloqueado` (ver §1, mismo prerrequisito, para Records/Custodia)
+**RF-UI-003 · Custodia y verificación de integridad del original** — `Borrador`
+(desbloqueado desde T-63: Records/Custodia ya implementa `VerificadorDeAutorizacion`
+real, ver §1)
 Un operador ve el original custodiado de un documento y puede verificar su
 integridad bajo demanda.
 - Dado un documento custodiado, Cuando el operador lo abre, Entonces la UI muestra
@@ -210,9 +219,11 @@ Un operador ve una sugerencia de clasificación simulada, con su marca y su
 confianza, y puede confirmar que cruzó la capa anticorrupción como `Sugerencia`
 real — frontera P-01 completa: FICTICIO → `Sugerencia` (RF-RC-003) → cola de
 Validación Humana (RF-UI-005) → decisión humana → materialización. La decisión de
-materializarla es responsabilidad de RF-UI-005, no de esta pantalla: evita que la
-UI llame directamente a Records/Custodia, contexto bloqueado por el prerrequisito
-de §1. Este RF NO está bloqueado: `POST /clasificaciones` es el propio contexto
+materializarla sigue siendo responsabilidad de RF-UI-005, no de esta pantalla —
+Records/Custodia ya no está bloqueado (T-63), pero la UI de todos modos no
+necesita llamarlo directamente para materializar: Validación Humana ya orquesta
+esa escritura servidor-a-servidor, y duplicarla aquí no añadiría nada. Este RF
+nunca estuvo bloqueado: `POST /clasificaciones` es el propio contexto
 Clasificación, sin restricción de §10.
 - Dado un documento sin clasificación, Cuando se genera una sugerencia de
   clasificación, Entonces la UI la muestra con su marca de simulación y su
@@ -238,8 +249,9 @@ esos dos contextos.
   Entonces la UI produce la decisión humana vía Validación Humana y la retira de
   la cola (RF-VH-003), y la transición resultante queda consultable en
   `GET /eventos-auditoria` de Records/Custodia o Normalización según corresponda
-  (P-08) — verificación aplazada hasta cerrar el prerrequisito de §1, ya que esa
-  lectura sí requiere exponer Records/Custodia.
+  (P-08) — Records/Custodia ya no está bloqueado (T-63); la verificación de este
+  criterio queda para RF-UI-011 (bitácora consolidada, T-64), que es quien
+  construye la pantalla que lo consulta.
 
 **RF-UI-006 · Aprobación masiva de candidatos de alta confianza**
 Un operador aprueba en bloque los candidatos que superan el umbral de la curva
@@ -268,8 +280,8 @@ distinguibles entre sí, y puede confirmar que llegaron a Records/Custodia como
   sugerencia nueva (RF-EN-009).
 - Dada una sugerencia de enriquecimiento generada, Cuando Enriquecimiento la
   reenvía, Entonces la UI puede confirmar (`GET /documentos/{id}/sugerencias` en
-  Records/Custodia — bloqueado hasta cerrar el prerrequisito de §1) que llegó como
-  `Sugerencia` real a través de la capa anticorrupción (RF-EN-010, RF-RC-003).
+  Records/Custodia — desbloqueado desde T-63) que llegó como `Sugerencia` real a
+  través de la capa anticorrupción (RF-EN-010, RF-RC-003).
 
 **RF-UI-009 · Búsqueda léxica y filtrada**
 Un operador busca por palabra clave y filtro de metadatos sobre el índice ya
@@ -300,9 +312,9 @@ nuevo para lograrlo.
 - Dado un documento que pasó por Records/Custodia, Normalización, Extracción y/o
   Indexación y Búsqueda, Cuando el operador consulta su bitácora, Entonces la UI
   muestra los eventos de cada uno de esos contextos que sí expone
-  `GET /eventos-auditoria` (Records/Custodia bloqueado hasta cerrar el prerrequisito
-  de §1; Normalización, Extracción e Indexación y Búsqueda sin bloqueo), cada uno
-  con actor y fecha no vacíos (P-08).
+  `GET /eventos-auditoria` (los cuatro sin bloqueo desde T-63: Records/Custodia
+  cerró su prerrequisito de arquitectura, y Normalización/Extracción/Indexación y
+  Búsqueda nunca lo tuvieron), cada uno con actor y fecha no vacíos (P-08).
 - Dado un evento de Seguridad y Acceso (`GET /eventos-seguridad`, forma distinta a
   `EventoAuditoria`), Cuando el operador lo consulta, Entonces la UI lo muestra en
   su propia sección, sin fusionarlo con la forma de los demás.
