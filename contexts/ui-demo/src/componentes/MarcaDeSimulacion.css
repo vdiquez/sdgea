@@ -1,0 +1,12 @@
+.marca-de-simulacion {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #7a4a00;
+  background: #fff3cd;
+  border: 1px solid #ffe08a;
+}

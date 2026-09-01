@@ -11,3 +11,4 @@ uv run --directory contexts/extraccion pytest
 uv run --directory contexts/clasificacion pytest
 uv run --directory contexts/enriquecimiento pytest
 uv run --directory contexts/indexacion-busqueda pytest
+npm --prefix contexts/ui-demo test

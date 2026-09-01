@@ -1,0 +1,28 @@
+# Overlay de la capa UI de demostración (specs/008-ui-demo/spec.md, T-59).
+#
+# A diferencia de docker-compose.local-ports.yml (que mapea puertos de los
+# nueve contextos directo al host, solo para depurar con Postman/curl), este
+# overlay agrega un servicio nuevo: la UI + su proxy curado (nginx), la
+# ÚNICA puerta pública pensada para una demo real -- el navegador nunca
+# necesita conocer los puertos internos de los demás contextos (RNF-UI-001).
+#
+# Uso: docker compose -f deploy/docker-compose.saas.yml -f deploy/docker-compose.demo.yml up -d --build
+#
+# Captura/Ingesta y Records/Custodia deliberadamente no aparecen en
+# `depends_on`: nginx.conf no tiene ninguna ruta hacia ellos todavía
+# (prerrequisito de arquitectura de la spec §1, ver TODO.md T-63).
+services:
+  ui-demo:
+    build:
+      context: ..
+      dockerfile: contexts/ui-demo/Dockerfile
+    ports:
+      - "8090:80"
+    depends_on:
+      - seguridad-acceso
+      - validacion-humana
+      - normalizacion
+      - extraccion
+      - clasificacion
+      - enriquecimiento
+      - indexacion-busqueda

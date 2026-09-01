@@ -3236,3 +3236,26 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   008/009/010/011/012, la mayor parte de la narrativa de demo), después
   el prerrequisito backend (VerificadorDeAutorizacion real en
   Captura/Ingesta y Records/Custodia) que desbloquea RF-UI-002/003.
+
+- 2026-08-31 — T-59 completada: scaffold de `contexts/ui-demo/` (React 19 +
+  Vite + TypeScript), primer contexto del proyecto que no es Kotlin ni
+  Python. `src/api/cliente.ts` (helper HTTP genérico contra
+  `/api/<contexto>`), `MarcaDeSimulacion` (RF-UI-012, con su prueba Vitest +
+  Testing Library), `nginx.conf` (proxy curado: un bloque por cada contexto
+  NO bloqueado por el prerrequisito de §1 — Captura/Ingesta y
+  Records/Custodia deliberadamente sin ruta), `Dockerfile` (Node build +
+  nginx serve, mismo contenedor sirve la UI y el proxy),
+  `deploy/docker-compose.demo.yml` (overlay nuevo, puerto 8090). Vite dev
+  server con el mismo mapeo de proxy contra `docker-compose.local-ports.yml`
+  para iterar sin reconstruir la imagen.
+  Verificado con Docker real (no solo `npm run build`): diez contenedores
+  arriba (`docker compose -f saas.yml -f demo.yml up -d --build`); `GET
+  /api/seguridad-acceso/eventos-seguridad` vía el proxy devolvió 200 real
+  del servicio interno, `GET /api/clasificacion/no-existe` devolvió 404 real
+  de Spring Boot — confirma que el proxy reenvía de verdad, no una respuesta
+  estática de nginx. Smoke test de Playwright verde contra la UI dockerizada
+  real (`http://localhost:8090`) y contra el dev server de Vite.
+  `./test.sh` ganó una línea nueva (`npm --prefix contexts/ui-demo test`);
+  completo del repo en verde. `.dockerignore` ampliado (`node_modules` del
+  nuevo contexto inflaba el contexto de build a 146 MB).
+  Siguiente paso: T-60 (RF-UI-001, autenticación de la sesión de demo).

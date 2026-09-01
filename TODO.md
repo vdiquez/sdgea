@@ -1464,7 +1464,7 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       **Con T-58 cerrada, no queda ninguna tarea abierta en el backlog
       actual.**
 
-- [ ] T-59 Scaffold de la capa UI (`specs/008-ui-demo/spec.md`): React +
+- [x] T-59 Scaffold de la capa UI (`specs/008-ui-demo/spec.md`): React +
       Vite + TypeScript en `contexts/ui-demo/` (mismo criterio de ubicación
       que los demás contextos, aunque este no sea un bounded context de
       dominio), proxy inverso curado (nginx, nuevo servicio de
@@ -1484,6 +1484,31 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       docker-compose (RNF-UI-004) — sin pruebas de RF todavía, solo que el
       andamiaje corre (`npm run build`, un smoke test de Playwright que
       confirma que la UI carga).
+      Hecho: `contexts/ui-demo/` (React 19 + Vite + TypeScript,
+      react-router-dom para las rutas de cada RF-UI futuro), `src/api/
+      cliente.ts` (helper `get`/`post` genérico contra `/api/<contexto>`,
+      sin lógica de RF todavía), `MarcaDeSimulacion` (RF-UI-012, componente
+      único reutilizable, con su primera prueba Vitest + Testing Library —
+      verifica `role="status"` visible con texto, no un tooltip), `nginx.conf`
+      (proxy curado, un bloque `location /api/<contexto>/` por cada
+      contexto NO bloqueado, SPA fallback a `index.html` para
+      react-router), `Dockerfile` (build Node + serve nginx, mismo
+      contenedor sirve la UI y el proxy), `deploy/docker-compose.demo.yml`
+      (nuevo overlay, puerto 8090, `depends_on` los siete contextos no
+      bloqueados). Vite dev server con el mismo mapeo de proxy apuntando a
+      `docker-compose.local-ports.yml` para iterar sin reconstruir la
+      imagen.
+      Verificado con Docker real: `docker build` + `docker compose -f
+      saas.yml -f demo.yml up -d --build` (diez contenedores), `GET
+      /api/seguridad-acceso/eventos-seguridad` vía el proxy devolvió 200
+      real (no una respuesta estática) y `GET /api/clasificacion/no-existe`
+      devolvió 404 real de Spring Boot — confirma que el proxy alcanza los
+      servicios internos de verdad, no solo que nginx arranca. Smoke test
+      de Playwright pasó contra `http://localhost:8090` (la UI dockerizada
+      real) y contra el dev server de Vite. `./test.sh` actualizado con
+      `npm --prefix contexts/ui-demo test`; completo del repo en verde
+      (Gradle + pytest de siempre + el nuevo Vitest). `.dockerignore`
+      ampliado con `node_modules`/`dist`/reportes de Playwright.
 - [ ] T-60 RF-UI-001 · Autenticación de la sesión de demo — pantalla de
       login real contra `POST /identidades/autenticacion` (Seguridad y
       Acceso) vía el proxy; sesión (identidad autenticada) guardada en el

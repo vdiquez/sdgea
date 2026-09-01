@@ -11,3 +11,7 @@ build/
 agent-sandbox/
 eval-harness/.venv/
 **/__pycache__/
+**/node_modules/
+contexts/ui-demo/dist/
+contexts/ui-demo/test-results/
+contexts/ui-demo/playwright-report/
