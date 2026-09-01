@@ -3339,3 +3339,34 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Siguiente paso: T-62 (RF-UI-005, cola de validación humana y decisión
   individual) -- cierra el flujo funcional que pidió Victor (login →
   clasificación → decisión).
+
+- 2026-08-31 — T-62 completada: RF-UI-005 (cola de validación humana y
+  decisión individual) -- cierra el flujo funcional COMPLETO que pidió
+  Victor (login → clasificación → decisión). `src/paginas/
+  ColaDeValidacion.tsx`: `GET /colas/clasificacion?identidadId=...` exige
+  permiso `leer`/`documento` (RF-VH-007) para verla y `decidir`/`documento`
+  para decidir -- ambos verificados de verdad contra Seguridad y Acceso,
+  no simulados. `POST /decisiones` reenvía la `SugerenciaPendiente`
+  completa más una `ClasificacionPropuesta` derivada; tras la respuesta
+  real, la fila se retira de la lista local (no antes).
+  **Hallazgo real durante la verificación** (no una hipótesis, mismo
+  patrón exacto que T-57/T-58 encontraron con la colección Postman): el
+  primer intento del e2e completo falló porque la cola de Validación
+  Humana es estado PERSISTENTE y compartido entre corridas -- reutilizar
+  los literales "serie-1"/"subserie-1" de T-61 hacía que la aserción sobre
+  la cola encontrara tres filas coincidentes (de corridas anteriores), no
+  una. Corregido con `serie`/`subserie` únicos por corrida (mismo criterio
+  ya establecido para el texto/término de búsqueda de indexación-búsqueda
+  en T-57).
+  `e2e/rf-ui-005-flujo-clasificacion-decision.spec.ts` es el primer e2e de
+  este proyecto que encadena CUATRO pantallas reales de punta a punta
+  (login → clasificar → ver en cola marcada como simulada → decidir → cola
+  vacía) contra el stack completo, sin ningún doble en ningún punto —
+  exactamente el criterio de honestidad de RNF-UI-004 aplicado al flujo
+  completo, no solo a un RF aislado.
+  Verificado con Docker real: cinco pruebas e2e, DOS corridas seguidas sin
+  fallos contra `http://localhost:8090` (`saas.yml` + `demo.yml` +
+  `local-ports.yml`). `./test.sh` completo del repo en verde.
+  Siguiente paso: T-63 (autorización real en Records/Custodia, cierra el
+  prerrequisito para ese contexto -- desbloquea RF-UI-003 y la
+  verificación de bitácora de RF-UI-011).

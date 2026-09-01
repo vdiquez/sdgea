@@ -14,6 +14,9 @@ export function Inicio() {
           <p>
             <Link to="/clasificacion">Sugerencia de clasificación</Link>
           </p>
+          <p>
+            <Link to="/cola-validacion">Cola de validación humana</Link>
+          </p>
         </>
       ) : (
         <p>

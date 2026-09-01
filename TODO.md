@@ -1572,7 +1572,7 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       -f local-ports.yml up -d --build`, las cuatro pruebas e2e (smoke +
       RF-UI-001 ×2 + RF-UI-004) en verde contra `http://localhost:8090`.
       `./test.sh` completo del repo en verde.
-- [ ] T-62 RF-UI-005 · Cola de validación humana y decisión individual —
+- [x] T-62 RF-UI-005 · Cola de validación humana y decisión individual —
       pantalla que lista `GET /colas/clasificacion` ordenada por confianza
       y permite decidir (`POST /decisiones`) sobre la sugerencia de T-61;
       tras decidir, la sugerencia debe desaparecer de la cola. Este es el
@@ -1581,6 +1581,29 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       Humana ya orquesta la materialización servidor-a-servidor, ver §1 de
       la spec). TDD: Playwright e2e completo login→clasificar→decidir→cola
       vacía, contra el stack real.
+      Hecho: `src/paginas/ColaDeValidacion.tsx` (lista la cola con
+      `identidadId` de la sesión activa — `GET /colas/clasificacion`
+      exige permiso `leer`/`documento`, RF-VH-007; decidir exige
+      `decidir`/`documento`; al decidir, `POST /decisiones` con la
+      `SugerenciaPendiente` completa y una `ClasificacionPropuesta`
+      derivada de `contenidoPropuesto`, y la fila se retira localmente de
+      la lista tras la respuesta real); ruta `/cola-validacion`;
+      `Inicio.tsx` enlaza a ella.
+      `e2e/rf-ui-005-flujo-clasificacion-decision.spec.ts`: el flujo
+      COMPLETO de punta a punta que pidió Victor — crea rol (con los dos
+      permisos) + identidad + documento custodiado (setup vía puertos
+      locales), login real, genera la sugerencia, la ve en la cola marcada
+      simulada, decide, y confirma que desaparece — sin ningún doble.
+      **Hallazgo real durante la verificación**: el primer intento de este
+      e2e falló por colisión de estado compartido entre corridas — la cola
+      de Validación Humana es estado persistente (mismo patrón exacto que
+      T-57/T-58 encontraron con Postman): con `serie`/`subserie` literales
+      ("serie-1"/"subserie-1", reutilizados de T-61), la aserción sobre la
+      cola encontraba TRES coincidencias (de corridas anteriores), no una.
+      Corregido con `serie`/`subserie` únicos por corrida.
+      Verificado con Docker real: cinco pruebas e2e, dos corridas seguidas
+      sin fallos contra `http://localhost:8090` (saas.yml + demo.yml +
+      local-ports.yml). `./test.sh` completo del repo en verde.
 - [ ] T-63 Autorización real en Records/Custodia — cierra, PARA
       RECORDS/CUSTODIA únicamente (Captura/Ingesta queda fuera de alcance
       de esta tarea, ver T-64+), el prerrequisito de arquitectura de §1 de
