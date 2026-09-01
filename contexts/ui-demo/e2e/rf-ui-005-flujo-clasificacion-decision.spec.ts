@@ -90,6 +90,11 @@ test("flujo completo: login → clasificación → cola de validación → decis
   // pendientes de re-revisión (RF-VH-009) -- si el defecto reapareciera,
   // esta aserción lo detectaría de nuevo.
   const correccionesAntes = await recordsCustodia.get("/documentos/correcciones");
+  // Observación de Codex sobre este mismo refuerzo (ver REVIEW.md/STATE.md):
+  // sin exigir 2xx aquí, dos respuestas de error sin `length` en su cuerpo
+  // JSON compararían `undefined === undefined` y la aserción de abajo
+  // pasaría igual aunque la consulta real hubiera fallado.
+  expect(correccionesAntes.ok()).toBe(true);
   const volumenAntes = (await correccionesAntes.json()).length;
 
   // 4. Decisión (RF-UI-005) -- Validación Humana materializa en
@@ -99,6 +104,7 @@ test("flujo completo: login → clasificación → cola de validación → decis
   await expect(fila).toHaveCount(0);
 
   const correccionesDespues = await recordsCustodia.get("/documentos/correcciones");
+  expect(correccionesDespues.ok()).toBe(true);
   const volumenDespues = (await correccionesDespues.json()).length;
   expect(volumenDespues).toBe(volumenAntes);
 });

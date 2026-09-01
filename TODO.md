@@ -1652,7 +1652,7 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       decisión → bitácora. TDD: Playwright e2e que corre el flujo completo
       y verifica que la bitácora muestra el evento con actor y fecha no
       vacíos.
-- [ ] T-65 Corrección de aceptación individual de RF-UI-005 — al pulsar
+- [x] T-65 Corrección de aceptación individual de RF-UI-005 — al pulsar
       «Aceptar decisión» sobre la sugerencia de clasificación `serie/subserie`
       de T-61, Validación Humana debe materializar una aceptación
       (`esCorreccion=false`), no una corrección por comparar sólo `serieId`.
@@ -1662,3 +1662,12 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       de integración real para comprobar la clasificación/evento resultante y
       ambas ramas aceptación/corrección; comprobar además las respuestas del
       setup de rol e identidad.
+      Hecho: esta tarea fue creada por el propio Codex durante su revisión de
+      T-62 (commit `f11c848`), describiendo un defecto que su misma revisión
+      constató ya corregido en el commit siguiente, `a7af4b8`
+      (`ValidacionHumana.kt::construirDecision` reconstruye
+      `contenidoEsperado` como `serieId/subserieId` cuando hay subserie, con
+      dos pruebas unitarias nuevas cubriendo aceptación y corrección). Se
+      marca cerrada aquí, sin nuevo trabajo de dominio, por instrucción
+      explícita de Codex en esa misma revisión: "Debe marcarse cerrada al
+      corregir el e2e para no reabrir artificialmente una tarea completada."

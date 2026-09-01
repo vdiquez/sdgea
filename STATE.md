@@ -3406,3 +3406,26 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   fallos contra `http://localhost:8090`. `./test.sh` completo del repo en
   verde (Gradle incluidas las nuevas pruebas de validacion-humana).
   Siguiente paso: T-63 (autorización real en Records/Custodia).
+
+- 2026-08-31 — Segunda ronda de revisión de Codex sobre el mismo commit
+  `a7af4b8` (corrección de T-62): confirmó que la corrección de dominio es
+  correcta y que no hay VETO constitucional (P-01/P-03/P-08 conformes),
+  pero exigió un refuerzo adicional al e2e mismo: las lecturas
+  `GET /documentos/correcciones` (antes y después de decidir) no exigían
+  HTTP 2xx antes de comparar sus volúmenes -- si ambas fallaran con un
+  cuerpo JSON de error sin `length`, `undefined === undefined` habría
+  hecho pasar la aserción igual, aunque la verificación real hubiera
+  fallado en silencio. Corregido añadiendo `expect(...).toBe(true)` sobre
+  `.ok()` de ambas respuestas antes de leer sus cuerpos.
+  Codex señaló además que T-65 (una tarea que el propio Codex había creado
+  durante su revisión anterior, del commit `f11c848`, describiendo este
+  mismo defecto de ACEPTACION/CORRECCION) ya estaba resuelta por
+  `a7af4b8` y debía cerrarse "para no reabrir artificialmente una tarea
+  completada" -- marcada `[x]` en TODO.md sin nuevo trabajo de dominio,
+  solo la referencia al commit donde ya se resolvió.
+  Verificado con Docker real: cinco pruebas e2e, dos corridas seguidas sin
+  fallos contra `http://localhost:8090` (`saas.yml` + `demo.yml` +
+  `local-ports.yml`). `./test.sh` completo del repo en verde.
+  Siguiente paso: T-63 (autorización real en Records/Custodia) y T-64
+  (RF-UI-011, bitácora consolidada) para cerrar el paso "→ bitácora" del
+  flujo pedido por Victor.
