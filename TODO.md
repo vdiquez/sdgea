@@ -1484,13 +1484,20 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       docker-compose (RNF-UI-004) — sin pruebas de RF todavía, solo que el
       andamiaje corre (`npm run build`, un smoke test de Playwright que
       confirma que la UI carga).
+      **VETO real de Codex sobre la primera versión de este commit** (ver
+      STATE.md): etiquetaba `MarcaDeSimulacion` como "RF-UI-012" entregado,
+      contradiciendo la propia afirmación de T-59 de no implementar ningún
+      RF-UI todavía — un componente sin ninguna pantalla que lo use no
+      satisface ese RF (exige que TODA salida FICTICIA lo use). Corregido:
+      recomentado como andamiaje compartido que T-61+ usará para cumplir
+      RF-UI-012, sin reclamar el RF como cerrado.
       Hecho: `contexts/ui-demo/` (React 19 + Vite + TypeScript,
       react-router-dom para las rutas de cada RF-UI futuro), `src/api/
       cliente.ts` (helper `get`/`post` genérico contra `/api/<contexto>`,
-      sin lógica de RF todavía), `MarcaDeSimulacion` (RF-UI-012, componente
-      único reutilizable, con su primera prueba Vitest + Testing Library —
-      verifica `role="status"` visible con texto, no un tooltip), `nginx.conf`
-      (proxy curado, un bloque `location /api/<contexto>/` por cada
+      sin lógica de RF todavía), `MarcaDeSimulacion` (andamiaje compartido,
+      sin RF cerrado todavía — ver nota arriba; su primera prueba Vitest +
+      Testing Library verifica `role="status"` visible con texto, no un
+      tooltip), `nginx.conf` (proxy curado, un bloque `location /api/<contexto>/` por cada
       contexto NO bloqueado, SPA fallback a `index.html` para
       react-router), `Dockerfile` (build Node + serve nginx, mismo
       contenedor sirve la UI y el proxy), `deploy/docker-compose.demo.yml`

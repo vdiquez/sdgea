@@ -3240,11 +3240,11 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
 - 2026-08-31 — T-59 completada: scaffold de `contexts/ui-demo/` (React 19 +
   Vite + TypeScript), primer contexto del proyecto que no es Kotlin ni
   Python. `src/api/cliente.ts` (helper HTTP genérico contra
-  `/api/<contexto>`), `MarcaDeSimulacion` (RF-UI-012, con su prueba Vitest +
-  Testing Library), `nginx.conf` (proxy curado: un bloque por cada contexto
-  NO bloqueado por el prerrequisito de §1 — Captura/Ingesta y
-  Records/Custodia deliberadamente sin ruta), `Dockerfile` (Node build +
-  nginx serve, mismo contenedor sirve la UI y el proxy),
+  `/api/<contexto>`), `MarcaDeSimulacion` (andamiaje compartido, con su
+  prueba Vitest + Testing Library), `nginx.conf` (proxy curado: un bloque
+  por cada contexto NO bloqueado por el prerrequisito de §1 — Captura/
+  Ingesta y Records/Custodia deliberadamente sin ruta), `Dockerfile` (Node
+  build + nginx serve, mismo contenedor sirve la UI y el proxy),
   `deploy/docker-compose.demo.yml` (overlay nuevo, puerto 8090). Vite dev
   server con el mismo mapeo de proxy contra `docker-compose.local-ports.yml`
   para iterar sin reconstruir la imagen.
@@ -3258,4 +3258,20 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   `./test.sh` ganó una línea nueva (`npm --prefix contexts/ui-demo test`);
   completo del repo en verde. `.dockerignore` ampliado (`node_modules` del
   nuevo contexto inflaba el contexto de build a 146 MB).
+
+- 2026-08-31 — VETO real de Codex sobre T-59 (commit `3e9826f`) — el loop
+  headless se detuvo ahí. Texto: "T-59 introduce RF-UI-012 pese a que su
+  alcance exige infraestructura pura sin ningún RF-UI." Hallazgo: el
+  commit etiquetaba `MarcaDeSimulacion` y su prueba como "RF-UI-012"
+  entregado (en comentarios de código, `TODO.md` y esta misma bitácora),
+  contradiciendo la propia afirmación de T-59 de no implementar ningún
+  RF-UI todavía — un componente sin ninguna pantalla real que lo use no
+  satisface RF-UI-012 (exige que TODA salida FICTICIA lo use). Corregido:
+  recomentado `MarcaDeSimulacion.tsx`/`.prueba.tsx` como andamiaje
+  compartido que T-61+ usará para cumplir RF-UI-012, sin reclamar el RF
+  como cerrado; `TODO.md`/`STATE.md` corregidos para no listar RF-UI-012
+  como entregado por T-59. Ningún cambio de comportamiento — el componente
+  y su prueba siguen siendo los mismos, solo se corrigió la etiqueta.
+  `./test.sh` completo del repo en verde (mismo resultado, sin cambios de
+  código funcional).
   Siguiente paso: T-60 (RF-UI-001, autenticación de la sesión de demo).
