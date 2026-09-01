@@ -1,59 +1,60 @@
-OK: T-60 es conforme con RF-UI-001; sin VETO.
+OK: fortalecimiento de T-60 conforme con RF-UI-001; sin VETO.
 
-# Revisión de `c7d5317` — T-60: autenticación de la sesión de demo
+# Revisión de `33429d7` — aserción explícita de `localStorage` para RF-UI-001
 
-## Alcance y criterios de aceptación
+## Alcance contra la spec
 
-El commit implementa únicamente RF-UI-001 de `specs/008-ui-demo/spec.md`:
-el formulario llama a `POST /api/seguridad-acceso/identidades/autenticacion`
-mediante el cliente HTTP común y, ante éxito, guarda solamente `id`, `actor` y
-`roles` antes de navegar al inicio. El navegador no apunta a puertos internos.
-El error 401 se muestra con `role="alert"` y no ejecuta `guardarSesion`.
+El único cambio está en `contexts/ui-demo/e2e/rf-ui-001-autenticacion.spec.ts`.
+Amplía el caso válido de RF-UI-001 (`specs/008-ui-demo/spec.md` §5) después del
+login real: lee `localStorage["sgdea-ui-demo:sesion"]`, comprueba que contiene el
+`id` y el `actor` de la identidad realmente creada, y que no contiene
+`credencialHash`. Es precisamente el fortalecimiento no bloqueante pendiente de
+la revisión anterior.
 
-La respuesta real de Seguridad y Acceso contiene `credencialHash`, pero
-`Login.tsx` construye explícitamente el objeto persistido con los tres campos
-permitidos. La interfaz `Sesion` tampoco admite ese campo. Por inspección, el
-valor almacenado en `localStorage` no puede incluir `credencialHash`.
+El criterio válido exige conservar la identidad autenticada para la sesión. La
+aserción nueva lo comprueba en su ubicación real, en vez de inferirlo sólo por el
+texto de Inicio. No añade comportamiento, endpoints, ni regla de negocio.
 
 ## Principios constitucionales
 
-- **P-01: conforme.** No hay componente probabilístico ni escritura de una
-  sugerencia o de un documento. La UI sólo conserva estado de sesión de cliente.
-- **P-03: conforme.** Seguridad y Acceso es un contexto interno ya especificado;
-  la UI lo consume mediante su interfaz HTTP publicada y el proxy curado, no una
-  capacidad externa crítica consumida directamente.
-- **P-08: conforme.** La sesión de cliente no es estado de documento/expediente.
-  El intento de acceso sí llega al servicio real: `GestionDeAccesos.autenticar`
-  anexa `AUTENTICACION_EXITOSA` o `AUTENTICACION_FALLIDA` a su bitácora antes de
-  devolver o rechazar. No se introduce una transición backend sin auditoría.
+- **P-01: conforme.** El cambio no incorpora ni invoca capacidad probabilística,
+  no genera una sugerencia y no escribe estado documental. La única escritura que
+  observa es el estado efímero de sesión del navegador, expresamente fuera del
+  núcleo de records.
+- **P-03: conforme.** No incorpora una capacidad externa ni un acceso directo a
+  ella. El e2e sigue creando rol e identidad y autenticando a través de las rutas
+  HTTP publicadas por Seguridad y Acceso y el proxy curado.
+- **P-08: conforme.** El commit no crea ninguna transición de documento o
+  expediente. La autenticación que el flujo ejercita se audita en el backend:
+  `GestionDeAccesos.autenticar` anexa `AUTENTICACION_EXITOSA` o
+  `AUTENTICACION_FALLIDA` antes de retornar o rechazar. El estado de sesión local
+  no es una transición de records sujeta a P-08.
 
-## Honestidad de pruebas
+## Honestidad de los tests
 
-`rf-ui-001-autenticacion.spec.ts` no usa un doble para autenticación. Antes del
-caso válido crea un rol y una identidad a través de `/api/seguridad-acceso`, y
-después opera el formulario desde Playwright. El caso inválido usa un actor que
-no existe y comprueba el rechazo y que el inicio continúa sin sesión visible.
-Por tanto, las pruebas ejercitan el contrato y el proxy reales, no una respuesta
-simulada acomodada al componente.
+La prueba no está amañada: usa Playwright y crea un rol y una identidad reales por
+HTTP antes de enviar el formulario de login. No intercepta `fetch`, no simula la
+respuesta de autenticación y la aserción de almacenamiento se ejecuta en la misma
+página que atravesó UI, proxy y servicio real. La identidad esperada procede de
+los datos generados para esa ejecución, por lo que detectaría tanto no persistir
+la sesión como persistir el hash de credencial.
 
-La cobertura es honesta pero mejorable: el e2e infiere la sesión desde la vista
-de inicio; no inspecciona el contenido de `localStorage`. Conviene añadir a una
-próxima tarea de la spec UI una aserción explícita de que la sesión válida
-contiene `id`/`actor`/`roles` y no contiene `credencialHash`. No impide aprobar
-este commit: el filtrado está implementado de forma explícita y el criterio de
-rechazo queda cubierto por el flujo real.
-
-## Verificación ejecutada
-
-- `npm.cmd --prefix contexts/ui-demo test` — 1 archivo, 1 prueba, verde.
-- `npm.cmd --prefix contexts/ui-demo run build` — verde.
-- `git diff --check HEAD^ HEAD` — sin errores de espacios.
-- El e2e de Playwright no se pudo correr en este entorno: Docker devuelve
-  `Access is denied` al conectar con el daemon. La revisión estática confirma
-  que está configurado contra `http://localhost:8090` y contra el stack real.
+El caso inválido existente continúa verificando el rechazo visible y la ausencia
+de sesión visible; el cambio no lo debilita ni altera sus precondiciones.
 
 ## Control de specs, normativa y umbrales
 
-El diff no modifica archivos bajo `specs/`; no aplica el chequeo diferencial de
-referencias normativas ni umbrales. Tampoco añade una referencia normativa ni un
-umbral numérico nuevo.
+El commit no modifica archivos bajo `specs/` y no introduce referencias
+normativas, valores de umbral ni afirmaciones regulatorias nuevas. No procede
+agregar tareas a `TODO.md`.
+
+## Verificación ejecutada
+
+- `git show --check HEAD` y `git diff --check HEAD^ HEAD`: sin errores de
+  espacios.
+- Se intentó `npm.cmd --prefix contexts/ui-demo run test:e2e --
+  e2e/rf-ui-001-autenticacion.spec.ts`. No pudo arrancar el stack requerido:
+  no había servidor en `localhost:5173` y el cliente Docker de este entorno no
+  tiene permiso para acceder al daemon (`Access is denied`). Los dos fallos son
+  de disponibilidad del entorno, antes de ejecutar el flujo de la aplicación;
+  no constituyen un fallo atribuido al commit.
