@@ -1516,7 +1516,7 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       `npm --prefix contexts/ui-demo test`; completo del repo en verde
       (Gradle + pytest de siempre + el nuevo Vitest). `.dockerignore`
       ampliado con `node_modules`/`dist`/reportes de Playwright.
-- [ ] T-60 RF-UI-001 · Autenticación de la sesión de demo — pantalla de
+- [x] T-60 RF-UI-001 · Autenticación de la sesión de demo — pantalla de
       login real contra `POST /identidades/autenticacion` (Seguridad y
       Acceso) vía el proxy; sesión (identidad autenticada) guardada en el
       cliente (`localStorage`, ver `[CLARIFICAR]` de §8 sobre token real —
@@ -1525,6 +1525,23 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       contra el seguridad-acceso real del stack (rol + identidad, mismo
       patrón que la carpeta 3/4 de Postman) para el caso válido, y con
       credenciales inventadas para el caso de rechazo.
+      Hecho: `src/sesion/sesion.ts` (guarda solo `id`/`actor`/`roles` en
+      `localStorage` — deliberadamente NO persiste `credencialHash`, que sí
+      viene en la respuesta real de `Identidad` pero esta capa nunca lo
+      necesita ni lo reenvía); `src/paginas/Login.tsx` (formulario real,
+      401 con `{"error": "..."}"` muestra el rechazo vía `role="alert"`,
+      sin guardar ninguna sesión); ruta `/login` en `App.tsx`; `Inicio.tsx`
+      ahora muestra "Sesión activa: {actor}" o un enlace a iniciar sesión.
+      `e2e/rf-ui-001-autenticacion.spec.ts`: dos pruebas Playwright contra
+      el stack real — la de credenciales válidas crea rol + identidad
+      reales en seguridad-acceso primero (mismo patrón que la carpeta 3/4
+      de Postman), después ejercita el login desde el navegador; la de
+      rechazo confirma `role="alert"` visible y que `/` sigue mostrando el
+      enlace de login (ninguna sesión quedó guardada).
+      Verificado con Docker real: `docker compose -f saas.yml -f demo.yml
+      up -d --build`, las tres pruebas e2e (smoke + las dos de RF-UI-001)
+      en verde contra `http://localhost:8090`. `./test.sh` completo del
+      repo en verde.
 - [ ] T-61 RF-UI-004 · Sugerencia de clasificación (FICTICIA) — pantalla
       que llama a `POST /clasificaciones` y muestra la sugerencia devuelta
       con la marca de simulación (RF-UI-012: componente reutilizable desde

@@ -3274,4 +3274,28 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   y su prueba siguen siendo los mismos, solo se corrigió la etiqueta.
   `./test.sh` completo del repo en verde (mismo resultado, sin cambios de
   código funcional).
-  Siguiente paso: T-60 (RF-UI-001, autenticación de la sesión de demo).
+
+- 2026-08-31 — T-60 completada: RF-UI-001 (autenticación de la sesión de
+  demo). `src/sesion/sesion.ts` guarda `id`/`actor`/`roles` en
+  `localStorage` -- deliberadamente NO persiste `credencialHash` (viene en
+  la respuesta real de `Identidad` de seguridad-acceso, contrato ya
+  existente fuera del alcance de esta capa, pero la UI nunca lo necesita
+  ni lo reenvía). `src/paginas/Login.tsx`: formulario real contra `POST
+  /identidades/autenticacion`; un 401 con `{"error": "..."}` (
+  `ManejoDeErrores.kt`) se muestra vía `role="alert"`, sin guardar ninguna
+  sesión. Ruta `/login` nueva en `App.tsx`; `Inicio.tsx` ahora distingue
+  sesión activa de sesión ausente.
+  TDD honesto (RNF-UI-004): `e2e/rf-ui-001-autenticacion.spec.ts` no usa
+  ningún doble -- la prueba de credenciales válidas crea un rol y una
+  identidad REALES en seguridad-acceso primero (mismo patrón que la
+  carpeta 3/4 de Postman) y solo entonces ejercita el login desde el
+  navegador; la de rechazo usa un actor que nunca existió. Se dejó
+  deliberadamente sin prueba Vitest con `fetch` mockeado para `Login.tsx`:
+  tiene lógica de orquestación real (llama a la API), así que su prueba de
+  aceptación es el e2e, no un doble que pudiera pasar con el camino real
+  roto (mismo criterio de honestidad ya aplicado en todo el proyecto).
+  Verificado con Docker real: `docker compose -f saas.yml -f demo.yml up
+  -d --build`, las tres pruebas e2e (smoke de T-59 + las dos de RF-UI-001)
+  en verde contra `http://localhost:8090`. `./test.sh` completo del repo
+  en verde.
+  Siguiente paso: T-61 (RF-UI-004, sugerencia de clasificación FICTICIA).
