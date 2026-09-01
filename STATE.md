@@ -3298,4 +3298,44 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   -d --build`, las tres pruebas e2e (smoke de T-59 + las dos de RF-UI-001)
   en verde contra `http://localhost:8090`. `./test.sh` completo del repo
   en verde.
-  Siguiente paso: T-61 (RF-UI-004, sugerencia de clasificación FICTICIA).
+
+- 2026-08-31 — Observación no bloqueante de Codex sobre T-60 (ver
+  REVIEW.md): el e2e de RF-UI-001 inferia la sesión guardada solo por el
+  texto de Inicio, sin inspeccionar `localStorage` directamente. Reforzado
+  (commit `33429d7`): nueva aserción que confirma `id`/`actor` presentes y
+  `credencialHash` ausente, leyendo `localStorage` real tras el login real.
+  Codex confirmó "OK: sin VETO" sobre el refuerzo.
+
+- 2026-08-31 — T-61 completada: RF-UI-004 (sugerencia de clasificación
+  FICTICIA). `src/paginas/Clasificacion.tsx`: formulario donde el operador
+  declara la candidata a mano (documento, texto extraído, serie/subserie,
+  confianza) -- mismo criterio del resto del proyecto: nunca se implementa
+  un clasificador real, el llamador la entrega ya calculada. Primer uso
+  real de `MarcaDeSimulacion`, cerrando RF-UI-012 para este caso concreto
+  (el RF sigue abierto en general hasta que TODAS las pantallas FICTICIAS
+  lo usen).
+  **Hallazgo real durante la verificación con Docker** (no una hipótesis):
+  la primera corrida del e2e falló con 502 real
+  ("records-custodia no respondió al recibir la sugerencia"). Investigado:
+  `POST /clasificaciones` reenvía cada sugerencia a `POST /sugerencias` en
+  Records/Custodia servidor-a-servidor (RF-CL-004, dentro del mismo
+  request HTTP, antes de responder al llamador) y
+  `CapaAnticorrupcionSugerencias.recibir()` exige que el documento ya esté
+  custodiado (`consultarDocumento`, lanza 404 si no existe) -- sin un
+  documento real, la llamada interna de clasificacion a records-custodia
+  fallaba. Esto NO es una violación del prerrequisito de §1 (records-
+  custodia sigue sin ruta en el proxy para el navegador; esta es una
+  llamada servidor-a-servidor ya existente, mismo patrón que Validación
+  Humana), pero sí exige que el e2e siembre un documento real para que el
+  flujo completo funcione. Corregido: el test crea el documento llamando
+  directo al puerto local de records-custodia
+  (`docker-compose.local-ports.yml`, 8082) como SETUP explícito, nunca a
+  través de la UI -- documentado en `playwright.config.ts` que correr los
+  e2e completos requiere las tres capas de compose juntas (`saas.yml` +
+  `demo.yml` + `local-ports.yml`).
+  Verificado con Docker real: cuatro pruebas e2e (smoke de T-59 +
+  RF-UI-001 ×2 + RF-UI-004) en verde contra `http://localhost:8090`.
+  `./test.sh` completo del repo en verde.
+  Siguiente paso: T-62 (RF-UI-005, cola de validación humana y decisión
+  individual) -- cierra el flujo funcional que pidió Victor (login →
+  clasificación → decisión).

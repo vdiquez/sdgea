@@ -9,7 +9,12 @@ export function Inicio() {
       <h1>SGDEA — demostración</h1>
       <p>Sistema de Gestión de Documentos Electrónicos de Archivo.</p>
       {sesion ? (
-        <p>Sesión activa: {sesion.actor}</p>
+        <>
+          <p>Sesión activa: {sesion.actor}</p>
+          <p>
+            <Link to="/clasificacion">Sugerencia de clasificación</Link>
+          </p>
+        </>
       ) : (
         <p>
           <Link to="/login">Iniciar sesión</Link>

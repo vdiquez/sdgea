@@ -1542,11 +1542,36 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       up -d --build`, las tres pruebas e2e (smoke + las dos de RF-UI-001)
       en verde contra `http://localhost:8090`. `./test.sh` completo del
       repo en verde.
-- [ ] T-61 RF-UI-004 · Sugerencia de clasificación (FICTICIA) — pantalla
+- [x] T-61 RF-UI-004 · Sugerencia de clasificación (FICTICIA) — pantalla
       que llama a `POST /clasificaciones` y muestra la sugerencia devuelta
       con la marca de simulación (RF-UI-012: componente reutilizable desde
       este primer uso, no una implementación ad hoc). TDD: Playwright e2e
       contra el clasificacion real del stack.
+      Hecho: `src/paginas/Clasificacion.tsx` (formulario: documento, texto
+      extraído, serie/subserie, confianza — el operador declara la
+      candidata a mano, mismo criterio del resto del proyecto: nunca se
+      implementa un clasificador real; `POST /clasificaciones` ya reenvía
+      cada sugerencia a Records/Custodia servidor-a-servidor antes de
+      responder, RF-CL-004/RF-RC-003); ruta `/clasificacion`; `Inicio.tsx`
+      enlaza a ella cuando hay sesión activa. Primer uso real de
+      `MarcaDeSimulacion` (cierra RF-UI-012 para este caso).
+      **Hallazgo real durante la verificación**: `POST /clasificaciones`
+      reenvía cada sugerencia a `POST /sugerencias` en Records/Custodia
+      (servidor-a-servidor, no pasa por el proxy ni por el navegador), y
+      `CapaAnticorrupcionSugerencias.recibir()` exige que el documento ya
+      esté custodiado (`consultarDocumento`, 404 si no existe) — sin un
+      documento real, la petición fallaba con 502
+      ("records-custodia no respondió"). Como Records/Custodia sigue
+      bloqueada para el navegador (prerrequisito de §1), el e2e crea el
+      documento llamando directo al puerto local de records-custodia
+      (`docker-compose.local-ports.yml`, 8082) como SETUP -- nunca a través
+      de la UI. Documentado en `playwright.config.ts`: correr los e2e
+      completos requiere las tres capas de compose juntas (`saas.yml` +
+      `demo.yml` + `local-ports.yml`).
+      Verificado con Docker real: `docker compose -f saas.yml -f demo.yml
+      -f local-ports.yml up -d --build`, las cuatro pruebas e2e (smoke +
+      RF-UI-001 ×2 + RF-UI-004) en verde contra `http://localhost:8090`.
+      `./test.sh` completo del repo en verde.
 - [ ] T-62 RF-UI-005 · Cola de validación humana y decisión individual —
       pantalla que lista `GET /colas/clasificacion` ordenada por confianza
       y permite decidir (`POST /decisiones`) sobre la sugerencia de T-61;
