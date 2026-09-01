@@ -3502,3 +3502,62 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   puerto directo al host.
   Siguiente paso: T-64 (RF-UI-011, bitácora de auditoría consolidada) para
   cerrar el paso "→ bitácora" del flujo pedido por Victor.
+
+- 2026-09-01 — VETO real de Codex sobre `aaf9929` (T-63): "el proxy de UI
+  expone también todos los demás endpoints no protegidos de Records/Custodia;
+  por ello no cierra el prerrequisito de arquitectura de
+  specs/008-ui-demo/spec.md §1". Causa raíz exacta: `location
+  /api/records-custodia/ { proxy_pass http://records-custodia:8082/; }` es
+  un PREFIJO -- reenvía TODO bajo ese prefijo, no solo los cinco endpoints
+  que ya verifican `identidadId`. `POST /documentos/{id}/decisiones` seguía
+  siendo alcanzable desde el navegador sin autorización, deshaciendo
+  exactamente la garantía que RF-UI-005 exige (que la UI nunca lo llame
+  directamente). Mismo defecto, mismo diagnóstico, en `vite.config.ts`
+  (proxy de desarrollo con el mismo prefijo genérico).
+  Corregido en `nginx.conf`: cinco bloques explícitos por ruta+método
+  (`location = ...` para las exactas, `location ~ ^...$` con `limit_except`
+  para las parametrizadas por `{id}`), más un `location
+  /api/records-custodia/ { return 404; }` de cierre para cualquier otra ruta
+  bajo ese prefijo. `vite.config.ts` gana un `bypass()` equivalente que
+  responde 404 (verificado que `bypassResult === false` produce un 404 real
+  en el propio código fuente de Vite, no un delegado a otro middleware) para
+  cualquier petición fuera de la misma lista de cinco.
+  **Segundo hallazgo real, verificando contra Docker real** (no lo detecta
+  ningún test de Gradle ni de Vitest): "correcciones" tiene la misma forma
+  textual que un id de documento (`/documentos/{id}`) -- sin una exclusión
+  explícita, el regex genérico habría reenviado `GET
+  /api/records-custodia/documentos/correcciones` al backend real, donde
+  Spring MVC lo resuelve al handler literal `correcciones()` (RF-VH-009),
+  que nunca tuvo verificación de permiso. Añadido un `location =
+  /api/records-custodia/documentos/correcciones { return 404; }` exacto
+  (nginx evalúa los `location =` antes que cualquier regex, sin importar el
+  orden en el archivo) y la misma exclusión explícita en el `bypass()` de
+  Vite.
+  **Tercer hallazgo real**: los bloques con `$1`/`$is_args$args` en
+  `proxy_pass` fallaban con 502 ("no resolver defined to resolve
+  records-custodia") -- cualquier variable dentro de `proxy_pass` obliga a
+  nginx a resolver el nombre de servicio en tiempo de petición, no una sola
+  vez al cargar la configuración, y eso exige un `resolver` explícito.
+  Corregido con `resolver 127.0.0.11 valid=30s;` (el DNS embebido de Docker
+  para redes bridge de docker-compose) al inicio del `server {}`.
+  Nuevo e2e dedicado (`rnf-ui-001-proxy-curado-records-custodia.spec.ts`,
+  pedido explícitamente por Codex): ejercita el proxy real de punta a punta
+  -- una ruta permitida llega de verdad al backend (200 con datos reales;
+  sin `identidadId`, 400 real de records-custodia, no un 404 del proxy que
+  podría confundirse con lo mismo), y las seis rutas fuera de alcance
+  (custodiar, decisiones, procedencia, correcciones, verificación agregada,
+  sugerencias pendientes) responden 404 a través del único camino que el
+  navegador tiene hacia records-custodia.
+  **Cuarto hallazgo real, en la propia verificación de este e2e**: dos de
+  las pruebas fallaban con "Test not found in the worker process" de forma
+  determinista (siempre las mismas dos) -- sus títulos interpolaban
+  `documentoId` (derivado de `Date.now()`), y Playwright importa el archivo
+  de prueba por separado en el proceso de descubrimiento y en cada worker
+  que lo ejecuta; con un valor no determinístico en el título, el nombre
+  registrado en el descubrimiento nunca coincide con el que recalcula el
+  worker. Corregido reemplazando el id dinámico por uno literal
+  (`doc-cualquiera`) en esas seis rutas -- válido porque el bloqueo es de
+  forma de la ruta, no de si el documento existe.
+  Verificado con Docker real: 13 pruebas e2e (las 5 de siempre + 8 nuevas),
+  dos corridas seguidas sin fallos contra `http://localhost:8090`.
+  `./test.sh` completo del repo en verde.

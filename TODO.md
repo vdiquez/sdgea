@@ -1696,6 +1696,22 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       `SEGURIDAD_ACCESO_BASE_URL` y `depends_on: seguridad-acceso`, sigue
       sin `ports:` (el prerrequisito habilita el proxy de ui-demo, no un
       puerto directo al host).
+      **VETO real de Codex sobre el primer intento del proxy** (commit
+      `aaf9929`, ver STATE.md): `location /api/records-custodia/ {
+      proxy_pass ...; }` era un PREFIJO -- reenviaba todo el contrato, no
+      solo los cinco endpoints protegidos; `POST .../decisiones` seguía
+      alcanzable desde el navegador sin autorización. Corregido con cinco
+      bloques `nginx.conf` explícitos por ruta+método (más un `return 404`
+      de cierre) y un `bypass()` equivalente en `vite.config.ts`. Dos
+      hallazgos reales adicionales durante esa corrección: "correcciones"
+      colisiona con la forma de `/documentos/{id}` (excluido con un
+      `location =` exacto/exclusión explícita en `bypass()`); `proxy_pass`
+      con variables exige un `resolver 127.0.0.11` (DNS embebido de
+      Docker) o nginx responde 502. Nuevo e2e
+      `rnf-ui-001-proxy-curado-records-custodia.spec.ts` (pedido
+      explícitamente por Codex) verifica las cinco rutas permitidas y las
+      seis fuera de alcance a través del proxy real. 13 pruebas e2e, dos
+      corridas seguidas en verde.
 - [ ] T-64 RF-UI-011 · Bitácora de auditoría consolidada, alcance inicial:
       panel de decisión de T-62 — tras decidir sobre la sugerencia de
       clasificación, la UI consulta `GET /eventos-auditoria` de
