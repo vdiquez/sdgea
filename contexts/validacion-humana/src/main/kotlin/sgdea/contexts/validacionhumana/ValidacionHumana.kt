@@ -186,7 +186,17 @@ class GestionDeDecisiones(
         // portar la serie propuesta en `contenidoPropuesto` como texto plano;
         // no hay un contrato formal más rico todavía (spec-records-custodia.md
         // no define el formato de `contenidoPropuesto` por tipo de sugerencia).
-        val tipo = if (sugerencia.contenidoPropuesto == clasificacionResultante.serieId) {
+        // Corrección real (VETO de Codex sobre T-62/UI, ver STATE.md): el
+        // EMISOR FICTICIO de Clasificación (T-45, `a_sugerencia_saliente_de_
+        // clasificacion`) porta "serie/subserie", no solo "serie", cuando hay
+        // subserie -- comparar solo contra `serieId` marcaba SIEMPRE como
+        // corrección una aceptación exacta con subserie. `contenidoEsperado`
+        // reconstruye el mismo formato que produce esa convención para que la
+        // comparación sea honesta con ambas formas (con y sin subserie).
+        val contenidoEsperado = clasificacionResultante.subserieId
+            ?.let { "${clasificacionResultante.serieId}/$it" }
+            ?: clasificacionResultante.serieId
+        val tipo = if (sugerencia.contenidoPropuesto == contenidoEsperado) {
             TipoDeDecision.ACEPTACION
         } else {
             TipoDeDecision.CORRECCION

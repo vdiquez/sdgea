@@ -1601,6 +1601,24 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       ("serie-1"/"subserie-1", reutilizados de T-61), la aserción sobre la
       cola encontraba TRES coincidencias (de corridas anteriores), no una.
       Corregido con `serie`/`subserie` únicos por corrida.
+      **Codex no vetó constitucionalmente pero exigió corrección funcional
+      antes de aceptar el commit**: "Aceptar decisión" llegaba a
+      Records/Custodia como CORRECCIÓN, no como aceptación, para toda
+      sugerencia de Clasificación con subserie. Causa raíz real de
+      BACKEND, no de la UI: `ValidacionHumana.kt`
+      (`GestionDeDecisiones.construirDecision`) comparaba
+      `contenidoPropuesto == serieId`, asumiendo el formato "serie" plano
+      del EMISOR FICTICIO original (T-08) — pero
+      `a_sugerencia_saliente_de_clasificacion` (T-45, clasificacion) porta
+      "serie/subserie". Nunca se había ejercitado antes end-to-end (los
+      tests existentes de `ValidacionHumanaTest.kt` solo cubrían el caso
+      sin subserie). Corregido: `contenidoEsperado` reconstruye
+      "serie/subserie" cuando `subserieId` no es nulo. Dos pruebas
+      unitarias nuevas (aceptación y corrección con subserie) = 5/5
+      verdes en `ValidacionHumanaTest.kt`. E2e reforzado con verificación
+      servidor-a-servidor (`GET /documentos/correcciones` antes/después,
+      confirma que el volumen no cambió) y con los resultados de
+      creación de rol/identidad verificados explícitamente.
       Verificado con Docker real: cinco pruebas e2e, dos corridas seguidas
       sin fallos contra `http://localhost:8090` (saas.yml + demo.yml +
       local-ports.yml). `./test.sh` completo del repo en verde.
@@ -1634,3 +1652,13 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       decisión → bitácora. TDD: Playwright e2e que corre el flujo completo
       y verifica que la bitácora muestra el evento con actor y fecha no
       vacíos.
+- [ ] T-65 Corrección de aceptación individual de RF-UI-005 — al pulsar
+      «Aceptar decisión» sobre la sugerencia de clasificación `serie/subserie`
+      de T-61, Validación Humana debe materializar una aceptación
+      (`esCorreccion=false`), no una corrección por comparar sólo `serieId`.
+      Definir y aplicar la comparación conforme al contrato existente, sin
+      inventar un formato nuevo; conservar una corrección explícita y
+      distinguible si la UI la ofrece. TDD: ampliar el e2e T-62 o una prueba
+      de integración real para comprobar la clasificación/evento resultante y
+      ambas ramas aceptación/corrección; comprobar además las respuestas del
+      setup de rol e identidad.

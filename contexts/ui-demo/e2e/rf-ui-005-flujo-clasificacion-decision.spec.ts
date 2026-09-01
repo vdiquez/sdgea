@@ -25,7 +25,10 @@ test("flujo completo: login → clasificación → cola de validación → decis
   const subserie = `subserie-ui-flujo-${sufijo}`;
   const contenidoPropuesto = `${serie}/${subserie}`;
 
-  await request.post("/api/seguridad-acceso/roles", {
+  // Observación de Codex sobre T-62 (ver REVIEW.md/STATE.md): comprobar
+  // explícitamente el resultado de la preparación, para que un fallo de
+  // setup no quede oculto detrás de un fallo posterior más confuso.
+  const respuestaRol = await request.post("/api/seguridad-acceso/roles", {
     data: {
       nombre: rol,
       permisos: [
@@ -34,9 +37,11 @@ test("flujo completo: login → clasificación → cola de validación → decis
       ],
     },
   });
-  await request.post("/api/seguridad-acceso/identidades", {
+  expect(respuestaRol.ok()).toBe(true);
+  const respuestaIdentidad = await request.post("/api/seguridad-acceso/identidades", {
     data: { id: identidadId, actor, credencial, roles: [rol] },
   });
+  expect(respuestaIdentidad.ok()).toBe(true);
 
   const recordsCustodia = await apiRequest.newContext({ baseURL: "http://localhost:8082" });
   const respuestaCustodia = await recordsCustodia.post("/documentos", {
@@ -74,9 +79,26 @@ test("flujo completo: login → clasificación → cola de validación → decis
   await expect(fila).toBeVisible();
   await expect(fila.getByRole("status")).toHaveText(/simulad/i);
 
+  // VETO real de Codex sobre T-62 (ver REVIEW.md/STATE.md): "Aceptar
+  // decisión" llegaba a Records/Custodia como CORRECCIÓN para toda
+  // sugerencia con formato "serie/subserie" -- ValidacionHumana.kt
+  // comparaba solo contra `serieId`, nunca contra "serie/subserie" (el
+  // formato real que produce Clasificación, T-45). Corregido en
+  // ValidacionHumana.kt (con sus propias pruebas unitarias); aquí se
+  // verifica servidor-a-servidor, vía el puerto local de records-custodia,
+  // que esta aceptación exacta NO incrementó la lista de correcciones
+  // pendientes de re-revisión (RF-VH-009) -- si el defecto reapareciera,
+  // esta aserción lo detectaría de nuevo.
+  const correccionesAntes = await recordsCustodia.get("/documentos/correcciones");
+  const volumenAntes = (await correccionesAntes.json()).length;
+
   // 4. Decisión (RF-UI-005) -- Validación Humana materializa en
   // Records/Custodia servidor-a-servidor; la UI solo confirma que la
   // sugerencia se retira de la cola.
   await fila.getByRole("button", { name: "Aceptar decisión" }).click();
   await expect(fila).toHaveCount(0);
+
+  const correccionesDespues = await recordsCustodia.get("/documentos/correcciones");
+  const volumenDespues = (await correccionesDespues.json()).length;
+  expect(volumenDespues).toBe(volumenAntes);
 });

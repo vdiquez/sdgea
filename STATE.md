@@ -3370,3 +3370,39 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Siguiente paso: T-63 (autorización real en Records/Custodia, cierra el
   prerrequisito para ese contexto -- desbloquea RF-UI-003 y la
   verificación de bitácora de RF-UI-011).
+
+- 2026-08-31 — Codex no vetó T-62 constitucionalmente pero exigió
+  corrección funcional antes de aceptarlo (commit `f11c848`): "Aceptar
+  decisión" en `ColaDeValidacion.tsx` llegaba a Records/Custodia como
+  **CORRECCIÓN** para toda sugerencia de clasificación con subserie, no
+  como aceptación. Causa raíz real, no de la UI: `ValidacionHumana.kt`
+  (`GestionDeDecisiones.construirDecision`) comparaba
+  `sugerencia.contenidoPropuesto == clasificacionResultante.serieId` para
+  decidir ACEPTACION/CORRECCION -- ese criterio asume el formato "serie"
+  plano del EMISOR FICTICIO original (T-08), pero
+  `a_sugerencia_saliente_de_clasificacion` (T-45, clasificacion) porta
+  "serie/subserie" cuando hay subserie. La comparación era, por tanto,
+  siempre falsa para cualquier sugerencia de Clasificación con subserie
+  -- un defecto de BACKEND pre-existente, nunca antes ejercitado
+  end-to-end porque los tests de `ValidacionHumanaTest.kt` solo cubrían
+  el caso sin subserie, y ningún flujo previo (Postman incluido) probó
+  "aceptar tal cual" una sugerencia de Clasificación real a través de
+  Validación Humana.
+  Corregido en `ValidacionHumana.kt`: `contenidoEsperado` reconstruye
+  "serie/subserie" cuando `subserieId` no es nulo, o "serie" si lo es --
+  honesto con ambos formatos, no solo el nuevo. Dos pruebas unitarias
+  nuevas en `ValidacionHumanaTest.kt` (aceptación y corrección con
+  subserie), sumadas a las dos ya existentes (sin subserie) = 5/5 verdes.
+  `e2e/rf-ui-005-flujo-clasificacion-decision.spec.ts` reforzado con la
+  verificación servidor-a-servidor que Codex pidió explícitamente:
+  consulta `GET /documentos/correcciones` (puerto local de
+  records-custodia) antes y después de decidir, y confirma que el
+  volumen no cambió -- si el defecto reapareciera, esta aserción lo
+  detectaría de nuevo, no solo que la fila desaparece de la cola. También
+  se verifican explícitamente los resultados de creación de rol/identidad
+  en el setup del e2e (observación de Codex: un fallo de preparación no
+  debe quedar oculto).
+  Verificado con Docker real: cinco pruebas e2e, dos corridas seguidas sin
+  fallos contra `http://localhost:8090`. `./test.sh` completo del repo en
+  verde (Gradle incluidas las nuevas pruebas de validacion-humana).
+  Siguiente paso: T-63 (autorización real en Records/Custodia).

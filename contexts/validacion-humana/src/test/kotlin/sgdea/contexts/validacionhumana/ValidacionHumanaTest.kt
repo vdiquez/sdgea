@@ -148,6 +148,44 @@ class GestionDeDecisionesIndividualTest {
         assertEquals(TipoDeDecision.CORRECCION, decision.tipo)
     }
 
+    // VETO real de Codex sobre T-62 (UI, ver STATE.md): el EMISOR FICTICIO de
+    // Clasificación (T-45, `a_sugerencia_saliente_de_clasificacion`) porta
+    // "serie/subserie" en `contenidoPropuesto` cuando hay subserie, no solo
+    // "serie" -- comparar solo contra `serieId` marcaba SIEMPRE como
+    // corrección una aceptación exacta con subserie, aunque el archivista
+    // aceptara la sugerencia tal cual.
+    @Test
+    fun `dada una sugerencia con subserie, cuando un actor autorizado la acepta tal cual, se produce una decision marcada como aceptacion`() {
+        val registrador = RegistradorDeDecisionesEnMemoria()
+        val gestion = GestionDeDecisiones(registrador, VerificadorDePermisosEnMemoria(permitido = true))
+
+        val decision = gestion.decidir(
+            identidadId = "id-1",
+            sugerencia = sugerencia(contenidoPropuesto = "serie-1/subserie-1"),
+            clasificacionResultante = ClasificacionPropuesta(trdVersion = 1, serieId = "serie-1", subserieId = "subserie-1"),
+            actor = "archivista-1",
+            fecha = fecha,
+        )
+
+        assertEquals(TipoDeDecision.ACEPTACION, decision.tipo)
+    }
+
+    @Test
+    fun `dada una sugerencia con subserie, cuando un actor autorizado la corrige con otra subserie, se produce una decision marcada como correccion`() {
+        val registrador = RegistradorDeDecisionesEnMemoria()
+        val gestion = GestionDeDecisiones(registrador, VerificadorDePermisosEnMemoria(permitido = true))
+
+        val decision = gestion.decidir(
+            identidadId = "id-1",
+            sugerencia = sugerencia(contenidoPropuesto = "serie-1/subserie-1"),
+            clasificacionResultante = ClasificacionPropuesta(trdVersion = 1, serieId = "serie-1", subserieId = "subserie-2"),
+            actor = "archivista-1",
+            fecha = fecha,
+        )
+
+        assertEquals(TipoDeDecision.CORRECCION, decision.tipo)
+    }
+
     @Test
     fun `dado un actor sin permiso sobre el recurso, cuando intenta decidir, se deniega y no se materializa nada`() {
         val registrador = RegistradorDeDecisionesEnMemoria()
