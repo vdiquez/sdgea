@@ -1,28 +1,35 @@
-OK: `591cc50` corrige íntegramente la segunda observación sobre T-62 y cierra correctamente T-65; sin VETO constitucional.
+OK: `d5a5d1a` corrige íntegramente el VETO de `aaf9929`; el proxy curado expone solo los cinco endpoints autorizados de Records/Custodia, sin objeciones constitucionales.
 
-# Revisión de `591cc50` — refuerzo e2e de T-62 y cierre de T-65
+# Revisión de `d5a5d1a` — corrección del proxy curado de T-63
 
 ## Dictamen
 
-El e2e exige ahora explícitamente `HTTP 2xx` para ambas lecturas de `GET /documentos/correcciones`, antes de consumir sus cuerpos JSON. Esto elimina el falso positivo señalado en la revisión de `a7af4b8`: dos respuestas de error sin propiedad `length` ya no pueden satisfacer por accidente `undefined === undefined`.
+`contexts/ui-demo/nginx.conf` sustituye el prefijo genérico por exactamente cinco rutas+métodos hacia Records/Custodia:
 
-El cambio mantiene la comprobación servidor-a-servidor del efecto materializado de la decisión: una aceptación exacta de `serie/subserie` no incrementa las correcciones pendientes de re-revisión. No añade mocks ni interceptores y no abre una ruta de navegador hacia Records/Custodia.
+- `GET /documentos/{id}`
+- `GET /documentos/{id}/original`
+- `GET /documentos/{id}/sugerencias`
+- `GET /eventos-auditoria`
+- `POST /documentos/{id}/verificacion-integridad`
 
-T-65 queda cerrada de forma consistente. La tarea describía precisamente el defecto ya resuelto en `a7af4b8`: `GestionDeDecisiones.construirDecision` reconstruye el valor esperado como `serieId/subserieId` cuando corresponde, conserva el formato sin subserie y tiene pruebas para aceptación y corrección. Marcarla `[x]` no encubre trabajo de dominio pendiente ni introduce un requisito nuevo.
+Los bloques parametrizados están anclados de inicio a fin y usan `limit_except`; por tanto, ni métodos distintos ni segmentos adicionales se reenvían. `location /api/records-custodia/ { return 404; }` cierra el resto del prefijo. En concreto, `POST /documentos` y `POST /documentos/{id}/decisiones` ya no alcanzan el backend a través del proxy.
+
+`GET /documentos/correcciones` queda excluido expresamente antes del patrón que reconoce `/documentos/{id}`. La misma exclusión aparece en el `bypass()` de `vite.config.ts`; este comparte las mismas cinco parejas ruta+método y devuelve `false` para todo lo demás. En Vite 8.2.2, ese resultado escribe una respuesta 404 y termina la solicitud antes de `proxy.web`, así que el proxy de desarrollo no reabre la superficie bloqueada.
+
+El nuevo e2e no usa dobles: siembra identidad, rol y documento contra los servicios reales, comprueba que la lectura permitida llega por el `baseURL` del proxy y distingue el `400` real del backend de un `404` del proxy. Además comprueba por el proxy los 404 de custodiar, decisiones, procedencia, correcciones, verificación agregada y sugerencias pendientes. Esto cubre de forma efectiva la regresión vetada, incluido el caso de colisión `correcciones`.
 
 ## Constitución y specs
 
-- **P-01 y P-09: conforme.** La clasificación continúa como sugerencia FICTICIA y la materialización depende de la acción explícita del operador; la prueba refuerza ese resultado, sin automatizar decisiones.
-- **P-03: conforme.** No hay nueva integración ni consumo directo de capacidad externa. La consulta directa a Records/Custodia es únicamente setup/observación del e2e mediante el puerto local documentado, no una ruta de la UI.
-- **P-08: conforme.** Se conserva la comprobación de que la aceptación no se registra incorrectamente como corrección; el commit no altera el modelo ni la bitácora de auditoría.
-- **RF-UI-005 y RF-VH-008/009: conforme.** El refuerzo prueba honestamente la distinción aceptación/corrección y la observabilidad de correcciones requerida por las specs aplicables.
-
-El commit no modifica `specs/`, no introduce referencias normativas ni umbrales, y no modifica el stack ni incorpora componentes probabilísticos reales.
+- **`specs/008-ui-demo/spec.md` §§1 y 4 / `specs/spec-infra-servicios.md` §4: conforme.** La exposición resultante es exactamente el subconjunto de cinco endpoints con autorización real de T-63. Las rutas no autorizadas no tienen ruta pública.
+- **P-01 y P-09: conforme.** `POST /documentos/{id}/decisiones` deja de ser invocable por navegador; se preserva la orquestación servidor-a-servidor de Validación Humana.
+- **P-02, P-03 y P-08: conforme.** No cambia el stack, el dominio ni la bitácora, y el ajuste de proxy no incorpora integración o estado de negocio nuevos.
+- No se modificó la constitución, no se introdujeron referencias normativas ni umbrales inventados, ni componentes probabilísticos reales.
 
 ## Verificación ejecutada
 
+- Inspección de las reglas Nginx y Vite contra las cinco rutas declaradas en las specs y contra los demás endpoints del contrato de Records/Custodia.
+- Inspección del middleware instalado de Vite: `bypass() === false` devuelve 404 antes del reenvío.
 - `git diff HEAD^ HEAD --check`: correcto.
 - `npm.cmd --prefix contexts/ui-demo run build`: correcto.
 - `npm.cmd --prefix contexts/ui-demo test`: 1 prueba, correcta.
-
-El e2e requiere el stack Docker real con los overlays `saas`, `demo` y `local-ports`; no se ejecutó en este sandbox.
+- Configuración Compose SaaS+demo+local-ports y on-prem: válida. No fue posible ejecutar Docker/e2e en vivo en este sandbox porque el daemon de Docker requiere privilegios no disponibles.
