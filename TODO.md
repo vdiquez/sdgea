@@ -1463,3 +1463,77 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       volumen limpio: 98/98 peticiones, 143/143 aserciones, sin fallos.
       **Con T-58 cerrada, no queda ninguna tarea abierta en el backlog
       actual.**
+
+- [ ] T-59 Scaffold de la capa UI (`specs/008-ui-demo/spec.md`): React +
+      Vite + TypeScript en `contexts/ui-demo/` (mismo criterio de ubicación
+      que los demás contextos, aunque este no sea un bounded context de
+      dominio), proxy inverso curado (nginx, nuevo servicio de
+      infraestructura pura — traduce `/api/<contexto>/...` a la red interna
+      de docker-compose, ver §2/§4 de la spec) y wiring en un nuevo
+      `docker-compose.demo.yml` (overlay sobre `docker-compose.saas.yml`,
+      mismo patrón que `docker-compose.local-ports.yml` pero sirviendo la
+      UI construida además de mapear puertos). Sin ningún RF-UI todavía —
+      infraestructura pura, mismo criterio que T-16/T-18/T-35 (Dockerfile +
+      wiring antes del primer RF). El proxy solo enruta a los contextos NO
+      bloqueados por el prerrequisito de §1 de la spec (Seguridad y Acceso,
+      Clasificación, Validación Humana, Normalización, Extracción,
+      Enriquecimiento, Indexación y Búsqueda) — Captura/Ingesta y
+      Records/Custodia quedan sin ruta en el proxy hasta T-63.
+      Vitest + Testing Library configurados para componentes puros;
+      Playwright configurado para e2e contra el stack real de
+      docker-compose (RNF-UI-004) — sin pruebas de RF todavía, solo que el
+      andamiaje corre (`npm run build`, un smoke test de Playwright que
+      confirma que la UI carga).
+- [ ] T-60 RF-UI-001 · Autenticación de la sesión de demo — pantalla de
+      login real contra `POST /identidades/autenticacion` (Seguridad y
+      Acceso) vía el proxy; sesión (identidad autenticada) guardada en el
+      cliente (`localStorage`, ver `[CLARIFICAR]` de §8 sobre token real —
+      no se inventa uno) y reenviada como `actor` en las llamadas
+      siguientes. TDD: Playwright e2e con credenciales reales creadas
+      contra el seguridad-acceso real del stack (rol + identidad, mismo
+      patrón que la carpeta 3/4 de Postman) para el caso válido, y con
+      credenciales inventadas para el caso de rechazo.
+- [ ] T-61 RF-UI-004 · Sugerencia de clasificación (FICTICIA) — pantalla
+      que llama a `POST /clasificaciones` y muestra la sugerencia devuelta
+      con la marca de simulación (RF-UI-012: componente reutilizable desde
+      este primer uso, no una implementación ad hoc). TDD: Playwright e2e
+      contra el clasificacion real del stack.
+- [ ] T-62 RF-UI-005 · Cola de validación humana y decisión individual —
+      pantalla que lista `GET /colas/clasificacion` ordenada por confianza
+      y permite decidir (`POST /decisiones`) sobre la sugerencia de T-61;
+      tras decidir, la sugerencia debe desaparecer de la cola. Este es el
+      flujo funcional mínimo que Victor pidió (login → clasificación →
+      decisión); no depende de Records/Custodia expuesto (Validación
+      Humana ya orquesta la materialización servidor-a-servidor, ver §1 de
+      la spec). TDD: Playwright e2e completo login→clasificar→decidir→cola
+      vacía, contra el stack real.
+- [ ] T-63 Autorización real en Records/Custodia — cierra, PARA
+      RECORDS/CUSTODIA únicamente (Captura/Ingesta queda fuera de alcance
+      de esta tarea, ver T-64+), el prerrequisito de arquitectura de §1 de
+      `specs/008-ui-demo/spec.md`: nuevo puerto `VerificadorDeAutorizacion`
+      (mismo patrón ya aceptado por Codex en Extracción/T-41b —
+      `VerificadorDeAutorizacionHttp` contra `POST /autorizacion` de
+      Seguridad y Acceso), consultado en los endpoints que el proxy de la
+      demo necesita exponer (`GET /documentos/{id}`, `GET
+      /documentos/{id}/original`, `GET /documentos/{id}/sugerencias`,
+      `POST /documentos/{id}/decisiones`, `GET /eventos-auditoria`, `POST
+      /documentos/{id}/verificacion-integridad`), rechazando con 403 si el
+      actor no tiene el permiso correspondiente. TDD: mismo criterio que
+      T-41b — un test que confirma actor sin permiso → 403 y actor
+      autorizado → 200/materializa. Tras esto: actualizar
+      `spec-infra-servicios.md` §10 (Records/Custodia ya no queda listada
+      como "sin deber exponerse"; Captura/Ingesta sigue así hasta que se
+      haga lo mismo ahí) y `specs/008-ui-demo/spec.md` §1/§4/§5 (desbloquear
+      las rutas de Records/Custodia en el proxy — RF-UI-003 deja de estar
+      bloqueada; RF-UI-002 sigue bloqueada, depende de Captura/Ingesta).
+      Añadir la ruta de Records/Custodia al proxy curado (T-59) una vez
+      cerrado.
+- [ ] T-64 RF-UI-011 · Bitácora de auditoría consolidada, alcance inicial:
+      panel de decisión de T-62 — tras decidir sobre la sugerencia de
+      clasificación, la UI consulta `GET /eventos-auditoria` de
+      Records/Custodia (ahora expuesto tras T-63) y muestra el evento
+      `SUGERENCIA_RECIBIDA`/`DECISION_HUMANA_MATERIALIZADA` atribuible,
+      cerrando el flujo pedido por Victor: login → clasificación →
+      decisión → bitácora. TDD: Playwright e2e que corre el flujo completo
+      y verifica que la bitácora muestra el evento con actor y fecha no
+      vacíos.
