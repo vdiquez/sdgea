@@ -4,7 +4,7 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 
 **Modo** = rol jugado en esa invocación, no el nombre del agente: Claude Code siempre implementa ("desarrollador"); Codex revisa ("validador") salvo cuando el tag de la invocación trae `-lead` (Codex implementó porque Claude estaba en rate limit sostenido, ver `CODEX_LEAD_PROMPT` en `orquestador.sh`) — ahí también cuenta como "desarrollador". Ver el docstring del script para la definición exacta de `total_tokens` en cada CLI (los buckets NO son comparables 1:1 entre Claude y Codex — ver nota al pie).
 
-**Total general (todas las invocaciones registradas): 88.326.583 tokens.**
+**Total general (todas las invocaciones registradas): 92.491.532 tokens.**
 
 **Nota histórica:** hasta el 2026-08-29 los tags `iterN` de `orquestador.sh` se reiniciaban en cada corrida y colisionaban entre sesiones — la corrida de T-48 sobrescribió en disco los logs originales `iter1`/`iter2` del corte vertical T-01..T-22. Corregido ese mismo día (`run_id` único por invocación, ver el docstring del script). Los totales de aquí reflejan lo que sobrevive en `.loop/logs/` hoy, no necesariamente el histórico completo de corridas anteriores a la corrección — por eso este archivo se comitea como snapshot en vez de regenerarse solo desde disco.
 
@@ -14,7 +14,7 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | claude | desarrollador | 37 | 0 | 992 | 2.723.683 | 54.931.739 | 372.735 | 58.029.149 | $25.8952 |
 | codex | desarrollador | 1 | 0 | 822.814 | n/a | n/a | 7.112 | 829.926 | — |
-| codex | validador | 62 | 5 | 29.215.358 | n/a | n/a | 252.150 | 29.467.508 | — |
+| codex | validador | 70 | 5 | 33.341.609 | n/a | n/a | 290.848 | 33.632.457 | — |
 
 `n/a` en Codex: `cached_input_tokens` es un subconjunto informativo de `input_tokens` (no un bucket aditivo), así que no aplica una columna de cache separada aditiva como en Claude — ver docstring.
 
@@ -90,17 +90,25 @@ Generado por `tokens/contar_tokens.py` a partir de `.loop/logs/` (gitignored, lo
 | codex-iter7-1.log | codex | validador | iter7-1 | 245.964 | 2.609 | 248.573 | — |
 | codex-iter8-1.log | codex | validador | iter8-1 | 283.619 | 2.749 | 286.368 | — |
 | codex-iter9-1.log | codex | validador | iter9-1 | 310.444 | 2.743 | 313.187 | — |
+| codex-review-33429d7.log | codex | validador | review-33429d7 | 525.501 | 4.107 | 529.608 | — |
+| codex-review-3e9826f.log | codex | validador | review-3e9826f | 410.789 | 4.343 | 415.132 | — |
 | codex-review-452a448.log | codex | validador | review-452a448 | 534.030 | 4.943 | 538.973 | — |
 | codex-review-4b8b849.log | codex | validador | review-4b8b849 | 508.983 | 4.062 | 513.045 | — |
+| codex-review-591cc50.log | codex | validador | review-591cc50 | 528.272 | 4.358 | 532.630 | — |
 | codex-review-6dcad2b.log | codex | validador | review-6dcad2b | 454.123 | 3.326 | 457.449 | — |
 | codex-review-79d1186.log | codex | validador | review-79d1186 | 489.941 | 4.346 | 494.287 | — |
 | codex-review-8565402.log | codex | validador | review-8565402 | 534.277 | 3.802 | 538.079 | — |
+| codex-review-9dfa94e.log | codex | validador | review-9dfa94e | 374.034 | 3.188 | 377.222 | — |
 | codex-review-9f490e0.log | codex | validador | review-9f490e0 | 633.461 | 4.480 | 637.941 | — |
+| codex-review-a7af4b8.log | codex | validador | review-a7af4b8 | 726.451 | 6.036 | 732.487 | — |
 | codex-review-ab7d770.log | codex | validador | review-ab7d770 | 571.877 | 5.560 | 577.437 | — |
 | codex-review-acumulado.json | codex | validador | review-acumulado | 2.239.220 | 12.302 | 2.251.522 | — |
 | codex-review-audit-ratelimit-1.log | codex | validador | review-audit-ratelimit-1 | 289.800 | 2.698 | 292.498 | — |
 | codex-review-b2a6367.log | codex | validador | review-b2a6367 | 737.129 | 6.675 | 743.804 | — |
 | codex-review-c7d225b.log | codex | validador | review-c7d225b | 523.607 | 4.191 | 527.798 | — |
+| codex-review-c7d5317.log | codex | validador | review-c7d5317 | 455.365 | 4.378 | 459.743 | — |
+| codex-review-d32e1cf.log | codex | validador | review-d32e1cf | 538.191 | 4.742 | 542.933 | — |
+| codex-review-f11c848.log | codex | validador | review-f11c848 | 567.648 | 7.546 | 575.194 | — |
 | codex-review-ffda4a7.log | codex | validador | review-ffda4a7 | 603.634 | 6.819 | 610.453 | — |
 | codex-review-garantizar-marca-1.log | codex | validador | review-garantizar-marca-1 | 329.065 | 4.087 | 333.152 | — |
 | codex-review-runid-fix-1.log | codex | validador | review-runid-fix-1 | 312.399 | 3.207 | 315.606 | — |
