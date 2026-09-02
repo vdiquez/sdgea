@@ -17,6 +17,9 @@ export function Inicio() {
           <p>
             <Link to="/cola-validacion">Cola de validación humana</Link>
           </p>
+          <p>
+            <Link to="/bitacora">Bitácora de auditoría</Link>
+          </p>
         </>
       ) : (
         <p>

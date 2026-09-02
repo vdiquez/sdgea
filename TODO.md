@@ -1712,7 +1712,7 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       explícitamente por Codex) verifica las cinco rutas permitidas y las
       seis fuera de alcance a través del proxy real. 13 pruebas e2e, dos
       corridas seguidas en verde.
-- [ ] T-64 RF-UI-011 · Bitácora de auditoría consolidada, alcance inicial:
+- [x] T-64 RF-UI-011 · Bitácora de auditoría consolidada, alcance inicial:
       panel de decisión de T-62 — tras decidir sobre la sugerencia de
       clasificación, la UI consulta `GET /eventos-auditoria` de
       Records/Custodia (ahora expuesto tras T-63) y muestra el evento
@@ -1721,6 +1721,35 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       decisión → bitácora. TDD: Playwright e2e que corre el flujo completo
       y verifica que la bitácora muestra el evento con actor y fecha no
       vacíos.
+      Hecho: nueva pantalla `Bitacora.tsx` (`/bitacora`), enlazada desde
+      `Inicio.tsx`. Llama `GET /api/records-custodia/eventos-auditoria
+      ?identidadId=` (uno de los cinco endpoints que T-63 ya desbloqueó) y
+      lista cada evento con tipo/actor/fecha/estados. `records-custodia`
+      se añade al union `Contexto` de `cliente.ts` -- es el primer
+      screen real que lo consume, ya que hasta T-63 estaba bloqueado.
+      Alcance deliberadamente parcial frente al RF-UI-011 completo: el
+      backend (`EventoAuditoria` en `CustodiaOriginales.kt`) no porta
+      `documentoId`, así que esta pantalla muestra la bitácora COMPLETA que
+      expone Records/Custodia, no un recorte por documento -- inventar un
+      filtro que el backend no soporta habría sido menos honesto que
+      mostrar exactamente lo que expone. Tampoco consolida todavía
+      Normalización/Extracción/Indexación y Búsqueda (que también exponen
+      `GET /eventos-auditoria`) ni la sección distinta de Seguridad y
+      Acceso (`GET /eventos-seguridad`) que pide el resto del RF -- eso
+      queda para una ampliación futura de esta misma pantalla; T-64 solo
+      cierra el paso "→ bitácora" del flujo que pidió Victor, tal como
+      decía su propio alcance ("alcance inicial").
+      TDD: extendido `e2e/rf-ui-005-flujo-clasificacion-decision.spec.ts`
+      (en vez de un archivo nuevo, porque ya construye el flujo completo
+      login → clasificación → decisión) con un quinto paso que navega a
+      `/bitacora` tras decidir y verifica que el evento
+      `DECISION_HUMANA_MATERIALIZADA` atribuido al actor de la prueba es
+      visible, con una fecha no vacía. El rol de la identidad de prueba ya
+      declaraba `leer`/`documento` (lo necesitaba para ver la cola), así
+      que también alcanza para `GET /eventos-auditoria`.
+      Verificado con Docker real: 13 pruebas e2e, dos corridas seguidas sin
+      fallos contra `http://localhost:8090`. `./test.sh` completo del repo
+      en verde.
 - [x] T-65 Corrección de aceptación individual de RF-UI-005 — al pulsar
       «Aceptar decisión» sobre la sugerencia de clasificación `serie/subserie`
       de T-61, Validación Humana debe materializar una aceptación

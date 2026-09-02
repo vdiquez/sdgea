@@ -1,9 +1,13 @@
 // specs/008-ui-demo/spec.md §4: toda llamada sale hacia el proxy curado
 // (`/api/<contexto>/...`), nunca directo a un puerto interno de
 // docker-compose (RNF-UI-001). `contexto` es el nombre de servicio tal como
-// aparece en docker-compose.saas.yml -- Captura/Ingesta y Records/Custodia
-// deliberadamente no tienen ruta hasta cerrar el prerrequisito de
-// autorización de §1 (T-63+).
+// aparece en docker-compose.saas.yml -- Captura/Ingesta deliberadamente no
+// tiene ruta hasta cerrar su propio prerrequisito de autorización de §1.
+// Records/Custodia (T-63) ya cerró ese prerrequisito, pero solo para los
+// cinco endpoints que nginx.conf/vite.config.ts exponen explícitamente
+// (ver esos archivos) -- el cliente puede pedir cualquier ruta bajo este
+// contexto, y es el proxy curado quien la rechaza con 404 si no es una de
+// esas cinco.
 export type Contexto =
   | "seguridad-acceso"
   | "clasificacion"
@@ -11,7 +15,8 @@ export type Contexto =
   | "normalizacion"
   | "extraccion"
   | "enriquecimiento"
-  | "indexacion-busqueda";
+  | "indexacion-busqueda"
+  | "records-custodia";
 
 export class ErrorDeApi extends Error {
   readonly status: number;

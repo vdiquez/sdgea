@@ -1,16 +1,17 @@
 import { expect, request as apiRequest, test } from "@playwright/test";
 
-// RF-UI-005 (specs/008-ui-demo/spec.md §5) -- y el flujo funcional completo
-// que pidió Victor: login → clasificación → decisión → (bitácora en T-64,
-// una vez cerrado el prerrequisito de §1). Este e2e encadena las cuatro
-// pantallas reales de punta a punta contra el stack de Docker, sin ningún
-// doble -- exactamente el criterio de honestidad de RNF-UI-004.
+// RF-UI-005 + RF-UI-011 (alcance inicial, T-64) -- el flujo funcional
+// completo que pidió Victor: login → clasificación → decisión → bitácora.
+// Este e2e encadena las cinco pantallas reales de punta a punta contra el
+// stack de Docker, sin ningún doble -- exactamente el criterio de
+// honestidad de RNF-UI-004.
 //
 // La cola de Validación Humana exige `leer`/`documento` (para verla) y
-// `decidir`/`documento` (para decidir) -- ambos permisos reales, verificados
-// contra Seguridad y Acceso (RF-VH-007), así que el rol de la identidad de
-// prueba los declara los dos.
-test("flujo completo: login → clasificación → cola de validación → decisión", async ({ page, request }) => {
+// `decidir`/`documento` (para decidir); la bitácora (GET /eventos-auditoria
+// de Records/Custodia, T-63) exige `leer`/`documento` también -- los tres
+// permisos reales, verificados contra Seguridad y Acceso (RF-VH-007 /
+// T-63), así que el rol de la identidad de prueba los declara todos.
+test("flujo completo: login → clasificación → cola de validación → decisión → bitácora", async ({ page, request }) => {
   const sufijo = Date.now();
   const rol = `rol-ui-flujo-${sufijo}`;
   const actor = `actor-ui-flujo-${sufijo}`;
@@ -107,4 +108,13 @@ test("flujo completo: login → clasificación → cola de validación → decis
   expect(correccionesDespues.ok()).toBe(true);
   const volumenDespues = (await correccionesDespues.json()).length;
   expect(volumenDespues).toBe(volumenAntes);
+
+  // 5. Bitácora (RF-UI-011, alcance inicial de T-64) -- la decisión que
+  // acaba de materializarse debe ser consultable, atribuible y fechada,
+  // cerrando el flujo pedido por Victor.
+  await page.goto("/bitacora");
+  const bitacora = page.getByRole("list", { name: "Bitácora de auditoría" });
+  const eventoDecision = bitacora.getByRole("listitem").filter({ hasText: "DECISION_HUMANA_MATERIALIZADA" }).filter({ hasText: actor });
+  await expect(eventoDecision).toBeVisible();
+  await expect(eventoDecision).toContainText(/fecha: \S/);
 });

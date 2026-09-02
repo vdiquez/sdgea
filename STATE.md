@@ -3561,3 +3561,37 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   Verificado con Docker real: 13 pruebas e2e (las 5 de siempre + 8 nuevas),
   dos corridas seguidas sin fallos contra `http://localhost:8090`.
   `./test.sh` completo del repo en verde.
+
+- 2026-09-01 — T-64 cerrada (RF-UI-011, alcance inicial): cierra el paso
+  "→ bitácora" del flujo pedido por Victor -- login → clasificación →
+  decisión → bitácora, punta a punta. Nueva pantalla `Bitacora.tsx`
+  (`/bitacora`, enlazada desde `Inicio.tsx`) que llama
+  `GET /api/records-custodia/eventos-auditoria?identidadId=`, uno de los
+  cinco endpoints que T-63 ya desbloqueó. `records-custodia` entra al union
+  `Contexto` de `cliente.ts` -- primera pantalla real que lo consume, tras
+  quedar bloqueado desde el inicio de esta capa (T-59).
+  Alcance deliberadamente parcial frente al RF-UI-011 completo, no una
+  omisión: `EventoAuditoria` (`CustodiaOriginales.kt`) no porta
+  `documentoId`, así que la pantalla muestra la bitácora COMPLETA que
+  expone Records/Custodia, no un recorte inventado por documento -- filtrar
+  sin que el backend lo soporte habría sido menos honesto que mostrar
+  exactamente lo que existe. Tampoco consolida todavía Normalización/
+  Extracción/Indexación y Búsqueda (mismo `GET /eventos-auditoria`) ni la
+  sección distinta de Seguridad y Acceso (`GET /eventos-seguridad`, forma
+  diferente) que pide el resto del RF -- el propio TODO.md ya etiquetaba
+  T-64 como "alcance inicial"; esto no es una tarea nueva, es la ampliación
+  natural de esta misma pantalla cuando haga falta.
+  TDD: se extendió `rf-ui-005-flujo-clasificacion-decision.spec.ts` (en vez
+  de crear un archivo nuevo) con un quinto paso -- tras decidir, navega a
+  `/bitacora` y verifica que el evento `DECISION_HUMANA_MATERIALIZADA`
+  atribuido al actor de la prueba es visible con una fecha no vacía. El rol
+  de la identidad de prueba ya declaraba `leer`/`documento` (lo necesitaba
+  para ver la cola de T-62), así que también cubre `GET /eventos-auditoria`
+  sin cambios adicionales de permisos.
+  Verificado con Docker real: 13 pruebas e2e, dos corridas seguidas sin
+  fallos contra `http://localhost:8090`. `./test.sh` completo del repo en
+  verde.
+  Con T-63 y T-64 cerradas, el flujo completo que pidió Victor -- login →
+  clasificación (FICTICIA) → cola de validación humana → decisión →
+  bitácora -- queda demostrable de punta a punta contra el stack real de
+  Docker, sin ningún doble en ningún punto del camino.
