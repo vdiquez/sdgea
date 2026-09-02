@@ -113,6 +113,12 @@ test("flujo completo: login → clasificación → cola de validación → decis
   // acaba de materializarse debe ser consultable, atribuible y fechada,
   // cerrando el flujo pedido por Victor.
   await page.goto("/bitacora");
+  // Observación real de Codex sobre este mismo corte (ver REVIEW.md/
+  // STATE.md): la pantalla debe decirle al operador que este es solo el
+  // alcance inicial (Records/Custodia, sin filtrar por documento, sin
+  // consolidar los demás contextos) -- no basta con documentarlo en un
+  // comentario que el operador nunca ve.
+  await expect(page.getByText(/sin filtrar por documento/i)).toBeVisible();
   const bitacora = page.getByRole("list", { name: "Bitácora de auditoría" });
   const eventoDecision = bitacora.getByRole("listitem").filter({ hasText: "DECISION_HUMANA_MATERIALIZADA" }).filter({ hasText: actor });
   await expect(eventoDecision).toBeVisible();

@@ -48,8 +48,20 @@ export function Bitacora() {
 
   return (
     <main>
-      <h1>Bitácora de auditoría</h1>
-      <p>Eventos de Records/Custodia, atribuibles y fechados (P-08).</p>
+      <h1>Bitácora de Records/Custodia (alcance inicial)</h1>
+      {/* Observación real de Codex sobre este mismo corte (ver REVIEW.md/
+          STATE.md): los comentarios del archivo explicaban el alcance
+          parcial, pero la pantalla no se lo decía al operador. RF-UI-011
+          completo pide, además, Normalización/Extracción/Indexación y
+          Búsqueda y una sección propia de Seguridad y Acceso -- ninguna
+          de las dos está aquí todavía. */}
+      <p>
+        Todos los eventos de auditoría que expone Records/Custodia, atribuibles y
+        fechados (P-08) -- sin filtrar por documento ni por sesión, porque el
+        backend no distingue eventos por documento. Todavía no consolida
+        Normalización, Extracción, Indexación y Búsqueda ni la bitácora de
+        Seguridad y Acceso.
+      </p>
       {error && <p role="alert">{error}</p>}
       {eventos === null ? (
         <p>Cargando…</p>

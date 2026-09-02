@@ -3595,3 +3595,24 @@ Indexación y Búsqueda). Sigue `specs/003-clasificacion/spec.md`
   clasificación (FICTICIA) → cola de validación humana → decisión →
   bitácora -- queda demostrable de punta a punta contra el stack real de
   Docker, sin ningún doble en ningún punto del camino.
+
+- 2026-09-01 — Codex no vetó T-64 constitucionalmente pero exigió corrección
+  antes de aceptarlo (commit `d789113`): "la UI no comunica explícitamente
+  que muestra la bitácora completa de Records/Custodia -sin filtro por
+  documento- ni que aún no es la bitácora consolidada de RF-UI-011". Los
+  comentarios del archivo ya documentaban ese alcance parcial, pero nunca
+  llegaban al operador -- el título genérico "Bitácora de auditoría" y el
+  texto "Eventos de Records/Custodia" no decían que fuera SOLO ese
+  contexto, sin filtrar por documento, con la consolidación de los demás
+  contextos y de Seguridad y Acceso todavía pendiente.
+  Corregido en `Bitacora.tsx`: título "Bitácora de Records/Custodia
+  (alcance inicial)" y un párrafo visible que explica exactamente esas tres
+  cosas -- sin inventar un filtro por documento que el backend no soporta,
+  solo haciendo explícito el límite real. Reforzado el e2e
+  (`rf-ui-005-flujo-clasificacion-decision.spec.ts`) con una aserción que
+  verifica que el aviso ("sin filtrar por documento") es visible antes de
+  buscar el evento de decisión, por instrucción explícita de Codex ("Debe
+  añadirse una prueba de UI/e2e que compruebe este aviso").
+  Verificado con Docker real: 13 pruebas e2e, dos corridas seguidas sin
+  fallos contra `http://localhost:8090`. `./test.sh` completo del repo en
+  verde.

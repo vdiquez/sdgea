@@ -1750,6 +1750,12 @@ primer commit** (ver STATE.md para el detalle completo de cada una):
       Verificado con Docker real: 13 pruebas e2e, dos corridas seguidas sin
       fallos contra `http://localhost:8090`. `./test.sh` completo del repo
       en verde.
+      **Corrección real exigida por Codex** (sin VETO constitucional, commit
+      `d789113`): los comentarios del archivo documentaban el alcance
+      parcial, pero la pantalla nunca se lo decía al operador. Corregido con
+      un título y un párrafo visibles ("Bitácora de Records/Custodia
+      (alcance inicial)", sin filtrar por documento, consolidación
+      pendiente) y una aserción e2e que verifica que ese aviso es visible.
 - [x] T-65 Corrección de aceptación individual de RF-UI-005 — al pulsar
       «Aceptar decisión» sobre la sugerencia de clasificación `serie/subserie`
       de T-61, Validación Humana debe materializar una aceptación
